@@ -127,3 +127,4 @@ docker compose up -d --build backend
   nginx for a production-like setup. If you want hot-reload while developing the
   theme, run `npm run dev` locally on your machine (outside Docker) against the
   Dockerized backend/API, and only use the Docker frontend build for final testing.
+# HR-Portal
