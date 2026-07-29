@@ -87,6 +87,7 @@ model Company {
   name            String
   email           String    @unique
   phone           String?
+  subdomain       String    @unique  // ← ADD THIS LINE e.g. "techcorp"
   industry        String?
   companySize     String?
   address         String?
