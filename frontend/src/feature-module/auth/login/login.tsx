@@ -1,17 +1,52 @@
-import  {  useState } from "react";
+import { useState } from "react";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { Link, useNavigate } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
+import apiClient from "../../../core/utils/apiClient";
 type PasswordField = "password";
 
 const Login = () => {
   const routes = all_routes;
   const navigation = useNavigate();
 
-  const navigationPath = (event: React.FormEvent) => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+
+  const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault(); // Prevent page reload
-    navigation(routes.adminDashboard);
+    setError(""); // Clear previous errors
+
+    try {
+      // Call our backend API
+      const response = await apiClient.post("/auth/login", {
+        email,
+        password,
+      });
+
+      // If successful, store the token in localStorage
+      const { token, user } = response.data;
+      localStorage.setItem("token", token);
+
+      // Store user role in localStorage (or Redux later) so we know who is logged in
+      localStorage.setItem("userRole", user.role);
+
+      // Redirect based on role
+      if (user.role === "SUPER_ADMIN") {
+        navigation(routes.superAdminDashboard);
+      } else if (user.role === "HR") {
+        navigation(routes.hrDashboard);
+      } else {
+        navigation(routes.employeeDashboard);
+      }
+    } catch (err: any) {
+      console.error("Login failed:", err);
+      // Show error message from backend if available
+      setError(err.response?.data?.message || "Something went wrong. Please try again.");
+    }
   };
+
   const [passwordVisibility, setPasswordVisibility] = useState({
     password: false,
   });
@@ -54,7 +89,7 @@ const Login = () => {
           <div className="col-lg-7 col-md-12 col-sm-12">
             <div className="row justify-content-center align-items-center vh-100 overflow-auto flex-wrap">
               <div className="col-md-7 mx-auto vh-100">
-                <form className="vh-100" onSubmit={navigationPath}>
+                <form className="vh-100" onSubmit={handleLogin}>
                   <div className="vh-100 d-flex flex-column justify-content-between p-4 pb-0">
                     <div className="mx-auto mb-5 text-center">
                       <ImageWithBasePath
@@ -69,6 +104,7 @@ const Login = () => {
                         <p className="mb-0">Please enter your details to sign in</p>
                       </div>
                       <div className="mb-3">
+                        {error && <div className="alert alert-danger p-2">{error}</div>}
                         <label className="form-label">Email Address</label>
                         <div className="input-group">
                           <input
@@ -77,6 +113,8 @@ const Login = () => {
                             className="form-control border-end-0"
                             required
                             autoComplete="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                           />
                           <span className="input-group-text border-start-0">
                             <i className="ti ti-mail" />
@@ -91,6 +129,8 @@ const Login = () => {
                             className="pass-input form-control"
                             required
                             autoComplete="current-password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
                           />
                           <span
                             className={`ti toggle-passwords ${passwordVisibility.password
