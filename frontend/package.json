@@ -21,6 +21,7 @@
     "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
     "@hello-pangea/dnd": "^18.0.1",
     "@jridgewell/sourcemap-codec": "^1.5.5",
+    "axios": "^1.18.1",
     "chart.js": "^4.5.1",
     "react": "^19.2.7",
     "react-apexcharts": "^2.1.0",

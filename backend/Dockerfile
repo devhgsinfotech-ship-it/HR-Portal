@@ -18,7 +18,7 @@ COPY . .
 # is still a placeholder). Once you add models, generate it manually with:
 #   docker exec -it hr_portal_backend npx prisma generate
 # Then uncomment the line below so it runs automatically on future builds:
-# RUN npx prisma generate
+RUN npx prisma generate
 
 EXPOSE 5000
 

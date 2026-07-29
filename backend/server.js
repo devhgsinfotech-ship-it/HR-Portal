@@ -13,16 +13,16 @@ app.use(express.json());
 // Uncomment each line once its route file exists AND (for Prisma-backed
 // routes) your schema.prisma has models and `npx prisma generate` has run.
 //
-// const authRoutes = require('./src/routes/authRoutes');
-const employeeRoutes = require('./src/routes/employeeRoutes');
+const authRoutes = require('./src/routes/authRoutes');
+// const employeeRoutes = require('./src/routes/employeeRoutes');
 // const salaryRoutes = require('./src/routes/salaryRoutes');
 // const payslipRoutes = require('./src/routes/payslipRoutes');
 // const leaveRoutes = require('./src/routes/leaveRoutes');
 // const tabAccessRoutes = require('./src/routes/tabAccessRoutes');
 // const holidayRoutes = require('./src/routes/holidayRoutes');
-//
-// app.use('/auth', authRoutes);
-app.use('/employees', employeeRoutes);
+
+app.use('/auth', authRoutes);
+//app.use('/employees', employeeRoutes);
 // app.use('/salary', salaryRoutes);
 // app.use('/payslips', payslipRoutes);
 // app.use('/leaves', leaveRoutes);
