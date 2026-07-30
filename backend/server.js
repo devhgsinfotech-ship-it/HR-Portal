@@ -6,7 +6,24 @@ const cors = require('cors');
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like curl, Postman, mobile apps)
+        if (!origin) return callback(null, true);
+
+        // Allow localhost for development
+        if (origin.includes('localhost')) return callback(null, true);
+
+        // Allow any subdomain of yourhrms.com in production
+        if (/^https?:\/\/([a-z0-9-]+\.)?yourhrms\.com$/.test(origin)) {
+            return callback(null, true);
+        }
+
+        callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+}));
+
 app.use(express.json());
 
 // Routes are added incrementally as each feature is built.
