@@ -9,9 +9,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================
+// ENUMS
+// ============================================================
+
 enum Role {
   SUPER_ADMIN
   HR
+  MANAGER
   EMPLOYEE
 }
 
@@ -21,31 +26,98 @@ enum AccountStatus {
   DISABLED
 }
 
-enum LeaveType {
-  CASUAL
-  SICK
-  EARNED
-  UNPAID
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
 }
 
 enum LeaveStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
 }
 
-enum TabName {
-  SALARY
-  PAYSLIPS
-  LEAVES
-  PROFILE
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+}
+
+enum AssetStatus {
+  AVAILABLE
+  ASSIGNED
+  MAINTENANCE
+  RETIRED
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum NotificationType {
+  LEAVE_APPROVAL
+  LEAVE_REJECTION
+  PAYSLIP_GENERATED
+  BIRTHDAY_REMINDER
+  ATTENDANCE_REMINDER
+  HOLIDAY_REMINDER
+  ANNOUNCEMENT
+  ASSET_ASSIGNED
+  DOCUMENT_VERIFIED
 }
 
 // ============================================================
-// USERS — login accounts for both HR and Employees
+// COMPANY — each registered company's workspace
 // ============================================================
+
+model Company {
+  id              Int       @id @default(autoincrement())
+  name            String
+  email           String    @unique
+  phone           String?
+  subdomain       String    @unique  // ← ADD THIS LINE e.g. "techcorp"
+  industry        String?
+  companySize     String?
+  address         String?
+  logoUrl         String?
+  isEmailVerified Boolean   @default(false)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  users           User[]
+  departments     Department[]
+  designations    Designation[]
+  leaveTypes      LeaveType[]
+  holidays        Holiday[]
+  assets          Asset[]
+  assetCategories AssetCategory[]
+  settings        CompanySetting?
+  announcements   Announcement[]
+
+  @@map("companies")
+}
+
+// ============================================================
+// USERS — login accounts for all roles
+// ============================================================
+
 model User {
   id            Int           @id @default(autoincrement())
+  companyId     Int?
+  company       Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name          String
   email         String        @unique
   password      String
@@ -55,11 +127,10 @@ model User {
   updatedAt     DateTime      @updatedAt
 
   employee              Employee?
-  salaryStructuresMade  SalaryStructure[]   @relation("SalaryCreatedBy")
-  payslipsGenerated     Payslip[]           @relation("PayslipGeneratedBy")
-  leavesApproved        LeaveRequest[]      @relation("LeaveApprovedBy")
-  tabAccessUpdates      EmployeeTabAccess[] @relation("TabAccessUpdatedBy")
-  holidaysCreated       Holiday[]           @relation("HolidayCreatedBy")
+  inviteTokens          InviteToken[]
+  emailVerifyTokens     EmailVerifyToken[]
+  notificationsReceived Notification[]     @relation("NotificationReceiver")
+  notificationsSent     Notification[]     @relation("NotificationSender")
 
   @@map("users")
 }
@@ -67,38 +138,178 @@ model User {
 // ============================================================
 // EMPLOYEES — profile data, linked 1:1 to a user account
 // ============================================================
-model Employee {
-  id               Int       @id @default(autoincrement())
-  userId           Int       @unique
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  employeeCode     String    @unique
-  fullName         String
-  designation      String?
-  department       String?
-  phone            String?
-  address          String?
-  dateOfBirth      DateTime?
-  dateOfJoining    DateTime?
-  profilePhotoUrl  String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
 
-  salaryStructures SalaryStructure[]
-  payslips         Payslip[]
-  leaveRequests    LeaveRequest[]
-  leaveBalances    LeaveBalance[]
-  tabAccess        EmployeeTabAccess[]
-  inviteTokens     InviteToken[]
+model Employee {
+  id                  Int             @id @default(autoincrement())
+  userId              Int             @unique
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode        String          @unique
+  firstName           String
+  lastName            String
+  gender              Gender?
+  dateOfBirth         DateTime?
+  phone               String?
+  address             String?
+  profilePhotoUrl     String?
+  dateOfJoining       DateTime?
+  employmentType      EmploymentType  @default(FULL_TIME)
+  departmentId        Int?
+  department          Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  designationId       Int?
+  designation         Designation?    @relation(fields: [designationId], references: [id], onDelete: SetNull)
+  reportingManagerId  Int?
+  reportingManager    Employee?       @relation("ManagerSubordinates", fields: [reportingManagerId], references: [id], onDelete: SetNull)
+  subordinates        Employee[]      @relation("ManagerSubordinates")
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  salaryStructure     SalaryStructure?
+  payslips            Payslip[]
+  leaveRequests       LeaveRequest[]
+  leaveBalances       LeaveBalance[]
+  attendanceRecords   AttendanceRecord[]
+  documents           Document[]
+  assetAssignments    AssetAssignment[]
+  inviteTokens        InviteToken[]
+  performanceGoals    PerformanceGoal[]    @relation("EmployeeGoals")
+  goalsCreated        PerformanceGoal[]    @relation("ManagerGoals")
+  performanceReviews  PerformanceReview[]  @relation("EmployeeReviews")
+  reviewsConducted    PerformanceReview[]  @relation("ManagerReviews")
 
   @@map("employees")
 }
 
 // ============================================================
-// SALARY STRUCTURE — breakup per employee
+// DEPARTMENTS
 // ============================================================
+
+model Department {
+  id          Int       @id @default(autoincrement())
+  companyId   Int
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  headId      Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  employees   Employee[]
+
+  @@unique([companyId, name])
+  @@map("departments")
+}
+
+// ============================================================
+// DESIGNATIONS
+// ============================================================
+
+model Designation {
+  id          Int       @id @default(autoincrement())
+  companyId   Int
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+
+  employees   Employee[]
+
+  @@unique([companyId, name])
+  @@map("designations")
+}
+
+// ============================================================
+// LEAVE TYPES — configurable per company
+// ============================================================
+
+model LeaveType {
+  id           Int       @id @default(autoincrement())
+  companyId    Int
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name         String
+  totalDaysPerYear Decimal @default(0) @db.Decimal(5, 1)
+  isPaid       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+
+  leaveRequests LeaveRequest[]
+  leaveBalances LeaveBalance[]
+
+  @@unique([companyId, name])
+  @@map("leave_types")
+}
+
+// ============================================================
+// LEAVE REQUESTS
+// ============================================================
+
+model LeaveRequest {
+  id           Int         @id @default(autoincrement())
+  employeeId   Int
+  employee     Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveTypeId  Int
+  leaveType    LeaveType   @relation(fields: [leaveTypeId], references: [id])
+  startDate    DateTime
+  endDate      DateTime
+  totalDays    Decimal     @default(1) @db.Decimal(5, 1)
+  reason       String?
+  status       LeaveStatus @default(PENDING)
+  reviewedById Int?
+  reviewedAt   DateTime?
+  remarks      String?
+  appliedAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@map("leave_requests")
+}
+
+// ============================================================
+// LEAVE BALANCES
+// ============================================================
+
+model LeaveBalance {
+  id           Int       @id @default(autoincrement())
+  employeeId   Int
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveTypeId  Int
+  leaveType    LeaveType @relation(fields: [leaveTypeId], references: [id])
+  year         Int
+  totalDays    Decimal   @default(0) @db.Decimal(5, 1)
+  usedDays     Decimal   @default(0) @db.Decimal(5, 1)
+
+  @@unique([employeeId, leaveTypeId, year])
+  @@map("leave_balances")
+}
+
+// ============================================================
+// ATTENDANCE RECORDS
+// ============================================================
+
+model AttendanceRecord {
+  id             Int              @id @default(autoincrement())
+  employeeId     Int
+  employee       Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date           DateTime         @db.Date
+  checkIn        DateTime?
+  checkOut       DateTime?
+  breakIn        DateTime?
+  breakOut       DateTime?
+  workingHours   Decimal?         @db.Decimal(5, 2)
+  status         AttendanceStatus @default(PRESENT)
+  notes          String?
+  createdAt      DateTime         @default(now())
+
+  @@unique([employeeId, date])
+  @@map("attendance_records")
+}
+
+// ============================================================
+// SALARY STRUCTURE
+// ============================================================
+
 model SalaryStructure {
   id                Int      @id @default(autoincrement())
-  employeeId        Int
+  employeeId        Int      @unique
   employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   basic             Decimal  @default(0) @db.Decimal(12, 2)
   hra               Decimal  @default(0) @db.Decimal(12, 2)
@@ -110,27 +321,27 @@ model SalaryStructure {
   otherDeductions   Decimal  @default(0) @db.Decimal(12, 2)
   grossSalary       Decimal  @default(0) @db.Decimal(12, 2)
   netSalary         Decimal  @default(0) @db.Decimal(12, 2)
-  effectiveFrom     DateTime
-  createdById       Int?
-  createdBy         User?    @relation("SalaryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt         DateTime @default(now())
+  effectiveFrom     DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@map("salary_structures")
 }
 
 // ============================================================
-// PAYSLIPS — monthly generated salary receipts
+// PAYSLIPS
 // ============================================================
+
 model Payslip {
   id            Int      @id @default(autoincrement())
   employeeId    Int
   employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   month         Int
   year          Int
-  filePath      String
+  basic         Decimal  @default(0) @db.Decimal(12, 2)
+  totalAllowances Decimal @default(0) @db.Decimal(12, 2)
+  totalDeductions Decimal @default(0) @db.Decimal(12, 2)
   netPay        Decimal  @db.Decimal(12, 2)
-  generatedById Int?
-  generatedBy   User?    @relation("PayslipGeneratedBy", fields: [generatedById], references: [id], onDelete: SetNull)
+  filePath      String?
   generatedAt   DateTime @default(now())
 
   @@unique([employeeId, month, year])
@@ -138,84 +349,211 @@ model Payslip {
 }
 
 // ============================================================
-// LEAVE REQUESTS
+// HOLIDAYS
 // ============================================================
-model LeaveRequest {
-  id           Int         @id @default(autoincrement())
-  employeeId   Int
-  employee     Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveType    LeaveType
-  startDate    DateTime
-  endDate      DateTime
-  reason       String?
-  status       LeaveStatus @default(PENDING)
-  approvedById Int?
-  approvedBy   User?       @relation("LeaveApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
-  appliedAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
 
-  @@map("leave_requests")
-}
-
-// ============================================================
-// LEAVE BALANCE — yearly quota tracking per employee
-// ============================================================
-model LeaveBalance {
-  id         Int       @id @default(autoincrement())
-  employeeId Int
-  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveType  LeaveType
-  year       Int
-  totalDays  Decimal   @default(0) @db.Decimal(5, 1)
-  usedDays   Decimal   @default(0) @db.Decimal(5, 1)
-
-  @@unique([employeeId, leaveType, year])
-  @@map("leave_balances")
-}
-
-// ============================================================
-// EMPLOYEE TAB ACCESS — per-employee, per-tab permission control
-// ============================================================
-model EmployeeTabAccess {
-  id          Int      @id @default(autoincrement())
-  employeeId  Int
-  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  tabName     TabName
-  isEnabled   Boolean  @default(false)
-  updatedById Int?
-  updatedBy   User?    @relation("TabAccessUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  updatedAt   DateTime @updatedAt
-
-  @@unique([employeeId, tabName])
-  @@map("employee_tab_access")
-}
-
-// ============================================================
-// HOLIDAYS — company-wide calendar
-// ============================================================
 model Holiday {
   id          Int      @id @default(autoincrement())
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   title       String
-  holidayDate DateTime
+  holidayDate DateTime @db.Date
   description String?
-  createdById Int?
-  createdBy   User?    @relation("HolidayCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  isNational  Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   @@map("holidays")
 }
 
 // ============================================================
-// INVITE TOKENS — signup link issued when HR grants access
+// ASSET CATEGORIES
 // ============================================================
+
+model AssetCategory {
+  id        Int     @id @default(autoincrement())
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+
+  assets    Asset[]
+
+  @@map("asset_categories")
+}
+
+// ============================================================
+// ASSETS
+// ============================================================
+
+model Asset {
+  id          Int         @id @default(autoincrement())
+  companyId   Int
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  categoryId  Int?
+  category    AssetCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name        String
+  assetCode   String      @unique
+  status      AssetStatus @default(AVAILABLE)
+  purchaseDate DateTime?
+  description String?
+  createdAt   DateTime    @default(now())
+
+  assignments AssetAssignment[]
+
+  @@map("assets")
+}
+
+// ============================================================
+// ASSET ASSIGNMENTS
+// ============================================================
+
+model AssetAssignment {
+  id           Int       @id @default(autoincrement())
+  assetId      Int
+  asset        Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  employeeId   Int
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  assignedAt   DateTime  @default(now())
+  returnedAt   DateTime?
+  notes        String?
+
+  @@map("asset_assignments")
+}
+
+// ============================================================
+// DOCUMENTS
+// ============================================================
+
+model Document {
+  id          Int            @id @default(autoincrement())
+  employeeId  Int
+  employee    Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  name        String
+  fileUrl     String
+  fileType    String?
+  status      DocumentStatus @default(PENDING)
+  verifiedAt  DateTime?
+  createdAt   DateTime       @default(now())
+
+  @@map("documents")
+}
+
+// ============================================================
+// PERFORMANCE GOALS
+// ============================================================
+
+model PerformanceGoal {
+  id           Int      @id @default(autoincrement())
+  employeeId   Int
+  employee     Employee @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
+  createdById  Int
+  createdBy    Employee @relation("ManagerGoals", fields: [createdById], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  targetDate   DateTime?
+  isCompleted  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@map("performance_goals")
+}
+
+// ============================================================
+// PERFORMANCE REVIEWS
+// ============================================================
+
+model PerformanceReview {
+  id           Int      @id @default(autoincrement())
+  employeeId   Int
+  employee     Employee @relation("EmployeeReviews", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewerId   Int
+  reviewer     Employee @relation("ManagerReviews", fields: [reviewerId], references: [id], onDelete: Cascade)
+  rating       Int      // 1 to 5
+  feedback     String?
+  reviewDate   DateTime @default(now())
+
+  @@map("performance_reviews")
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id          Int              @id @default(autoincrement())
+  receiverId  Int
+  receiver    User             @relation("NotificationReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  senderId    Int?
+  sender      User?            @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
+  type        NotificationType
+  title       String
+  message     String
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  @@map("notifications")
+}
+
+// ============================================================
+// ANNOUNCEMENTS
+// ============================================================
+
+model Announcement {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title       String
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+
+  @@map("announcements")
+}
+
+// ============================================================
+// COMPANY SETTINGS
+// ============================================================
+
+model CompanySetting {
+  id              Int     @id @default(autoincrement())
+  companyId       Int     @unique
+  company         Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  workingDays     String  @default("Mon,Tue,Wed,Thu,Fri")
+  officeStartTime String  @default("09:00")
+  officeEndTime   String  @default("18:00")
+  timezone        String  @default("Asia/Kolkata")
+  currency        String  @default("INR")
+
+  @@map("company_settings")
+}
+
+// ============================================================
+// INVITE TOKENS — for employee onboarding
+// ============================================================
+
 model InviteToken {
   id         Int      @id @default(autoincrement())
   employeeId Int
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   token      String   @unique
   expiresAt  DateTime
   used       Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   @@map("invite_tokens")
+}
+
+// ============================================================
+// EMAIL VERIFY TOKENS — for company registration
+// ============================================================
+
+model EmailVerifyToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("email_verify_tokens")
 }
