@@ -2,12 +2,13 @@ import { configureStore } from "@reduxjs/toolkit";
 import { useDispatch, useSelector } from "react-redux";
 import themeSettingSlice from "./themeSettingSlice";
 import sidebarSlice from "./sidebarSlice";
-import type { RootState } from "../types";
+import authSlice from "./authSlice";
 
 const store = configureStore({
   reducer: {
     themeSetting: themeSettingSlice,
     sidebarSlice: sidebarSlice,
+    auth: authSlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -25,7 +26,8 @@ const store = configureStore({
 
 // Export types for use in components
 export type AppDispatch = typeof store.dispatch;
-export type AppRootState = RootState;
+export type AppRootState = ReturnType<typeof store.getState>;
+
 
 // Export typed hooks for use in components
 export const useAppDispatch = () => useDispatch<AppDispatch>();

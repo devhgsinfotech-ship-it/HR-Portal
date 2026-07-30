@@ -4,11 +4,15 @@ import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { Link, useNavigate } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import apiClient from "../../../core/utils/apiClient";
+import { useAppDispatch } from "../../../core/data/redux/store";
+import { setCredentials } from "../../../core/data/redux/authSlice";
 type PasswordField = "password";
 
 const Login = () => {
   const routes = all_routes;
   const navigation = useNavigate();
+  const dispatch = useAppDispatch();
+
   const subdomain = getSubdomain();
 
   const [email, setEmail] = useState("");
@@ -30,10 +34,13 @@ const Login = () => {
 
       // If successful, store the token in localStorage
       const { token, user } = response.data;
-      localStorage.setItem("token", token);
+      // localStorage.setItem("token", token);
 
-      // Store user role in localStorage (or Redux later) so we know who is logged in
-      localStorage.setItem("userRole", user.role);
+      // // Store user role in localStorage (or Redux later) so we know who is logged in
+      // localStorage.setItem("userRole", user.role);
+
+      // With this:
+      dispatch(setCredentials({ token, user }));
 
       // Redirect based on role
       if (user.role === "SUPER_ADMIN") {
