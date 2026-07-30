@@ -1,3 +1,4 @@
+import { getSubdomain } from '../../../core/utils/apiClient';
 import { useState } from "react";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { Link, useNavigate } from "react-router-dom";
@@ -8,6 +9,7 @@ type PasswordField = "password";
 const Login = () => {
   const routes = all_routes;
   const navigation = useNavigate();
+  const subdomain = getSubdomain();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,6 +25,7 @@ const Login = () => {
       const response = await apiClient.post("/auth/login", {
         email,
         password,
+        subdomain, // Will be null on main site, "techcorp" on company workspace
       });
 
       // If successful, store the token in localStorage
