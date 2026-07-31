@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from "react";
-import { Route, Routes, Navigate } from "react-router";
+import { Route, Routes } from "react-router";
 import { authRoutes, publicRoutes, layoutRoutes } from "./router.link";
 import { LoadingSpinner } from "../core/common/LoadingSpinner";
 import PrivateRoute from "./PrivateRoute";
@@ -14,7 +14,7 @@ const ALLRoutes: React.FC = () => {
     <>
       <Routes>
         {/* Redirect root URL to login */}
-        <Route path="/" element={<Navigate to={all_routes.login} replace />} />
+        {/* <Route path="/" element={<Navigate to={all_routes.login} replace />} /> */}
 
         {/* ── PROTECTED ROUTES (must be logged in) ── */}
         <Route element={<PrivateRoute />}>

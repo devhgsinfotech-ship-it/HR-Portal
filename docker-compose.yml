@@ -63,10 +63,13 @@ services:
     restart: unless-stopped
     ports:
       - "3000:80"
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf  # ← nginx changes auto-reflect
     depends_on:
       - backend
     networks:
       - hr_portal_network
+
 
 networks:
   hr_portal_network:
