@@ -31,6 +31,8 @@ app.use(express.json());
 // routes) your schema.prisma has models and `npx prisma generate` has run.
 //
 const authRoutes = require('./src/routes/authRoutes');
+const departmentRoutes = require('./src/routes/departmentRoutes');
+const designationRoutes = require('./src/routes/designationRoutes');
 // const employeeRoutes = require('./src/routes/employeeRoutes');
 // const salaryRoutes = require('./src/routes/salaryRoutes');
 // const payslipRoutes = require('./src/routes/payslipRoutes');
@@ -39,6 +41,8 @@ const authRoutes = require('./src/routes/authRoutes');
 // const holidayRoutes = require('./src/routes/holidayRoutes');
 
 app.use('/auth', authRoutes);
+app.use('/departments', departmentRoutes);
+app.use('/designations', designationRoutes);
 //app.use('/employees', employeeRoutes);
 // app.use('/salary', salaryRoutes);
 // app.use('/payslips', payslipRoutes);
