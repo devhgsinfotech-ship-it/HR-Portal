@@ -22,10 +22,17 @@ async function login(req, res) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // 2. If a subdomain is provided (company workspace login), validate it
+        // 2. Subdomain & Role Validation
         if (subdomain) {
+            // Trying to login to a specific workspace (e.g. hgsinfotech.yourhrms.com)
             if (!user.company || user.company.subdomain !== subdomain) {
                 return res.status(403).json({ message: 'You do not have access to this workspace' });
+            }
+        } else {
+            // Trying to login to the main domain (e.g. yourhrms.com or localhost)
+            // ONLY Super Admins are allowed here.
+            if (user.role !== 'SUPER_ADMIN') {
+                return res.status(403).json({ message: 'Please log in through your company\'s specific workspace URL.' });
             }
         }
 
@@ -73,26 +80,64 @@ async function login(req, res) {
 }
 
 
+/**
+ * Generates a clean subdomain from a company name.
+ * e.g. "HGS Infotech Pvt Ltd" → "hgsinfotech"
+ * e.g. "Tech World Pvt Ltd"   → "techworld"
+ */
+function buildBaseSubdomain(companyName) {
+    // Common business suffixes to strip (longest first to avoid partial matches)
+    const suffixes = [
+        'private limited', 'private lmtd', 'pvt. ltd.', 'pvt. ltd', 'pvt ltd', 'pvt lmtd',
+        'pvt.', 'pvt', 'ltd.', 'ltd', 'lmtd',
+        'incorporated', 'inc.', 'inc',
+        'limited', 'llc', 'corp.', 'corp',
+        'co. ltd', 'co.', '& co'
+    ];
+
+    let name = companyName.toLowerCase().trim();
+
+    // Remove suffix from end of name
+    for (const suffix of suffixes) {
+        if (name.endsWith(suffix)) {
+            name = name.slice(0, name.length - suffix.length).trim();
+            break;
+        }
+    }
+
+    // Remove all non-alphanumeric characters (no hyphens — pure concatenation)
+    return name
+        .replace(/[^a-z0-9]/g, '')
+        .substring(0, 25);
+}
+
 async function register(req, res) {
     try {
-        const { companyName, email, contactPerson, phone, companySize, industry, address, password, subdomain } = req.body;
+        const { companyName, email, contactPerson, phone, companySize, industry, address, password } = req.body;
 
         if (!companyName || !email || !password || !contactPerson) {
             return res.status(400).json({ message: 'Company name, email, contact person and password are required' });
         }
 
-        // Generate subdomain from company name if not provided
-        const rawSubdomain = subdomain || companyName;
-        const generatedSubdomain = rawSubdomain
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '')
-            .substring(0, 50);
+        // ── Auto-generate unique subdomain ──────────────────────────────
+        const base = buildBaseSubdomain(companyName);
+        if (!base || base.length < 2) {
+            return res.status(400).json({ message: 'Company name is too short to generate a workspace URL.' });
+        }
 
-        // Check if subdomain is already taken
-        const existingSubdomain = await prisma.company.findUnique({ where: { subdomain: generatedSubdomain } });
-        if (existingSubdomain) {
-            return res.status(409).json({ message: `The workspace "${generatedSubdomain}" is already taken. Please choose another.` });
+        // Try base → base2 → base3 … until we find a free one
+        let generatedSubdomain = base;
+        let counter = 2;
+        while (true) {
+            const taken = await prisma.company.findUnique({ where: { subdomain: generatedSubdomain } });
+            if (!taken) break;                           // Found a free subdomain
+            if (counter > 99) {
+                // Extremely unlikely; fall back to base + timestamp
+                generatedSubdomain = base + Date.now().toString().slice(-4);
+                break;
+            }
+            generatedSubdomain = `${base}${counter}`;
+            counter++;
         }
 
         // Check if email already exists
@@ -194,7 +239,17 @@ async function verifyEmail(req, res) {
                 data: { isEmailVerified: true },
             }),
         ]);
-        res.json({ message: 'Email verified successfully! You can now log in.' });
+
+        // Fetch the company subdomain to send back
+        const company = await prisma.company.findUnique({
+            where: { id: verifyRecord.user.companyId },
+            select: { subdomain: true },
+        });
+        res.json({
+            message: 'Email verified successfully! You can now log in.',
+            subdomain: company?.subdomain || null,
+        });
+
     } catch (error) {
         console.error('Verify Email Error:', error);
         res.status(500).json({ message: 'Internal server error' });
