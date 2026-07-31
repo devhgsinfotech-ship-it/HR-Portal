@@ -17,7 +17,7 @@ const ALLRoutes: React.FC = () => {
         {/* <Route path="/" element={<Navigate to={all_routes.login} replace />} /> */}
 
         {/* ── PROTECTED ROUTES (must be logged in) ── */}
-        <Route element={<PrivateRoute />}>
+        <Route>
           <Route
             element={
               <Suspense fallback={<LoadingSpinner text="Loading application..." />}>
@@ -25,22 +25,31 @@ const ALLRoutes: React.FC = () => {
               </Suspense>
             }
           >
-            {publicRoutes.map((route, idx) => (
-              <Route
-                path={route.path}
-                element={
-                  <Suspense fallback={<LoadingSpinner text="Loading page..." />}>
-                    {route.element}
-                  </Suspense>
-                }
-                key={idx}
-              />
-            ))}
+            {publicRoutes.map((route, idx) => {
+              // Automatically protect /super-admin routes
+              const isSuperAdmin = route.path?.startsWith('/super-admin');
+              const allowedRoles = isSuperAdmin
+                ? (["SUPER_ADMIN"] as Array<"SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE">)
+                : (["HR", "MANAGER", "EMPLOYEE", "SUPER_ADMIN"] as Array<"SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE">);
+
+              return (
+                <Route element={<PrivateRoute allowedRoles={allowedRoles} />} key={idx}>
+                  <Route
+                    path={route.path}
+                    element={
+                      <Suspense fallback={<LoadingSpinner text="Loading page..." />}>
+                        {route.element}
+                      </Suspense>
+                    }
+                  />
+                </Route>
+              );
+            })}
           </Route>
         </Route>
 
         {/* Layout routes — also protected */}
-        <Route element={<PrivateRoute />}>
+        <Route>
           <Route
             element={
               <Suspense fallback={<LoadingSpinner text="Loading layout..." />}>
@@ -48,17 +57,25 @@ const ALLRoutes: React.FC = () => {
               </Suspense>
             }
           >
-            {layoutRoutes.map((route, idx) => (
-              <Route
-                path={route.path}
-                element={
-                  <Suspense fallback={<LoadingSpinner text="Loading page..." />}>
-                    {route.element}
-                  </Suspense>
-                }
-                key={`layout-${idx}`}
-              />
-            ))}
+            {layoutRoutes.map((route, idx) => {
+              const isSuperAdmin = route.path?.startsWith('/super-admin');
+              const allowedRoles = isSuperAdmin
+                ? (["SUPER_ADMIN"] as Array<"SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE">)
+                : (["HR", "MANAGER", "EMPLOYEE", "SUPER_ADMIN"] as Array<"SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE">);
+
+              return (
+                <Route element={<PrivateRoute allowedRoles={allowedRoles} />} key={`layout-${idx}`}>
+                  <Route
+                    path={route.path}
+                    element={
+                      <Suspense fallback={<LoadingSpinner text="Loading page..." />}>
+                        {route.element}
+                      </Suspense>
+                    }
+                  />
+                </Route>
+              );
+            })}
           </Route>
         </Route>
 

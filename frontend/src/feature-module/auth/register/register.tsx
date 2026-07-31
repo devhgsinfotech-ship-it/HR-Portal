@@ -29,7 +29,6 @@ const Register = () => {
   const [error, setError]           = useState("");
   const [success, setSuccess]       = useState(false);
   const [workspaceUrl, setWorkspaceUrl] = useState("");
-  const [devToken, setDevToken]     = useState("");
   const [registeredEmail, setRegisteredEmail] = useState("");
 
   const [passwordVisibility, setPasswordVisibility] = useState<PasswordVisibility>({
@@ -70,11 +69,10 @@ const Register = () => {
         password,
       });
 
-      const { company, devToken: token } = response.data;
+      const { company } = response.data;
       setWorkspaceUrl(
         company.workspaceUrl || `http://${company.subdomain}.yourhrms.com/login`
       );
-      setDevToken(token || "");
       setRegisteredEmail(email);
       setSuccess(true);
     } catch (err: any) {
@@ -121,23 +119,7 @@ const Register = () => {
                   <p className="text-primary mb-0 fw-semibold">{workspaceUrl}</p>
                 </div>
 
-                {/* DEV ONLY: Show token for testing */}
-                {devToken && (
-                  <div className="alert alert-warning text-start small mb-3">
-                    <strong>🛠 Dev Mode — Verification Token:</strong>
-                    <br />
-                    <code className="text-break">{devToken}</code>
-                    <hr className="my-2" />
-                    <p className="mb-0">
-                      <Link
-                        to={`${routes.emailVerification}?token=${devToken}`}
-                        className="fw-semibold"
-                      >
-                        Click here to verify email →
-                      </Link>
-                    </p>
-                  </div>
-                )}
+
 
                 <a href={`${workspaceUrl}/login`} className="btn btn-primary w-100 mb-2">
                   Go to Login

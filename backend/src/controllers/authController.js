@@ -3,6 +3,7 @@ const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const emailService = require('../utils/emailService');
 
 async function login(req, res) {
     try {
@@ -185,7 +186,15 @@ async function register(req, res) {
             return { company, user };
         });
 
-        console.log(`📧 Verification token for ${email}: ${verifyToken}`);
+        const workspaceUrl = `http://${result.company.subdomain}.localhost:3000`;
+
+        // Send real email instead of just logging token
+        try {
+            await emailService.sendVerificationEmail(email, verifyToken, companyName, workspaceUrl);
+        } catch (emailError) {
+            console.error('Failed to send verification email:', emailError);
+            // We still return 201 because the user was created, but we could warn them.
+        }
 
         res.status(201).json({
             message: 'Company registered successfully! Please check your email to verify your account.',
@@ -193,9 +202,8 @@ async function register(req, res) {
                 id: result.company.id,
                 name: result.company.name,
                 subdomain: result.company.subdomain,
-                workspaceUrl: `https://${result.company.subdomain}.yourhrms.com`,
-            },
-            devToken: verifyToken, // Remove in production!
+                workspaceUrl: workspaceUrl,
+            }
         });
 
     } catch (error) {
