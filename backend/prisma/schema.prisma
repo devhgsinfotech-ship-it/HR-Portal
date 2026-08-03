@@ -88,6 +88,7 @@ model Company {
   email           String    @unique
   phone           String?
   subdomain       String    @unique  // ← ADD THIS LINE e.g. "techcorp"
+  emailDomain     String?   // The corporate email domain (e.g. hgsinfotech.com)
   industry        String?
   companySize     String?
   address         String?

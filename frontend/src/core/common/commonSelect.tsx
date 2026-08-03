@@ -11,9 +11,10 @@ export interface SelectProps {
   defaultValue?: Option;
   className?: string;
   styles?: any; 
+  onChange?: (option: Option | null) => void;
 }
 
-const CommonSelect: React.FC<SelectProps> = ({ options, defaultValue, className }) => {
+const CommonSelect: React.FC<SelectProps> = ({ options, defaultValue, className, onChange }) => {
   const [selectedOption, setSelectedOption] = useState<Option | undefined>(defaultValue);
 
   const customStyles = {
@@ -31,6 +32,9 @@ const CommonSelect: React.FC<SelectProps> = ({ options, defaultValue, className 
 
   const handleChange = (option: Option | null) => {
     setSelectedOption(option || undefined);
+    if (onChange) {
+      onChange(option);
+    }
   };
   useEffect(() => {
     setSelectedOption(defaultValue || undefined);

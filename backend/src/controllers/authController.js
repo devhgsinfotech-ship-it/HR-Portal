@@ -120,6 +120,17 @@ async function register(req, res) {
             return res.status(400).json({ message: 'Company name, email, contact person and password are required' });
         }
 
+        // ── Block public email domains ──────────────────────────────
+        const emailDomain = email.split('@')[1]?.toLowerCase();
+        if (!emailDomain) {
+            return res.status(400).json({ message: 'Invalid email address' });
+        }
+        
+        const publicDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com', 'icloud.com'];
+        if (publicDomains.includes(emailDomain)) {
+            return res.status(400).json({ message: 'Please register with your corporate email address. Public domains are not allowed.' });
+        }
+
         // ── Auto-generate unique subdomain ──────────────────────────────
         const base = buildBaseSubdomain(companyName);
         if (!base || base.length < 2) {
@@ -156,6 +167,7 @@ async function register(req, res) {
                 data: {
                     name: companyName,
                     email,
+                    emailDomain,                     // ← Store the corporate domain
                     subdomain: generatedSubdomain,   // ← Store the subdomain
                     phone: phone || null,
                     industry: industry || null,

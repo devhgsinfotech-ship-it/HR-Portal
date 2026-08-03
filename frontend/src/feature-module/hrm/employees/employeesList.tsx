@@ -1,6 +1,9 @@
 import { useState, useMemo, useCallback } from "react";
 import { all_routes } from "../../../router/all_routes";
 import { Link } from "react-router-dom";
+import { getSubdomain } from "../../../core/utils/apiClient";
+import apiClient from "../../../core/utils/apiClient";
+import { useEffect } from "react";
 import Table from "../../../core/common/dataTable/index";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import PredefinedDateRanges from "../../../core/common/datePicker";
@@ -8,11 +11,14 @@ import { employee_list_details } from "../../../core/data/json/employees_list_de
 import { DatePicker } from "antd";
 import CommonSelect from "../../../core/common/commonSelect";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
+import dayjs from "dayjs";
 
 type PasswordField = "password" | "confirmPassword";
 
 // Define an interface for employee data
 interface Employee {
+  id?: string | number;
+  raw?: any;
   EmpId: string;
   Name: string;
   Image: string;
@@ -33,6 +39,132 @@ const EmployeeList = () => {
   );
   const [hasMore, setHasMore] = useState<boolean>(allData.length > PAGE_SIZE);
   const [loading, setLoading] = useState(false);
+
+  const [dbEmployees, setDbEmployees] = useState<any[]>([]);
+  const [dbDepartments, setDbDepartments] = useState<any[]>([]);
+  const [dbDesignations, setDbDesignations] = useState<any[]>([]);
+  const [newEmp, setNewEmp] = useState({ firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '' });
+  const [editEmp, setEditEmp] = useState<any>({ id: '', firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', profilePhotoUrl: '', employeeCode: '', username: '', company: '', password: '', confirmPassword: '' });
+  const [errorMsg, setErrorMsg] = useState('');
+  const [newEmpFile, setNewEmpFile] = useState<File | null>(null);
+  const [editEmpFile, setEditEmpFile] = useState<File | null>(null);
+  const [emailStatus, setEmailStatus] = useState<{ available?: boolean, suggestion?: string, checking?: boolean }>({});
+  const [isEmailEdited, setIsEmailEdited] = useState(false);
+
+  useEffect(() => {
+    if (!newEmp.email) {
+      setEmailStatus({});
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setEmailStatus({ checking: true });
+      try {
+        const res = await apiClient.get(`/employees/check-email?email=${newEmp.email}`);
+        setEmailStatus({ available: res.data.available, suggestion: res.data.suggestion, checking: false });
+      } catch (err) {
+        setEmailStatus({ checking: false });
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [newEmp.email]);
+
+  const fetchData = async () => {
+    try {
+      const [empRes, deptRes, desigRes] = await Promise.all([
+        apiClient.get('/employees'),
+        apiClient.get('/departments'),
+        apiClient.get('/designations')
+      ]);
+      const mappedEmployees = empRes.data.map((emp: any) => ({
+        key: emp.id,
+        id: emp.id,
+        EmpId: emp.employeeCode || emp.employeeId || 'N/A',
+        Name: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+        Image: emp.profilePhotoUrl || 'avatar-20.jpg',
+        CurrentRole: emp.designation?.name || 'N/A',
+        Email: emp.user?.email || emp.email || 'N/A',
+        Phone: emp.phone || 'N/A',
+        Designation: emp.designation?.name || 'N/A',
+        JoiningDate: emp.dateOfJoining ? new Date(emp.dateOfJoining).toLocaleDateString() : 'N/A',
+        Status: 'Active',
+        raw: emp
+      }));
+      setDbEmployees(mappedEmployees);
+      setDbDepartments(deptRes.data.map((d: any) => ({ value: d.id, label: d.name })));
+      setDbDesignations(desigRes.data.map((d: any) => ({ value: d.id, label: d.name })));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleAddEmployee = async (e: any) => {
+    e.preventDefault();
+    if (emailStatus.available === false) {
+      setErrorMsg('Please choose an available email address.');
+      return;
+    }
+    try {
+      const formData = new FormData();
+      Object.entries(newEmp).forEach(([key, value]) => {
+        formData.append(key, value);
+      });
+      if (newEmpFile) formData.append('profileImage', newEmpFile);
+
+      await apiClient.post('/employees', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      // Close modal programmatically
+      const modal = document.getElementById('add_employee');
+      if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) backdrop.remove();
+      }
+      fetchData();
+      setNewEmp({ firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '' });
+      setNewEmpFile(null);
+      setEmailStatus({});
+      setIsEmailEdited(false);
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || 'Error adding employee');
+    }
+  };
+
+  const handleEditEmployee = async (e: any) => {
+    e.preventDefault();
+    if (editEmp.password && editEmp.password !== editEmp.confirmPassword) {
+      setErrorMsg('Passwords do not match');
+      return;
+    }
+    try {
+      const formData = new FormData();
+      Object.entries(editEmp).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && key !== 'confirmPassword') {
+          formData.append(key, String(value));
+        }
+      });
+      if (editEmpFile) formData.append('profileImage', editEmpFile);
+
+      await apiClient.put(`/employees/${editEmp.id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      // Close modal programmatically
+      const modal = document.getElementById('edit_employee');
+      if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) backdrop.remove();
+      }
+      fetchData();
+      setEditEmpFile(null);
+      setErrorMsg('');
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || 'Error updating employee');
+    }
+  };
+
 
   const columns = [
     {
@@ -55,11 +187,20 @@ const EmployeeList = () => {
             data-inert={true}
             data-bs-target="#view_details"
           >
-            <ImageWithBasePath
-              src={`assets/img/users/${record.Image}`}
-              className="img-fluid rounded-circle"
-              alt={`${record.Name}'s profile image`} // alt is now required and descriptive
-            />
+            {record.Image && (record.Image.startsWith('/') || record.Image.startsWith('http')) ? (
+              <img
+                src={record.Image.startsWith('http') ? record.Image : `${apiClient.defaults.baseURL}${record.Image}`}
+                className="img-fluid rounded-circle"
+                alt={`${record.Name}'s profile image`}
+                style={{ width: "36px", height: "36px", objectFit: "cover" }}
+              />
+            ) : (
+              <ImageWithBasePath
+                src={`assets/img/users/${record.Image || 'avatar-20.jpg'}`}
+                className="img-fluid rounded-circle"
+                alt={`${record.Name}'s profile image`}
+              />
+            )}
           </Link>
           <div className="ms-2">
             <p className="text-dark mb-0">
@@ -150,7 +291,7 @@ const EmployeeList = () => {
     {
       title: "",
       dataIndex: "actions",
-      render: () => (
+      render: (_text: any, record: Employee) => (
         <div className="action-icon d-inline-flex">
           <Link
             to="#"
@@ -158,6 +299,22 @@ const EmployeeList = () => {
             data-bs-toggle="modal"
             data-inert={true}
             data-bs-target="#edit_employee"
+            onClick={() => setEditEmp({
+              id: record.id,
+              firstName: record.raw?.firstName || '',
+              lastName: record.raw?.lastName || '',
+              email: record.raw?.user?.email || record.raw?.email || '',
+              phone: record.raw?.phone || '',
+              departmentId: record.raw?.departmentId || '',
+              designationId: record.raw?.designationId || '',
+              dateOfJoining: record.raw?.dateOfJoining ? new Date(record.raw.dateOfJoining).toISOString().split('T')[0] : '',
+              profilePhotoUrl: record.raw?.profilePhotoUrl || '',
+              employeeCode: record.raw?.employeeCode || '',
+              username: record.raw?.user?.name || '',
+              company: record.raw?.user?.company?.name || '',
+              password: '',
+              confirmPassword: ''
+            })}
           >
             <i className="ti ti-edit" />
           </Link>
@@ -494,7 +651,7 @@ const EmployeeList = () => {
               </div>
             </div>
             <div className="card-body p-0">
-              <Table columns={columns} dataSource={visibleData} Selection={false} />
+              <Table columns={columns} dataSource={dbEmployees} Selection={false} />
             </div>
           </div>
         </div>
@@ -527,7 +684,7 @@ const EmployeeList = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form>
+            <form onSubmit={handleAddEmployee}>
               <div className="contact-grids-tab">
                 <ul className="nav nav-underline" id="myTab" role="tablist">
                   <li className="nav-item" role="presentation">
@@ -567,11 +724,16 @@ const EmployeeList = () => {
                   tabIndex={0}
                 >
                   <div className="modal-body pb-0 ">
+{errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
                     <div className="row">
                       <div className="col-md-12">
                         <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
                           <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                            <i className="ti ti-photo text-gray-2 fs-16" />
+                            {newEmpFile ? (
+                              <img src={URL.createObjectURL(newEmpFile)} alt="profile" className="rounded-circle" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ) : (
+                              <i className="ti ti-photo text-gray-2 fs-16" />
+                            )}
                           </div>
                           <div className="profile-upload">
                             <div className="mb-2">
@@ -586,7 +748,12 @@ const EmployeeList = () => {
                                 <input
                                   type="file"
                                   className="form-control image-sign"
-                                  multiple
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    if (e.target.files && e.target.files.length > 0) {
+                                      setNewEmpFile(e.target.files[0]);
+                                    }
+                                  }}
                                 />
                               </div>
                               <Link to="#" className="btn btn-light btn-sm">
@@ -601,13 +768,20 @@ const EmployeeList = () => {
                           <label className="form-label">
                             First Name <span className="text-danger"> *</span>
                           </label>
-                          <input type="text" className="form-control" />
+                          <input type="text" className="form-control" value={newEmp.firstName} onChange={(e) => {
+                            const firstName = e.target.value;
+                            if (!isEmailEdited) {
+                              setNewEmp({...newEmp, firstName, email: `${firstName.toLowerCase().replace(/\s+/g, '')}@${getSubdomain() || 'hgs'}.com`})
+                            } else {
+                              setNewEmp({...newEmp, firstName})
+                            }
+                          }} required />
                         </div>
                       </div>
                       <div className="col-md-6">
                         <div className="mb-3">
                           <label className="form-label">Last Name</label>
-                          <input type="email" className="form-control" />
+                          <input type="text" className="form-control" value={newEmp.lastName} onChange={(e) => setNewEmp({...newEmp, lastName: e.target.value})} />
                         </div>
                       </div>
                       <div className="col-md-6">
@@ -615,7 +789,7 @@ const EmployeeList = () => {
                           <label className="form-label">
                             Employee ID <span className="text-danger"> *</span>
                           </label>
-                          <input type="text" className="form-control" />
+                          <input type="text" className="form-control" value="Auto-generated" readOnly disabled />
                         </div>
                       </div>
                       <div className="col-md-6">
@@ -626,12 +800,13 @@ const EmployeeList = () => {
                           <div className="input-icon-end position-relative">
                             <DatePicker
                               className="form-control datetimepicker"
-                              format={{
-                                format: "DD-MM-YYYY",
-                                type: "mask",
-                              }}
+                              format="DD-MM-YYYY"
                               getPopupContainer={getModalContainer}
                               placeholder="DD-MM-YYYY"
+                              value={newEmp.dateOfJoining ? dayjs(newEmp.dateOfJoining) : null}
+                              onChange={(_date: any, dateString: any) =>
+                                setNewEmp({ ...newEmp, dateOfJoining: typeof dateString === 'string' ? dateString.split('-').reverse().join('-') : '' })
+                              }
                             />
                             <span className="input-icon-addon">
                               <i className="ti ti-calendar text-gray-7" />
@@ -644,7 +819,7 @@ const EmployeeList = () => {
                           <label className="form-label">
                             Username <span className="text-danger"> *</span>
                           </label>
-                          <input type="text" className="form-control" />
+                          <input type="text" className="form-control" value={`${newEmp.firstName} ${newEmp.lastName}`.trim() || 'Auto-generated'} readOnly disabled />
                         </div>
                       </div>
                       <div className="col-md-6">
@@ -652,7 +827,20 @@ const EmployeeList = () => {
                           <label className="form-label">
                             Email <span className="text-danger"> *</span>
                           </label>
-                          <input type="email" className="form-control" />
+                          <input type="email" className={`form-control ${emailStatus.available === false ? 'is-invalid' : ''} ${emailStatus.available === true ? 'is-valid' : ''}`} value={newEmp.email} onChange={(e) => {
+                            setIsEmailEdited(true);
+                            setNewEmp({...newEmp, email: e.target.value});
+                          }} required />
+                          {emailStatus.checking && <div className="form-text text-muted">Checking availability...</div>}
+                          {emailStatus.available === false && (
+                            <div className="invalid-feedback d-block">
+                              This email is already in use. 
+                              {emailStatus.suggestion && (
+                                <span> Suggestion: <a href="#" onClick={(e) => { e.preventDefault(); setNewEmp({...newEmp, email: emailStatus.suggestion!}); setIsEmailEdited(true); }}>{emailStatus.suggestion}</a></span>
+                              )}
+                            </div>
+                          )}
+                          {emailStatus.available === true && <div className="valid-feedback d-block">Email is available!</div>}
                         </div>
                       </div>
                       <div className="col-md-6">
@@ -668,6 +856,9 @@ const EmployeeList = () => {
                                   : "password"
                               }
                               className="pass-input form-control"
+                              value="Password@123"
+                              readOnly
+                              disabled
                             />
                             <span
                               className={`ti toggle-passwords ${passwordVisibility.password
@@ -695,6 +886,9 @@ const EmployeeList = () => {
                                   : "password"
                               }
                               className="pass-input form-control"
+                              value="Password@123"
+                              readOnly
+                              disabled
                             />
                             <span
                               className={`ti toggle-passwords ${passwordVisibility.confirmPassword
@@ -713,7 +907,7 @@ const EmployeeList = () => {
                           <label className="form-label">
                             Phone Number <span className="text-danger"> *</span>
                           </label>
-                          <input type="text" className="form-control" />
+                          <input type="text" className="form-control" value={newEmp.phone} onChange={(e) => setNewEmp({...newEmp, phone: e.target.value})} />
                         </div>
                       </div>
                       <div className="col-md-6">
@@ -721,7 +915,7 @@ const EmployeeList = () => {
                           <label className="form-label">
                             Company<span className="text-danger"> *</span>
                           </label>
-                          <input type="text" className="form-control" />
+                          <input type="text" className="form-control" value="Auto-assigned to your Company" readOnly disabled />
                         </div>
                       </div>
                       <div className="col-md-6">
@@ -729,8 +923,8 @@ const EmployeeList = () => {
                           <label className="form-label">Department</label>
                           <CommonSelect
                             className="select"
-                            options={department}
-                            defaultValue={department[0]}
+                            options={dbDepartments}
+                            onChange={(opt) => setNewEmp({...newEmp, departmentId: opt?.value || ''})}
                           />
                         </div>
                       </div>
@@ -739,8 +933,8 @@ const EmployeeList = () => {
                           <label className="form-label">Designation</label>
                           <CommonSelect
                             className="select"
-                            options={designation}
-                            defaultValue={designation[0]}
+                            options={dbDesignations}
+                            onChange={(opt) => setNewEmp({...newEmp, designationId: opt?.value || ''})}
                           />
                         </div>
                       </div>
@@ -767,8 +961,7 @@ const EmployeeList = () => {
                       Cancel
                     </button>
                     <button
-                      type="button"
-                      data-bs-dismiss="modal"
+                      type="submit"
                       className="btn btn-primary"
                     >
                       Save{" "}
@@ -1506,7 +1699,7 @@ const EmployeeList = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form>
+            <form onSubmit={handleEditEmployee}>
               <div className="contact-grids-tab">
                 <ul className="nav nav-underline" id="myTab2" role="tablist">
                   <li className="nav-item" role="presentation">
@@ -1550,10 +1743,17 @@ const EmployeeList = () => {
                       <div className="col-md-12">
                         <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
                           <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                            <ImageWithBasePath
-                              src="assets/img/users/user-13.jpg"
+                            <img
+                              src={
+                                editEmpFile 
+                                  ? URL.createObjectURL(editEmpFile) 
+                                  : editEmp.profilePhotoUrl 
+                                    ? (editEmp.profilePhotoUrl.startsWith('/') ? `${apiClient.defaults.baseURL}${editEmp.profilePhotoUrl}` : `assets/img/users/${editEmp.profilePhotoUrl}`)
+                                    : "assets/img/users/user-13.jpg"
+                              }
                               alt="user"
                               className="rounded-circle"
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
                             />
                           </div>
                           <div className="profile-upload">
@@ -1569,7 +1769,12 @@ const EmployeeList = () => {
                                 <input
                                   type="file"
                                   className="form-control image-sign"
-                                  multiple
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    if (e.target.files && e.target.files.length > 0) {
+                                      setEditEmpFile(e.target.files[0]);
+                                    }
+                                  }}
                                 />
                               </div>
                               <Link to="#" className="btn btn-light btn-sm">
@@ -1587,7 +1792,12 @@ const EmployeeList = () => {
                           <input
                             type="text"
                             className="form-control"
-                            defaultValue="Anthony"
+                            value={editEmp.firstName}
+                            onChange={(e) => {
+                              const firstName = e.target.value;
+                              setEditEmp({...editEmp, firstName, email: `${firstName.toLowerCase().replace(/\s+/g, '')}@${getSubdomain() || 'hgs'}.com`})
+                            }}
+                            required
                           />
                         </div>
                       </div>
@@ -1595,9 +1805,10 @@ const EmployeeList = () => {
                         <div className="mb-3">
                           <label className="form-label">Last Name</label>
                           <input
-                            type="email"
+                            type="text"
                             className="form-control"
-                            defaultValue="Lewis"
+                            value={editEmp.lastName}
+                            onChange={(e) => setEditEmp({...editEmp, lastName: e.target.value})}
                           />
                         </div>
                       </div>
@@ -1609,7 +1820,9 @@ const EmployeeList = () => {
                           <input
                             type="text"
                             className="form-control"
-                            defaultValue="Emp-001"
+                            value={editEmp.employeeCode}
+                            readOnly
+                            disabled
                           />
                         </div>
                       </div>
@@ -1621,12 +1834,13 @@ const EmployeeList = () => {
                           <div className="input-icon-end position-relative">
                             <DatePicker
                               className="form-control datetimepicker"
-                              format={{
-                                format: "DD-MM-YYYY",
-                                type: "mask",
-                              }}
+                              format="DD-MM-YYYY"
                               getPopupContainer={getModalContainer}
                               placeholder="DD-MM-YYYY"
+                              value={editEmp.dateOfJoining ? dayjs(editEmp.dateOfJoining) : null}
+                              onChange={(_date: any, dateString: any) =>
+                                setEditEmp({ ...editEmp, dateOfJoining: typeof dateString === 'string' ? dateString.split('-').reverse().join('-') : '' })
+                              }
                             />
                             <span className="input-icon-addon">
                               <i className="ti ti-calendar text-gray-7" />
@@ -1642,7 +1856,9 @@ const EmployeeList = () => {
                           <input
                             type="text"
                             className="form-control"
-                            defaultValue="Anthony"
+                            value={editEmp.username}
+                            readOnly
+                            disabled
                           />
                         </div>
                       </div>
@@ -1654,14 +1870,16 @@ const EmployeeList = () => {
                           <input
                             type="email"
                             className="form-control"
-                            defaultValue="anthony@example.com	"
+                            value={editEmp.email}
+                            onChange={(e) => setEditEmp({...editEmp, email: e.target.value})}
+                            required
                           />
                         </div>
                       </div>
                       <div className="col-md-6">
                         <div className="mb-3 ">
                           <label className="form-label">
-                            Password <span className="text-danger"> *</span>
+                            Password
                           </label>
                           <div className="pass-group">
                             <input
@@ -1671,6 +1889,9 @@ const EmployeeList = () => {
                                   : "password"
                               }
                               className="pass-input form-control"
+                              placeholder="Leave blank to keep current"
+                              value={editEmp.password || ''}
+                              onChange={(e) => setEditEmp({ ...editEmp, password: e.target.value })}
                             />
                             <span
                               className={`ti toggle-passwords ${passwordVisibility.password
@@ -1687,8 +1908,7 @@ const EmployeeList = () => {
                       <div className="col-md-6">
                         <div className="mb-3 ">
                           <label className="form-label">
-                            Confirm Password{" "}
-                            <span className="text-danger"> *</span>
+                            Confirm Password
                           </label>
                           <div className="pass-group">
                             <input
@@ -1698,6 +1918,9 @@ const EmployeeList = () => {
                                   : "password"
                               }
                               className="pass-input form-control"
+                              placeholder="Confirm new password"
+                              value={editEmp.confirmPassword || ''}
+                              onChange={(e) => setEditEmp({ ...editEmp, confirmPassword: e.target.value })}
                             />
                             <span
                               className={`ti toggle-passwords ${passwordVisibility.confirmPassword
@@ -1719,7 +1942,8 @@ const EmployeeList = () => {
                           <input
                             type="text"
                             className="form-control"
-                            defaultValue="(123) 4567 890"
+                            value={editEmp.phone}
+                            onChange={(e) => setEditEmp({...editEmp, phone: e.target.value})}
                           />
                         </div>
                       </div>
@@ -1731,7 +1955,9 @@ const EmployeeList = () => {
                           <input
                             type="text"
                             className="form-control"
-                            defaultValue="Abac Company"
+                            value={editEmp.company || 'HGS Infotech'}
+                            readOnly
+                            disabled
                           />
                         </div>
                       </div>
@@ -1740,8 +1966,9 @@ const EmployeeList = () => {
                           <label className="form-label">Department</label>
                           <CommonSelect
                             className="select"
-                            options={department}
-                            defaultValue={department[1]}
+                            options={dbDepartments}
+                            onChange={(opt) => setEditEmp({...editEmp, departmentId: opt?.value || ''})}
+                            defaultValue={dbDepartments.find(d => d.value === editEmp.departmentId) || dbDepartments[0]}
                           />
                         </div>
                       </div>
@@ -1750,8 +1977,9 @@ const EmployeeList = () => {
                           <label className="form-label">Designation</label>
                           <CommonSelect
                             className="select"
-                            options={designation}
-                            defaultValue={designation[1]}
+                            options={dbDesignations}
+                            onChange={(opt) => setEditEmp({...editEmp, designationId: opt?.value || ''})}
+                            defaultValue={dbDesignations.find(d => d.value === editEmp.designationId) || dbDesignations[0]}
                           />
                         </div>
                       </div>
@@ -1778,11 +2006,8 @@ const EmployeeList = () => {
                       Cancel
                     </button>
                     <button
-                      type="button"
+                      type="submit"
                       className="btn btn-primary"
-                      data-bs-toggle="modal"
-                      data-inert={true}
-                      data-bs-target="#success_modal"
                     >
                       Save{" "}
                     </button>

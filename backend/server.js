@@ -3,6 +3,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes are added incrementally as each feature is built.
 // Uncomment each line once its route file exists AND (for Prisma-backed
@@ -33,7 +35,7 @@ app.use(express.json());
 const authRoutes = require('./src/routes/authRoutes');
 const departmentRoutes = require('./src/routes/departmentRoutes');
 const designationRoutes = require('./src/routes/designationRoutes');
-// const employeeRoutes = require('./src/routes/employeeRoutes');
+const employeeRoutes = require('./src/routes/employeeRoutes');
 // const salaryRoutes = require('./src/routes/salaryRoutes');
 // const payslipRoutes = require('./src/routes/payslipRoutes');
 // const leaveRoutes = require('./src/routes/leaveRoutes');
@@ -43,7 +45,7 @@ const designationRoutes = require('./src/routes/designationRoutes');
 app.use('/auth', authRoutes);
 app.use('/departments', departmentRoutes);
 app.use('/designations', designationRoutes);
-//app.use('/employees', employeeRoutes);
+app.use('/employees', employeeRoutes);
 // app.use('/salary', salaryRoutes);
 // app.use('/payslips', payslipRoutes);
 // app.use('/leaves', leaveRoutes);
