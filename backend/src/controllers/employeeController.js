@@ -241,13 +241,9 @@ async function deleteEmployee(req, res) {
             return res.status(404).json({ message: 'Employee not found' });
         }
 
-        await prisma.$transaction(async (tx) => {
-            await tx.employee.delete({
-                where: { id: parseInt(id, 10) }
-            });
-            await tx.user.delete({
-                where: { id: existing.userId }
-            });
+        // Deleting the user automatically cascades and deletes the employee profile and all associated data
+        await prisma.user.delete({
+            where: { id: existing.userId }
         });
 
         res.json({ message: 'Employee deleted successfully' });

@@ -48,6 +48,7 @@ const EmployeeList = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [newEmpFile, setNewEmpFile] = useState<File | null>(null);
   const [editEmpFile, setEditEmpFile] = useState<File | null>(null);
+  const [deleteEmpId, setDeleteEmpId] = useState<string | number | null>(null);
   const [emailStatus, setEmailStatus] = useState<{ available?: boolean, suggestion?: string, checking?: boolean }>({});
   const [isEmailEdited, setIsEmailEdited] = useState(false);
 
@@ -162,6 +163,24 @@ const EmployeeList = () => {
       setErrorMsg('');
     } catch (err: any) {
       setErrorMsg(err.response?.data?.message || 'Error updating employee');
+    }
+  };
+
+  const handleDeleteEmployee = async () => {
+    if (!deleteEmpId) return;
+    try {
+      await apiClient.delete(`/employees/${deleteEmpId}`);
+      const modal = document.getElementById('delete_employee_modal');
+      if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) backdrop.remove();
+      }
+      fetchData();
+      setDeleteEmpId(null);
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || 'Error deleting employee');
     }
   };
 
@@ -322,7 +341,8 @@ const EmployeeList = () => {
             to="#"
             data-bs-toggle="modal"
             data-inert={true}
-            data-bs-target="#delete_modal"
+            data-bs-target="#delete_employee_modal"
+            onClick={() => setDeleteEmpId(record.id || null)}
           >
             <i className="ti ti-trash" />
           </Link>
@@ -2765,7 +2785,40 @@ const EmployeeList = () => {
           </div>
         </div>
       </div>
-      {/* /Add Client Success */}
+      {/* Delete Employee Modal */}
+      <div className="modal fade" id="delete_employee_modal" role="dialog">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-body text-center p-4">
+              <span className="avatar avatar-xl bg-transparent-danger text-danger mb-3">
+                <i className="ti ti-trash-x fs-36" />
+              </span>
+              <h4 className="mb-1">Confirm Delete</h4>
+              <p className="mb-3">
+                Are you sure you want to delete this employee? This action cannot be undone.
+              </p>
+              <div className="d-flex justify-content-center">
+                <button
+                  type="button"
+                  className="btn btn-light me-3"
+                  data-bs-dismiss="modal"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  data-bs-dismiss="modal"
+                  className="btn btn-danger"
+                  onClick={handleDeleteEmployee}
+                >
+                  Yes, Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* /Delete Employee Modal */}
     </>
   );
 };
