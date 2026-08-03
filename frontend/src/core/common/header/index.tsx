@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { setDataLayout } from "../../data/redux/themeSettingSlice";
+import { logout } from "../../data/redux/authSlice";
 import ImageWithBasePath from "../imageWithBasePath";
 import {
   setMobileSidebar,
@@ -64,10 +65,18 @@ const hasActiveChild = (
 const Header = React.memo(() => {
   const routes = all_routes;
   const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
   const dataLayout = useSelector(
     (state: RootState) => state.themeSetting.dataLayout,
   );
+  const user = useSelector((state: RootState) => state.auth.user);
   const Location = useLocation();
+
+  const handleLogout = (e: React.MouseEvent) => {
+    e.preventDefault();
+    dispatch(logout());
+    navigate(all_routes.login);
+  };
 
   // Multi-level menu open states (using Set for multiple open menus)
   const [openMenus, setOpenMenus] = useState<Set<string>>(new Set());
@@ -882,9 +891,9 @@ const Header = React.memo(() => {
                             />
                           </span>
                           <div>
-                            <h5 className="mb-0">Kevin Larry</h5>
+                            <h5 className="mb-0">{user?.name || "Admin"}</h5>
                             <p className="fs-12 fw-medium mb-0">
-                              warren@example.com
+                              {user?.email || "admin@example.com"}
                             </p>
                           </div>
                         </div>
@@ -923,6 +932,7 @@ const Header = React.memo(() => {
                         <Link
                           className="dropdown-item d-inline-flex align-items-center p-0 py-2"
                           to={all_routes.login}
+                          onClick={handleLogout}
                         >
                           <i className="ti ti-login me-2" />
                           Logout
@@ -960,8 +970,8 @@ const Header = React.memo(() => {
                     />
                   </span>
                   <div>
-                    <h6 className="mb-0">Kevin Larry</h6>
-                    <p className="fs-12 fw-medium mb-0">warren@example.com</p>
+                    <h6 className="mb-0">{user?.name || "Admin"}</h6>
+                    <p className="fs-12 fw-medium mb-0">{user?.email || "admin@example.com"}</p>
                   </div>
                 </div>
               </div>
@@ -980,7 +990,11 @@ const Header = React.memo(() => {
               <Link className="dropdown-item" to={routes.knowledgebase}>
                 <i className="ti ti-question-mark me-1"></i>Knowledge Base
               </Link>
-              <Link className="dropdown-item" to={routes.login}>
+              <Link 
+                className="dropdown-item" 
+                to={routes.login}
+                onClick={handleLogout}
+              >
                 <i className="ti ti-login me-2"></i>Logout
               </Link>
             </div>
