@@ -1,12 +1,13 @@
+import React, { useState, useEffect } from 'react';
 import { all_routes } from '../../../router/all_routes'
 import { Link } from 'react-router-dom'
 import Table from "../../../core/common/dataTable/index";
-import CommonSelect from '../../../core/common/commonSelect';
-import { department_details } from '../../../core/data/json/department_details';
+import apiClient from "../../../core/utils/apiClient";
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
 
 // Add type for department data
 interface DepartmentData {
+  id: number;
   Department: string;
   NoOfEmployees: string;
   Status: string;
@@ -14,8 +15,75 @@ interface DepartmentData {
 }
 
 const Department = () => {
+  const [departments, setDepartments] = useState<DepartmentData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const data: DepartmentData[] = department_details;
+  // Form states
+  const [newDeptName, setNewDeptName] = useState("");
+  const [editDeptId, setEditDeptId] = useState<number | null>(null);
+  const [editDeptName, setEditDeptName] = useState("");
+  const [deleteDeptId, setDeleteDeptId] = useState<number | null>(null);
+
+  const fetchDepartments = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.get('/departments');
+      
+      // Map API response to table format
+      const formattedData = response.data.map((dept: any) => ({
+        id: dept.id,
+        Department: dept.name,
+        NoOfEmployees: dept._count?.employees?.toString() || "0",
+        Status: "Active", // Future proofing: you could add an isActive flag to the DB
+      }));
+      setDepartments(formattedData);
+    } catch (error) {
+      console.error("Failed to fetch departments", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDepartments();
+  }, []);
+
+  const handleAddDepartment = async () => {
+    if (!newDeptName) return;
+    try {
+      await apiClient.post('/departments', { name: newDeptName });
+      setNewDeptName("");
+      fetchDepartments(); // Refresh list
+    } catch (error) {
+      console.error("Failed to add department", error);
+      alert("Failed to add department");
+    }
+  };
+
+  const handleEditDepartment = async () => {
+    if (!editDeptId || !editDeptName) return;
+    try {
+      await apiClient.put(`/departments/${editDeptId}`, { name: editDeptName });
+      setEditDeptId(null);
+      setEditDeptName("");
+      fetchDepartments(); // Refresh list
+    } catch (error) {
+      console.error("Failed to update department", error);
+      alert("Failed to update department");
+    }
+  };
+
+  const handleDeleteDepartment = async () => {
+    if (!deleteDeptId) return;
+    try {
+      await apiClient.delete(`/departments/${deleteDeptId}`);
+      setDeleteDeptId(null);
+      fetchDepartments(); // Refresh list
+    } catch (error: any) {
+      console.error("Failed to delete department", error);
+      alert(error.response?.data?.message || "Failed to delete department");
+    }
+  };
   const columns = [
     {
       title: "Department",
@@ -46,7 +114,7 @@ const Department = () => {
     {
       title: "",
       dataIndex: "actions",
-      render: () => (
+      render: (text: string, _record: DepartmentData) => (
         <div className="action-icon d-inline-flex">
           <button
             type="button"
@@ -54,6 +122,10 @@ const Department = () => {
             data-bs-toggle="modal"
             data-bs-target="#edit_department"
             aria-label="Edit department"
+            onClick={() => {
+              setEditDeptId(_record.id);
+              setEditDeptName(_record.Department);
+            }}
           >
             <i className="ti ti-edit" />
           </button>
@@ -62,6 +134,7 @@ const Department = () => {
             data-bs-toggle="modal"
             data-bs-target="#delete_modal"
             aria-label="Delete department"
+            onClick={() => setDeleteDeptId(_record.id)}
           >
             <i className="ti ti-trash" />
           </button>
@@ -235,7 +308,11 @@ const Department = () => {
               </div>
             </div>
             <div className="card-body p-0">
-              <Table dataSource={data} columns={columns} Selection={true} />
+              {isLoading ? (
+                <div className="p-4 text-center">Loading departments...</div>
+              ) : (
+                <Table dataSource={departments} columns={columns} Selection={true} />
+              )}
             </div>
           </div>
           {/* /Performance Indicator list */}
@@ -272,19 +349,15 @@ const Department = () => {
                   <div className="col-md-12">
                     <div className="mb-3">
                       <label className="form-label">Department Name</label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label">Status</label>
-                      <CommonSelect
-                        className='select'
-                        options={statusChoose}
-                        defaultValue={statusChoose[0]}
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={newDeptName}
+                        onChange={(e) => setNewDeptName(e.target.value)}
                       />
                     </div>
                   </div>
+                  {/* Status removed as it's not dynamic yet */}
                 </div>
               </div>
               <div className="modal-footer">
@@ -295,7 +368,12 @@ const Department = () => {
                 >
                   Cancel
                 </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                <button 
+                  type="button" 
+                  data-bs-dismiss="modal" 
+                  className="btn btn-primary"
+                  onClick={handleAddDepartment}
+                >
                   Add Department
                 </button>
               </div>
@@ -328,20 +406,12 @@ const Department = () => {
                       <input
                         type="text"
                         className="form-control"
-                        defaultValue="Finance"
+                        value={editDeptName}
+                        onChange={(e) => setEditDeptName(e.target.value)}
                       />
                     </div>
                   </div>
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label">Status</label>
-                      <CommonSelect
-                        className='select'
-                        options={statusChoose}
-                        defaultValue={statusChoose[1]}
-                      />
-                    </div>
-                  </div>
+                  {/* Status removed as it's not dynamic yet */}
                 </div>
               </div>
               <div className="modal-footer">
@@ -352,7 +422,12 @@ const Department = () => {
                 >
                   Cancel
                 </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                <button 
+                  type="button" 
+                  data-bs-dismiss="modal" 
+                  className="btn btn-primary"
+                  onClick={handleEditDepartment}
+                >
                   Save Department
                 </button>
               </div>
@@ -361,6 +436,41 @@ const Department = () => {
         </div>
       </div>
       {/* /Edit Department */}
+
+      {/* Delete Modal */}
+      <div className="modal fade" id="delete_modal">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-body text-center">
+              <span className="avatar avatar-xl bg-transparent-danger text-danger mb-3">
+                <i className="ti ti-trash-x fs-36" />
+              </span>
+              <h4 className="mb-1">Confirm Delete</h4>
+              <p className="mb-3">
+                Are you sure you want to delete this department? This action cannot be undone.
+              </p>
+              <div className="d-flex justify-content-center">
+                <button
+                  type="button"
+                  className="btn btn-light me-3"
+                  data-bs-dismiss="modal"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-danger" 
+                  data-bs-dismiss="modal"
+                  onClick={handleDeleteDepartment}
+                >
+                  Yes, Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* /Delete Modal */}
     </>
 
 
