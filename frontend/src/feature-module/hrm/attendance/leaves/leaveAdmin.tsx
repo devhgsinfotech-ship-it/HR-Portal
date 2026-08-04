@@ -1,8 +1,10 @@
 
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { all_routes } from '../../../../router/all_routes';
 import Table from "../../../../core/common/dataTable/index";
 import CommonSelect from '../../../../core/common/commonSelect';
+import apiClient from '../../../../core/utils/apiClient';
 import { leaveadmin_details } from '../../../../core/data/json/leaveadmin_details';
 import PredefinedDateRanges from '../../../../core/common/datePicker';
 import ImageWithBasePath from '../../../../core/common/imageWithBasePath';
@@ -10,8 +12,91 @@ import { DatePicker } from 'antd';
 import CollapseHeader from '../../../../core/common/collapse-header/collapse-header';
 
 const LeaveAdmin = () => {
+  const [dbRequests, setDbRequests] = useState<any[]>([]);
+  const [dbEmployees, setDbEmployees] = useState<any[]>([]);
+  const [dbTypes, setDbTypes] = useState<any[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+  
+  const [newLeave, setNewLeave] = useState({
+    employeeId: '',
+    leaveTypeId: '',
+    startDate: null as any,
+    endDate: null as any,
+    reason: ''
+  });
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const data = leaveadmin_details;
+  const fetchLeaveData = async () => {
+    try {
+      const [reqRes, empRes, typesRes] = await Promise.all([
+        apiClient.get('/leaves/requests'),
+        apiClient.get('/employees'),
+        apiClient.get('/leaves/types')
+      ]);
+      const mapped = reqRes.data.map((r: any) => ({
+        key: r.id,
+        rawId: r.id,
+        Employee: `${r.employee?.firstName || ''} ${r.employee?.lastName || ''}`.trim() || 'Employee',
+        Role: r.employee?.designation?.name || 'Staff',
+        LeaveType: r.leaveType?.name || 'Leave',
+        From: new Date(r.startDate).toLocaleDateString(),
+        To: new Date(r.endDate).toLocaleDateString(),
+        NoOfDays: `${r.totalDays} Days`,
+        Status: r.status,
+        Image: r.employee?.profilePhotoUrl || 'user-01.jpg'
+      }));
+      setDbRequests(mapped);
+      setDbEmployees(empRes.data);
+      setDbTypes(typesRes.data);
+      setIsLoaded(true);
+    } catch (err) {
+      console.error(err);
+      setIsLoaded(true);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeaveData();
+  }, []);
+
+  const handleApplyLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLeave.employeeId || !newLeave.leaveTypeId || !newLeave.startDate || !newLeave.endDate) {
+      setErrorMsg("Please fill all required fields.");
+      return;
+    }
+    try {
+      await apiClient.post('/leaves/apply', {
+        employeeId: newLeave.employeeId,
+        leaveTypeId: newLeave.leaveTypeId,
+        startDate: newLeave.startDate.format('YYYY-MM-DD'),
+        endDate: newLeave.endDate.format('YYYY-MM-DD'),
+        reason: newLeave.reason
+      });
+      const closeBtn = document.querySelector('#add_leaves .btn-close') as HTMLButtonElement;
+      if (closeBtn) closeBtn.click();
+      fetchLeaveData();
+      setNewLeave({ employeeId: '', leaveTypeId: '', startDate: null, endDate: null, reason: '' });
+      setErrorMsg('');
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || 'Error applying for leave');
+    }
+  };
+
+  const handleUpdateStatus = async (id: number, status: string) => {
+    if (!id) {
+        alert("Cannot approve dummy data.");
+        return;
+    }
+    try {
+      await apiClient.put(`/leaves/requests/${id}/status`, { status });
+      fetchLeaveData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error updating status');
+    }
+  };
+
+  const data = isLoaded ? dbRequests : leaveadmin_details;
   const columns = [
     {
       title: "Employee",
@@ -22,39 +107,27 @@ const LeaveAdmin = () => {
             to="#"
             className="avatar avatar-md border avatar-rounded"
           >
-            <ImageWithBasePath src={`assets/img/users/${record.Image}`} className="img-fluid" alt="img" />
+            <ImageWithBasePath src={`assets/img/users/${record?.Image}`} className="img-fluid" alt="img" />
           </Link>
           <div className="ms-2">
             <h6 className="fw-medium">
-              <Link to="#">{record.Employee}</Link>
+              <Link to="#">{record?.Employee}</Link>
             </h6>
             <span className="fs-12 fw-normal ">{record.Role}</span>
           </div>
         </div>
-
-
       ),
       sorter: (a: any, b: any) => a.Employee.length - b.Employee.length,
     },
     {
       title: "Leave Type",
       dataIndex: "LeaveType",
-      render: (_text: String, record: any) => (
+      render: (text: string) => (
         <div className="d-flex align-items-center">
           <p className="fs-14 fw-medium d-flex align-items-center mb-0">
-            {record.LeaveType}
+            {text}
           </p>
-          <Link
-            to="#"
-            className="ms-2"
-            data-bs-toggle="tooltip"
-            data-bs-placement="right"
-            data-bs-title="I am currently experiencing a fever and design & Development"
-          >
-            <i className="ti ti-info-circle text-info" />
-          </Link>
         </div>
-
       ),
       sorter: (a: any, b: any) => a.LeaveType.length - b.LeaveType.length,
     },
@@ -74,25 +147,31 @@ const LeaveAdmin = () => {
       sorter: (a: any, b: any) => a.NoOfDays.length - b.NoOfDays.length,
     },
     {
-      title: "",
-      dataIndex: "actions",
-      render: () => (
-        <div className="action-icon d-inline-flex">
-          <Link
-            to="#"
-            className="me-2"
-            data-bs-toggle="modal" data-inert={true}
-            data-bs-target="#edit_leaves"
-          >
-            <i className="ti ti-edit" />
-          </Link>
-          <Link
-            to="#"
-            data-bs-toggle="modal" data-inert={true}
-            data-bs-target="#delete_modal"
-          >
-            <i className="ti ti-trash" />
-          </Link>
+      title: "Status",
+      dataIndex: "Status",
+      render: (text: string, record: any) => (
+        <div className="d-flex align-items-center">
+          <span className={`badge ${text === 'APPROVED' ? 'badge-success-transparent' : text === 'REJECTED' ? 'badge-danger-transparent' : 'badge-warning-transparent'} me-2`}>
+            {text}
+          </span>
+          {text === 'PENDING' && (
+            <div className="btn-group btn-group-sm">
+              <button
+                type="button"
+                className="btn btn-sm btn-success py-0 px-2 fs-12"
+                onClick={() => handleUpdateStatus(record.rawId, 'APPROVED')}
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-danger py-0 px-2 fs-12"
+                onClick={() => handleUpdateStatus(record.rawId, 'REJECTED')}
+              >
+                Reject
+              </button>
+            </div>
+          )}
         </div>
       ),
     },
@@ -404,16 +483,18 @@ const LeaveAdmin = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form>
+            <form onSubmit={handleApplyLeave}>
               <div className="modal-body pb-0">
+                {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
                 <div className="row">
                   <div className="col-md-12">
                     <div className="mb-3">
                       <label className="form-label">Employee Name</label>
                       <CommonSelect
                         className='select'
-                        options={employeename}
-                        defaultValue={employeename[0]}
+                        options={dbEmployees.map(e => ({ value: String(e.id), label: `${e.firstName} ${e.lastName}` }))}
+                        defaultValue={undefined}
+                        onChange={(opt) => setNewLeave({...newLeave, employeeId: opt?.value || ''})}
                       />
                     </div>
                   </div>
@@ -422,8 +503,9 @@ const LeaveAdmin = () => {
                       <label className="form-label">Leave Type</label>
                       <CommonSelect
                         className='select'
-                        options={leavetype}
-                        defaultValue={leavetype[0]}
+                        options={dbTypes.map(t => ({ value: String(t.id), label: t.name }))}
+                        defaultValue={undefined}
+                        onChange={(opt) => setNewLeave({...newLeave, leaveTypeId: opt?.value || ''})}
                       />
                     </div>
                   </div>
@@ -433,12 +515,11 @@ const LeaveAdmin = () => {
                       <div className="input-icon-end position-relative">
                         <DatePicker
                           className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
+                          format="DD-MM-YYYY"
                           getPopupContainer={getModalContainer}
                           placeholder="DD-MM-YYYY"
+                          value={newLeave.startDate}
+                          onChange={(date) => setNewLeave({...newLeave, startDate: date})}
                         />
                         <span className="input-icon-addon">
                           <i className="ti ti-calendar text-gray-7" />
@@ -452,61 +533,16 @@ const LeaveAdmin = () => {
                       <div className="input-icon-end position-relative">
                         <DatePicker
                           className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
+                          format="DD-MM-YYYY"
                           getPopupContainer={getModalContainer}
                           placeholder="DD-MM-YYYY"
+                          value={newLeave.endDate}
+                          onChange={(date) => setNewLeave({...newLeave, endDate: date})}
                         />
                         <span className="input-icon-addon">
                           <i className="ti ti-calendar text-gray-7" />
                         </span>
                       </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <CommonSelect
-                        className='select'
-                        options={selectChoose}
-                        defaultValue={selectChoose[0]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">No of Days</label>
-                      <input type="text" className="form-control" disabled />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Remaining Days</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue={8}
-                        disabled
-                      />
                     </div>
                   </div>
                   <div className="col-md-12">
@@ -515,7 +551,8 @@ const LeaveAdmin = () => {
                       <textarea
                         className="form-control"
                         rows={3}
-                        defaultValue={""}
+                        value={newLeave.reason}
+                        onChange={(e) => setNewLeave({...newLeave, reason: e.target.value})}
                       />
                     </div>
                   </div>
@@ -529,7 +566,7 @@ const LeaveAdmin = () => {
                 >
                   Cancel
                 </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                <button type="submit" className="btn btn-primary">
                   Add Leave
                 </button>
               </div>

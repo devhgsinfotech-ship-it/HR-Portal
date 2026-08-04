@@ -1,5 +1,7 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { all_routes } from '../../../router/all_routes';
+import apiClient from '../../../core/utils/apiClient';
 import PredefinedDateRanges from '../../../core/common/datePicker';
 import { attendance_employee_details } from '../../../core/data/json/attendanceemployee';
 import ImageWithBasePath from '../../../core/common/imageWithBasePath';
@@ -19,8 +21,64 @@ interface AttendanceEmployeeData {
 }
 
 const AttendanceEmployee = () => {
+  const [isCheckedIn, setIsCheckedIn] = useState(false);
+  const [todayRecord, setTodayRecord] = useState<any>(null);
+  const [dbLogs, setDbLogs] = useState<any[]>([]);
+  const [loadingAction, setLoadingAction] = useState(false);
 
-  const data: AttendanceEmployeeData[] = attendance_employee_details;
+  const fetchTodayStatus = async () => {
+    try {
+      const res = await apiClient.get('/attendance/today');
+      setIsCheckedIn(res.data.isCheckedIn);
+      setTodayRecord(res.data.record);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchLogs = async () => {
+    try {
+      const res = await apiClient.get('/attendance/logs');
+      const mapped = res.data.map((rec: any) => ({
+        key: rec.id,
+        Date: new Date(rec.date).toLocaleDateString(),
+        CheckIn: rec.checkIn ? new Date(rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        CheckOut: rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        Status: rec.status,
+        Break: '00:00 Min',
+        Late: '0 Min',
+        Overtime: '0.00 hrs',
+        ProductionHours: rec.workingHours ? `${rec.workingHours} hrs` : '0 hrs'
+      }));
+      setDbLogs(mapped);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchTodayStatus();
+    fetchLogs();
+  }, []);
+
+  const handlePunch = async () => {
+    setLoadingAction(true);
+    try {
+      if (isCheckedIn) {
+        await apiClient.post('/attendance/check-out');
+      } else {
+        await apiClient.post('/attendance/check-in');
+      }
+      await fetchTodayStatus();
+      await fetchLogs();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error executing punch action');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const data: AttendanceEmployeeData[] = dbLogs.length > 0 ? dbLogs : attendance_employee_details;
   const columns = [
     {
       title: "Date",
@@ -194,15 +252,20 @@ const AttendanceEmployee = () => {
                   </div>
                   <div className="text-center">
                     <div className="badge badge-md badge-primary mb-3">
-                      Production : 3.45 hrs
+                      Production : {todayRecord?.workingHours ? `${todayRecord.workingHours} hrs` : '0.00 hrs'}
                     </div>
                     <h6 className="fw-medium d-flex align-items-center justify-content-center mb-3">
                       <i className="ti ti-fingerprint text-primary me-1" />
-                      Punch In at 10.00 AM
+                      {todayRecord?.checkIn ? `Punch In at ${new Date(todayRecord.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not Punched In'}
                     </h6>
-                    <Link to="#" className="btn btn-dark w-100">
-                      Punch Out
-                    </Link>
+                    <button
+                      type="button"
+                      disabled={loadingAction}
+                      onClick={handlePunch}
+                      className={`btn w-100 ${isCheckedIn ? 'btn-danger' : 'btn-success'}`}
+                    >
+                      {loadingAction ? 'Processing...' : isCheckedIn ? 'Punch Out' : 'Punch In'}
+                    </button>
                   </div>
                 </div>
               </div>

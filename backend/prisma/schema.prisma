@@ -558,3 +558,4 @@ model EmailVerifyToken {
 
   @@map("email_verify_tokens")
 }
+

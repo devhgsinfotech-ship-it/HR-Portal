@@ -2,20 +2,34 @@ import { Link } from "react-router-dom";
 import CollapseHeader from "../../core/common/collapse-header/collapse-header";
 import { all_routes } from "../../router/all_routes";
 import Table from "../../core/common/dataTable/index";
-import { HolidaysData } from "../../core/data/json/holidaysData";
 import HolidaysModal from "../../core/modals/holidaysModal";
-
-// Define an interface for holiday data
-interface Holiday {
-  Title: string;
-  Date: string;
-  Description: string;
-  Status: string;
-}
+import { useState, useEffect } from "react";
+import apiClient from "../../core/utils/apiClient";
 
 const Holidays = () => {
   const routes = all_routes;
-  const data: Holiday[] = HolidaysData;
+  const [dbHolidays, setDbHolidays] = useState<any[]>([]);
+
+  const fetchHolidays = async () => {
+    try {
+      const res = await apiClient.get('/holidays');
+      const mapped = res.data.map((h: any) => ({
+        key: h.id,
+        Title: h.title,
+        Date: new Date(h.holidayDate).toLocaleDateString(),
+        Description: h.description || '',
+        Status: h.isNational ? 'National' : 'Public',
+      }));
+      setDbHolidays(mapped);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchHolidays();
+  }, []);
+
   const columns = [
     {
       title: "Title",
@@ -25,17 +39,17 @@ const Holidays = () => {
           <Link to="#">{text}</Link>
         </h6>
       ),
-      sorter: (a: Holiday, b: Holiday) => a.Title.length - b.Title.length,
+      sorter: (a: any, b: any) => a.Title.length - b.Title.length,
     },
     {
       title: "Date",
       dataIndex: "Date",
-      sorter: (a: Holiday, b: Holiday) => a.Date.length - b.Date.length,
+      sorter: (a: any, b: any) => a.Date.length - b.Date.length,
     },
     {
       title: "Description",
       dataIndex: "Description",
-      sorter: (a: Holiday, b: Holiday) => a.Description.length - b.Description.length,
+      sorter: (a: any, b: any) => a.Description.length - b.Description.length,
     },
     {
       title: "Status",
@@ -46,7 +60,7 @@ const Holidays = () => {
           {text}
         </span>
       ),
-      sorter: (a: Holiday, b: Holiday) => a.Status.length - b.Status.length,
+      sorter: (a: any, b: any) => a.Status.length - b.Status.length,
     },
     {
       title: "",
@@ -72,6 +86,7 @@ const Holidays = () => {
       ),
     },
   ];
+
   return (
     <>
       {/* Page Wrapper */}
@@ -118,23 +133,12 @@ const Holidays = () => {
               <h5>Holidays List</h5>
             </div>
             <div className="card-body p-0">
-              <Table dataSource={data} columns={columns} Selection={true} />
+              <Table dataSource={dbHolidays} columns={columns} Selection={true} />
             </div>
           </div>
         </div>
-        <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-          <p className="mb-0">2014 - 2026 © SmartHR.</p>
-          <p>
-            Designed &amp; Developed By{" "}
-            <Link to="#" className="text-primary">
-              Dreams
-            </Link>
-          </p>
-        </div>
       </div>
-      {/* /Page Wrapper */}
-
-      <HolidaysModal />
+      <HolidaysModal onAddSuccess={fetchHolidays} />
     </>
   );
 };

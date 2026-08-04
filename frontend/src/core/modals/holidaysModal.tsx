@@ -1,17 +1,56 @@
-
+import React, { useState } from "react";
 import CommonSelect from "../common/commonSelect";
 import { DatePicker } from "antd";
+import apiClient from "../utils/apiClient";
 
-const HolidaysModal = () => {
+interface HolidaysModalProps {
+  onAddSuccess?: () => void;
+}
+
+const HolidaysModal: React.FC<HolidaysModalProps> = ({ onAddSuccess }) => {
+    const [title, setTitle] = useState('');
+    const [holidayDate, setHolidayDate] = useState<any>(null);
+    const [description, setDescription] = useState('');
+    const [isNational, setIsNational] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
+
     const status = [
-        { value: "Select", label: "Select" },
-        { value: "Active", label: "Active" },
-        { value: "Inactive", label: "Inactive" },
+        { value: "Public", label: "Public" },
+        { value: "National", label: "National" },
     ];
+    
     const getModalContainer = () => {
         const modalElement = document.getElementById("modal-datepicker");
-        return modalElement ? modalElement : document.body; // Fallback to document.body if modalElement is null
+        return modalElement ? modalElement : document.body;
     };
+
+    const handleAddHoliday = async (e: React.FormEvent) => {
+      e.preventDefault();
+      try {
+        await apiClient.post('/holidays', {
+          title,
+          holidayDate: holidayDate ? holidayDate.format('YYYY-MM-DD') : null,
+          description,
+          isNational
+        });
+        
+        // Reset form
+        setTitle('');
+        setHolidayDate(null);
+        setDescription('');
+        setIsNational(false);
+        setErrorMsg('');
+        
+        // Close modal and refresh
+        const closeBtn = document.querySelector('#add_holiday .btn-close') as HTMLButtonElement;
+        if (closeBtn) closeBtn.click();
+        
+        if (onAddSuccess) onAddSuccess();
+      } catch (err: any) {
+        setErrorMsg(err.response?.data?.message || 'Error adding holiday');
+      }
+    };
+
   return (
     <>
       {/* Add Plan */}
@@ -29,13 +68,14 @@ const HolidaysModal = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form>
+            <form onSubmit={handleAddHoliday}>
               <div className="modal-body pb-0">
+                {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
                 <div className="row">
                   <div className="col-md-12">
                     <div className="mb-3">
                       <label className="form-label">Title</label>
-                      <input type="text" className="form-control" />
+                      <input type="text" className="form-control" required value={title} onChange={(e) => setTitle(e.target.value)} />
                     </div>
                   </div>
                   <div className="col-md-12">
@@ -44,12 +84,11 @@ const HolidaysModal = () => {
                       <div className="input-icon-end position-relative">
                         <DatePicker
                           className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
+                          format="DD-MM-YYYY"
                           getPopupContainer={getModalContainer}
                           placeholder="DD-MM-YYYY"
+                          value={holidayDate}
+                          onChange={(date) => setHolidayDate(date)}
                         />
                         <span className="input-icon-addon">
                           <i className="ti ti-calendar text-gray-7" />
@@ -63,17 +102,19 @@ const HolidaysModal = () => {
                       <textarea
                         className="form-control"
                         rows={3}
-                        defaultValue={""}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
                       />
                     </div>
                   </div>
                   <div className="col-md-12">
                     <div className="mb-3">
-                      <label className="form-label">Status</label>
+                      <label className="form-label">Type</label>
                       <CommonSelect
                         className="select"
                         options={status}
                         defaultValue={status[0]}
+                        onChange={(opt) => setIsNational(opt?.value === 'National')}
                       />
                     </div>
                   </div>
@@ -87,7 +128,7 @@ const HolidaysModal = () => {
                 >
                   Cancel
                 </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                <button type="submit" className="btn btn-primary">
                   Add Holiday
                 </button>
               </div>

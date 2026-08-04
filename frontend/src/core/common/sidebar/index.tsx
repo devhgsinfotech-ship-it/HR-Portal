@@ -7,6 +7,7 @@ import { useDispatch } from "react-redux";
 import { setDataLayout } from "../../data/redux/themeSettingSlice";
 import { SidebarDataTest } from "../../data/json/sidebarMenu";
 import { all_routes } from "../../../router/all_routes";
+import { useAppSelector } from "../../data/redux/store";
 import type { AppDispatch } from "../../data/redux/store";
 
 // Define flexible types for sidebar data
@@ -37,6 +38,68 @@ interface SidebarMainMenu {
   separateRoute: boolean;
   submenuItems: SidebarMenuItem[];
 }
+
+type Role = "SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
+
+const getRouteRoles = (path: string | undefined): Role[] => {
+  if (!path) return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  let p = path.toLowerCase();
+  if (!p.startsWith('/')) {
+    p = '/' + p;
+  }
+
+  if (p.startsWith("/super-admin")) return ["SUPER_ADMIN"];
+
+  // 2. Employee Self-Service routes (Accessible by all)
+  const employeeAllowedPrefixes = [
+    "/employee-dashboard", "/attendance-employee", "/leaves-employee",
+    "/pages/profile", "/hrm/holidays", "/payslip", "/application"
+  ];
+  if (employeeAllowedPrefixes.some(prefix => p.startsWith(prefix))) {
+    return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
+  // 3. Manager & HR Approvals
+  const adminApprovalPrefixes = [
+    "/leaves", "/attendance-admin", "/timesheet", "/performance", "/training",
+    "/projects", "/tasks", "/clients", "/tickets"
+  ];
+  if (adminApprovalPrefixes.some(prefix => p.startsWith(prefix))) {
+    return ["SUPER_ADMIN", "HR", "MANAGER"];
+  }
+
+  // 4. Default: Restricted to HR & Super Admin (Security by default)
+  return ["SUPER_ADMIN", "HR"];
+};
+
+const filterMenu = (items: SidebarMenuItem[] | undefined, role: Role): SidebarMenuItem[] => {
+  if (!items) return [];
+  return items.filter(item => {
+    // Process submenu first
+    if (item.submenuItems && item.submenuItems.length > 0) {
+      item.submenuItems = filterMenu(item.submenuItems, role);
+      // If submenu is now empty, hide the parent too
+      if (item.submenuItems.length === 0) return false;
+      // If submenu has visible items, the parent MUST be visible 
+      // (ignore arbitrary link/base restrictions on the wrapper itself)
+      return true;
+    }
+
+    // If it has a link and it's not '#', check roles
+    if (item.link && item.link !== '#' && item.link !== 'index' && item.link !== 'apps') {
+      const allowedRoles = getRouteRoles(item.link);
+      if (!allowedRoles.includes(role)) return false;
+    }
+
+    // Check base explicitly if provided (sometimes item.link is '#')
+    if (item.base && item.base !== '/application') {
+      const allowedRoles = getRouteRoles(item.base);
+      if (!allowedRoles.includes(role)) return false;
+    }
+
+    return true;
+  });
+};
 
 // Helper: Normalize path for comparison (remove trailing slash, lowercase)
 const normalizePath = (path: string): string => {
@@ -119,6 +182,18 @@ const Sidebar = React.memo(() => {
   const dispatch = useDispatch<AppDispatch>();
   const currentPath = location.pathname;
 
+  const user = useAppSelector((state) => state.auth.user);
+  const currentRole = (user?.role as Role) || "EMPLOYEE";
+
+  // Filter sidebar data deeply based on role
+  const filteredSidebarData = useMemo(() => {
+    const dataCopy = JSON.parse(JSON.stringify(SidebarDataTest)) as SidebarMainMenu[];
+    return dataCopy.map(mainMenu => {
+      mainMenu.submenuItems = filterMenu(mainMenu.submenuItems, currentRole);
+      return mainMenu;
+    }).filter(mainMenu => mainMenu.submenuItems.length > 0);
+  }, [currentRole]);
+
   const [openMenus, setOpenMenus] = useState<Set<string>>(
     new Set(["Dashboard"]),
   );
@@ -129,7 +204,7 @@ const Sidebar = React.memo(() => {
     const activeMenuLabels: string[] = [];
     const activeSubMenuLabels: string[] = [];
 
-    (SidebarDataTest as SidebarMainMenu[]).forEach((mainMenu) => {
+    filteredSidebarData.forEach((mainMenu) => {
       mainMenu.submenuItems?.forEach((menuItem) => {
         // Check if menu item is active (by link, base, or children)
         if (isItemActive(menuItem, currentPath)) {
@@ -402,7 +477,7 @@ const Sidebar = React.memo(() => {
         <div className="sidebar-inner slimscroll">
           <div id="sidebar-menu" className="sidebar-menu">
             <ul>
-              {(SidebarDataTest as SidebarMainMenu[])?.map(
+              {filteredSidebarData?.map(
                 (mainMenu: SidebarMainMenu, index: number) => (
                   <React.Fragment key={`main-${index}`}>
                     <li className="menu-title">
@@ -427,11 +502,10 @@ const Sidebar = React.memo(() => {
                                 <Link
                                   to={hasSubmenu ? "#" : menuItem.link}
                                   onClick={(e) => handleMenuClick(e, menuItem)}
-                                  className={`d-flex align-items-center justify-content-between ${
-                                    hasSubmenu
+                                  className={`d-flex align-items-center justify-content-between ${hasSubmenu
                                       ? `${isActive ? "active" : ""} ${isOpen ? "subdrop" : ""}`
                                       : ""
-                                  }`}
+                                    }`}
                                 >
                                   <div>
                                     {menuItem.icon && (
@@ -498,11 +572,10 @@ const Sidebar = React.memo(() => {
                                               onClick={(e) =>
                                                 handleSubMenuClick(e, subItem)
                                               }
-                                              className={`d-flex align-items-center justify-content-between ${
-                                                hasNestedSubmenu
+                                              className={`d-flex align-items-center justify-content-between ${hasNestedSubmenu
                                                   ? `${isSubActive ? "active" : ""} ${isSubOpen ? "subdrop" : ""}`
                                                   : `${isSubActive ? "active" : ""}`
-                                              }`}
+                                                }`}
                                             >
                                               {subItem.label}
                                               {subItem.newBadge && (

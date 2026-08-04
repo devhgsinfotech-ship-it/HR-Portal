@@ -1,10 +1,13 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { all_routes } from '../../../../router/all_routes';
 import Table from "../../../../core/common/dataTable/index";
 import CommonSelect from '../../../../core/common/commonSelect';
 import PredefinedDateRanges from '../../../../core/common/datePicker';
 import ImageWithBasePath from '../../../../core/common/imageWithBasePath';
 import { DatePicker } from 'antd';
+import dayjs from 'dayjs';
+import apiClient from '../../../../core/utils/apiClient';
 import { leaveemployee_details } from '../../../../core/data/json/leaveemployee_details';
 import CollapseHeader from '../../../../core/common/collapse-header/collapse-header';
 
@@ -22,8 +25,77 @@ interface LeaveEmployeeData {
 }
 
 const LeaveEmployee = () => {
+  const [dbTypes, setDbTypes] = useState<any[]>([]);
+  const [dbBalances, setDbBalances] = useState<any[]>([]);
+  const [dbRequests, setDbRequests] = useState<any[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [newLeave, setNewLeave] = useState<any>({ leaveTypeId: '', startDate: null, endDate: null, reason: '' });
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const data: LeaveEmployeeData[] = leaveemployee_details;
+  const fetchLeaveData = async () => {
+    try {
+      const [typesRes, balRes, reqRes] = await Promise.all([
+        apiClient.get('/leaves/types'),
+        apiClient.get('/leaves/balances'),
+        apiClient.get('/leaves/requests?mine=true')
+      ]);
+      setDbTypes(typesRes.data);
+      setDbBalances(balRes.data);
+      const mapped = reqRes.data.map((r: any) => ({
+        key: r.id,
+        LeaveType: r.leaveType?.name || 'Leave',
+        From: new Date(r.startDate).toLocaleDateString(),
+        To: new Date(r.endDate).toLocaleDateString(),
+        NoOfDays: `${r.totalDays} Days`,
+        Status: r.status === 'APPROVED' ? 'Approved' : r.status === 'REJECTED' ? 'Declined' : 'New',
+        ApprovedBy: r.reviewedById ? 'Manager/HR' : 'Pending Review',
+        Image: 'user-01.jpg',
+        Roll: 'HR Admin'
+      }));
+      setDbRequests(mapped);
+      setIsLoaded(true);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeaveData();
+  }, []);
+
+  const handleApplyLeave = async (e: any) => {
+    e.preventDefault();
+    if (!newLeave.leaveTypeId || !newLeave.startDate || !newLeave.endDate) {
+      setErrorMsg('Please select leave type, start date, and end date.');
+      return;
+    }
+    try {
+      await apiClient.post('/leaves/apply', {
+        leaveTypeId: newLeave.leaveTypeId,
+        startDate: newLeave.startDate.format('YYYY-MM-DD'),
+        endDate: newLeave.endDate.format('YYYY-MM-DD'),
+        reason: newLeave.reason
+      });
+      const closeBtn = document.querySelector('#add_leaves .btn-close') as HTMLButtonElement;
+      if (closeBtn) closeBtn.click();
+      fetchLeaveData();
+      setNewLeave({ leaveTypeId: '', startDate: null, endDate: null, reason: '' });
+      setErrorMsg('');
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || 'Error applying for leave');
+    }
+  };
+
+  const data: LeaveEmployeeData[] = isLoaded ? dbRequests : [];
+
+  const leaveTypeOptions = dbTypes.length > 0
+    ? dbTypes.map((t: any) => ({ value: String(t.id), label: t.name }))
+    : [
+        { value: "1", label: "Casual Leave" },
+        { value: "2", label: "Sick Leave" },
+        { value: "3", label: "Earned Leave" },
+        { value: "4", label: "Unpaid Leave" }
+      ];
   const columns = [
     {
       title: "Leave Type",
@@ -252,94 +324,35 @@ const LeaveEmployee = () => {
           {/* /Breadcrumb */}
           {/* Leaves Info */}
           <div className="row">
-            <div className="col-xl-3 col-md-6">
-              <div className="card bg-black-le">
-                <div className="card-body">
-                  <div className="d-flex align-items-center justify-content-between">
-                    <div className="text-start">
-                      <p className="mb-1">Annual Leaves</p>
-                      <h4>05</h4>
-                    </div>
-                    <div className="d-flex">
-                      <div className="flex-shrink-0 me-2">
-                        <span className="avatar avatar-md d-flex">
-                          <i className="ti ti-calendar-event fs-32" />
-                        </span>
+            {(dbBalances.length > 0 ? dbBalances : [
+              { leaveTypeName: 'Annual Leaves', usedDays: 0, remainingDays: 12 },
+              { leaveTypeName: 'Medical Leaves', usedDays: 0, remainingDays: 12 },
+              { leaveTypeName: 'Casual Leaves', usedDays: 0, remainingDays: 12 },
+              { leaveTypeName: 'Other Leaves', usedDays: 0, remainingDays: 30 },
+            ]).map((bal, idx) => (
+              <div className="col-xl-3 col-md-6" key={bal.leaveTypeId || idx}>
+                <div className={`card ${idx % 4 === 0 ? 'bg-black-le' : idx % 4 === 1 ? 'bg-blue-le' : idx % 4 === 2 ? 'bg-purple-le' : 'bg-pink-le'}`}>
+                  <div className="card-body">
+                    <div className="d-flex align-items-center justify-content-between">
+                      <div className="text-start">
+                        <p className="mb-1">{bal.leaveTypeName}</p>
+                        <h4>{String(bal.usedDays).padStart(2, '0')}</h4>
+                      </div>
+                      <div className="d-flex">
+                        <div className="flex-shrink-0 me-2">
+                          <span className="avatar avatar-md d-flex">
+                            <i className="ti ti-calendar-event fs-32" />
+                          </span>
+                        </div>
                       </div>
                     </div>
+                    <span className="badge bg-secondary-transparent">
+                      Remaining Leaves : {String(bal.remainingDays).padStart(2, '0')}
+                    </span>
                   </div>
-                  <span className="badge bg-secondary-transparent">
-                    Remaining Leaves : 07
-                  </span>
                 </div>
               </div>
-            </div>
-            <div className="col-xl-3 col-md-6">
-              <div className="card bg-blue-le">
-                <div className="card-body">
-                  <div className="d-flex align-items-center justify-content-between">
-                    <div className="text-start">
-                      <p className="mb-1">Medical Leaves</p>
-                      <h4>11</h4>
-                    </div>
-                    <div className="d-flex">
-                      <div className="flex-shrink-0 me-2">
-                        <span className="avatar avatar-md d-flex">
-                          <i className="ti ti-vaccine fs-32" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <span className="badge bg-info-transparent">
-                    Remaining Leaves : 01
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="col-xl-3 col-md-6">
-              <div className="card bg-purple-le">
-                <div className="card-body">
-                  <div className="d-flex align-items-center justify-content-between">
-                    <div className="text-start">
-                      <p className="mb-1">Casual Leaves</p>
-                      <h4>02</h4>
-                    </div>
-                    <div className="d-flex">
-                      <div className="flex-shrink-0 me-2">
-                        <span className="avatar avatar-md d-flex">
-                          <i className="ti ti-hexagon-letter-c fs-32" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <span className="badge bg-transparent-purple">
-                    Remaining Leaves : 10
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="col-xl-3 col-md-6">
-              <div className="card bg-pink-le">
-                <div className="card-body">
-                  <div className="d-flex align-items-center justify-content-between">
-                    <div className="text-start">
-                      <p className="mb-1">Other Leaves</p>
-                      <h4>07</h4>
-                    </div>
-                    <div className="d-flex">
-                      <div className="flex-shrink-0 me-2">
-                        <span className="avatar avatar-md d-flex">
-                          <i className="ti ti-hexagonal-prism-plus fs-32" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <span className="badge bg-pink-transparent">
-                    Remaining Leaves : 05
-                  </span>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
           {/* /Leaves Info */}
           {/* Leaves list */}
@@ -559,16 +572,17 @@ const LeaveEmployee = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form >
+            <form onSubmit={handleApplyLeave}>
               <div className="modal-body pb-0">
+                {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
                 <div className="row">
                   <div className="col-md-12">
                     <div className="mb-3">
                       <label className="form-label">Leave Type</label>
                       <CommonSelect
                         className='select'
-                        options={leavetype}
-                        defaultValue={leavetype[0]}
+                        options={leaveTypeOptions}
+                        onChange={(opt) => setNewLeave({ ...newLeave, leaveTypeId: opt?.value || '' })}
                       />
                     </div>
                   </div>
@@ -578,12 +592,11 @@ const LeaveEmployee = () => {
                       <div className="input-icon-end position-relative">
                         <DatePicker
                           className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
+                          format="DD-MM-YYYY"
                           getPopupContainer={getModalContainer}
                           placeholder="DD-MM-YYYY"
+                          value={newLeave.startDate}
+                          onChange={(date) => setNewLeave({ ...newLeave, startDate: date })}
                         />
                         <span className="input-icon-addon">
                           <i className="ti ti-calendar text-gray-7" />
@@ -597,12 +610,11 @@ const LeaveEmployee = () => {
                       <div className="input-icon-end position-relative">
                         <DatePicker
                           className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
+                          format="DD-MM-YYYY"
                           getPopupContainer={getModalContainer}
                           placeholder="DD-MM-YYYY"
+                          value={newLeave.endDate}
+                          onChange={(date) => setNewLeave({ ...newLeave, endDate: date })}
                         />
                         <span className="input-icon-addon">
                           <i className="ti ti-calendar text-gray-7" />
@@ -610,57 +622,15 @@ const LeaveEmployee = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <CommonSelect
-                        className='select'
-                        options={selectChoose}
-                        defaultValue={selectChoose[0]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">No of Days</label>
-                      <input type="text" className="form-control" disabled />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Remaining Days</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue={8}
-                        disabled
-                      />
-                    </div>
-                  </div>
+
                   <div className="col-md-12">
                     <div className="mb-3">
                       <label className="form-label">Reason</label>
                       <textarea
                         className="form-control"
                         rows={3}
-                        defaultValue={""}
+                        value={newLeave.reason}
+                        onChange={(e) => setNewLeave({ ...newLeave, reason: e.target.value })}
                       />
                     </div>
                   </div>
@@ -674,7 +644,7 @@ const LeaveEmployee = () => {
                 >
                   Cancel
                 </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                <button type="submit" className="btn btn-primary">
                   Add Leave
                 </button>
               </div>

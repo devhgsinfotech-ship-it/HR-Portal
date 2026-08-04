@@ -9,6 +9,38 @@ const LazyFeature = lazy(() => import("../feature-module/feature"));
 const LazyAuthFeature = lazy(() => import("../feature-module/authFeature"));
 const LazyLayoutFeature = lazy(() => import("../feature-module/layoutFeature"));
 
+type Role = "SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
+
+const getRouteRoles = (path: string | undefined): Role[] => {
+  if (!path) return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+
+  const p = path.toLowerCase();
+
+  // 1. Super Admin ONLY routes
+  if (p.startsWith("/super-admin")) return ["SUPER_ADMIN"];
+
+  // 2. Employee Self-Service routes (Accessible by all)
+  const employeeAllowedPrefixes = [
+    "/employee-dashboard", "/attendance-employee", "/leaves-employee",
+    "/pages/profile", "/hrm/holidays", "/payslip", "/application"
+  ];
+  if (employeeAllowedPrefixes.some(prefix => p.startsWith(prefix))) {
+    return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
+  // 3. Manager & HR Approvals
+  const adminApprovalPrefixes = [
+    "/leaves", "/attendance-admin", "/timesheet", "/performance", "/training",
+    "/projects", "/tasks", "/clients", "/tickets"
+  ];
+  if (adminApprovalPrefixes.some(prefix => p.startsWith(prefix))) {
+    return ["SUPER_ADMIN", "HR", "MANAGER"];
+  }
+
+  // 4. Default: Restricted to HR & Super Admin (Security by default)
+  return ["SUPER_ADMIN", "HR"];
+};
+
 const ALLRoutes: React.FC = () => {
   return (
     <>
@@ -26,12 +58,7 @@ const ALLRoutes: React.FC = () => {
             }
           >
             {publicRoutes.map((route, idx) => {
-              // Automatically protect /super-admin routes
-              const isSuperAdmin = route.path?.startsWith('/super-admin');
-              const allowedRoles = isSuperAdmin
-                ? (["SUPER_ADMIN"] as Array<"SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE">)
-                : (["HR", "MANAGER", "EMPLOYEE", "SUPER_ADMIN"] as Array<"SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE">);
-
+              const allowedRoles = getRouteRoles(route.path);
               return (
                 <Route element={<PrivateRoute allowedRoles={allowedRoles} />} key={idx}>
                   <Route
@@ -58,11 +85,7 @@ const ALLRoutes: React.FC = () => {
             }
           >
             {layoutRoutes.map((route, idx) => {
-              const isSuperAdmin = route.path?.startsWith('/super-admin');
-              const allowedRoles = isSuperAdmin
-                ? (["SUPER_ADMIN"] as Array<"SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE">)
-                : (["HR", "MANAGER", "EMPLOYEE", "SUPER_ADMIN"] as Array<"SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE">);
-
+              const allowedRoles = getRouteRoles(route.path);
               return (
                 <Route element={<PrivateRoute allowedRoles={allowedRoles} />} key={`layout-${idx}`}>
                   <Route

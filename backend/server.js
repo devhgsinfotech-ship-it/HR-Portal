@@ -36,21 +36,17 @@ const authRoutes = require('./src/routes/authRoutes');
 const departmentRoutes = require('./src/routes/departmentRoutes');
 const designationRoutes = require('./src/routes/designationRoutes');
 const employeeRoutes = require('./src/routes/employeeRoutes');
-// const salaryRoutes = require('./src/routes/salaryRoutes');
-// const payslipRoutes = require('./src/routes/payslipRoutes');
-// const leaveRoutes = require('./src/routes/leaveRoutes');
-// const tabAccessRoutes = require('./src/routes/tabAccessRoutes');
-// const holidayRoutes = require('./src/routes/holidayRoutes');
+const leaveRoutes = require('./src/routes/leaveRoutes');
+const attendanceRoutes = require('./src/routes/attendanceRoutes');
+const holidayRoutes = require('./src/routes/holidayRoutes'); // Added Holiday Routes
 
 app.use('/auth', authRoutes);
 app.use('/departments', departmentRoutes);
 app.use('/designations', designationRoutes);
 app.use('/employees', employeeRoutes);
-// app.use('/salary', salaryRoutes);
-// app.use('/payslips', payslipRoutes);
-// app.use('/leaves', leaveRoutes);
-// app.use('/tab-access', tabAccessRoutes);
-// app.use('/holidays', holidayRoutes);
+app.use('/leaves', leaveRoutes);
+app.use('/attendance', attendanceRoutes);
+app.use('/holidays', holidayRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

@@ -701,13 +701,13 @@ export const SidebarDataTest = [
             base: 'leaves',
             submenuItems: [
               {
-                label: 'Leaves (Admin)',
+                label: 'Team Leaves',
                 link: routes.leaveadmin,
                 submenu: false,
                 showSubRoute: false,
               },
               {
-                label: 'Leaves (Employee)',
+                label: 'My Leaves',
                 link: routes.leaveemployee,
                 submenu: false,
                 showSubRoute: false,
@@ -722,13 +722,13 @@ export const SidebarDataTest = [
           },
 
           {
-            label: 'Attendance (Admin)',
+            label: 'Team Attendance',
             link: routes.attendanceadmin,
             base: 'attendance-admin',
             customSubmenuTwo: false,
           },
           {
-            label: 'Attendance (Employee)',
+            label: 'My Attendance',
             link: routes.attendanceemployee,
             base: 'attendance-employee',
             customSubmenuTwo: false,
