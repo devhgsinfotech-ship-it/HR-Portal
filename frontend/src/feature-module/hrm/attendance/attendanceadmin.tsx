@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import apiClient from '../../../core/utils/apiClient';
 import { attendance_admin_details } from '../../../core/data/json/attendanceadmin';
 import { all_routes } from '../../../router/all_routes';
 import PredefinedDateRanges from '../../../core/common/datePicker';
@@ -22,8 +24,34 @@ interface AttendanceAdminData {
 }
 
 const AttendanceAdmin = () => {
+  const [dbLogs, setDbLogs] = useState<any[]>([]);
 
-  const data: AttendanceAdminData[] = attendance_admin_details;
+  const fetchLogs = async () => {
+    try {
+      const res = await apiClient.get('/attendance/logs');
+      const mapped = res.data.map((rec: any) => ({
+        key: rec.id,
+        Employee: `${rec.employee?.firstName || ''} ${rec.employee?.lastName || ''}`.trim() || 'Employee',
+        Role: rec.employee?.designation?.name || 'Staff',
+        Image: rec.employee?.profilePhotoUrl ? (rec.employee.profilePhotoUrl.startsWith('/') ? rec.employee.profilePhotoUrl.substring(1) : rec.employee.profilePhotoUrl) : 'user-01.jpg',
+        Status: rec.status,
+        CheckIn: rec.checkIn ? new Date(rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        CheckOut: rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        Break: '00:00 Min',
+        Late: '0 Min',
+        ProductionHours: rec.workingHours ? `${rec.workingHours}` : '0'
+      }));
+      setDbLogs(mapped);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+  }, []);
+
+  const data: AttendanceAdminData[] = dbLogs.length > 0 ? dbLogs : attendance_admin_details;
   const columns = [
     {
       title: "Employee",

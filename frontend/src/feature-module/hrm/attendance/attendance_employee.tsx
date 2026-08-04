@@ -38,7 +38,7 @@ const AttendanceEmployee = () => {
 
   const fetchLogs = async () => {
     try {
-      const res = await apiClient.get('/attendance/logs');
+      const res = await apiClient.get('/attendance/logs?mine=true');
       const mapped = res.data.map((rec: any) => ({
         key: rec.id,
         Date: new Date(rec.date).toLocaleDateString(),

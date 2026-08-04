@@ -5,9 +5,10 @@ const prisma = require('../config/prisma');
 async function getTodayStatus(req, res) {
     try {
         const userId = req.user.id;
-        const employee = await prisma.employee.findUnique({ where: { userId } });
+        let employee = await prisma.employee.findUnique({ where: { userId } });
         if (!employee) {
-            return res.status(404).json({ message: 'Employee profile not found' });
+            // It's okay if HR hasn't checked in yet, just return not checked in
+            return res.json({ isCheckedIn: false, record: null });
         }
 
         const today = new Date();
@@ -34,8 +35,22 @@ async function getTodayStatus(req, res) {
 async function checkIn(req, res) {
     try {
         const userId = req.user.id;
-        const employee = await prisma.employee.findUnique({ where: { userId } });
-        if (!employee) {
+        let employee = await prisma.employee.findUnique({ where: { userId } });
+        
+        // Auto-create employee profile for HR/Admin if it doesn't exist yet
+        if (!employee && (req.user.role === 'HR' || req.user.role === 'SUPER_ADMIN')) {
+            const user = await prisma.user.findUnique({ where: { id: userId } });
+            employee = await prisma.employee.create({
+                data: {
+                    userId: user.id,
+                    employeeCode: `EMP-${user.id}`,
+                    firstName: user.name?.split(' ')[0] || 'Admin',
+                    lastName: user.name?.split(' ').slice(1).join(' ') || 'User',
+                    dateOfJoining: new Date(),
+                    employmentType: 'FULL_TIME'
+                }
+            });
+        } else if (!employee) {
             return res.status(404).json({ message: 'Employee profile not found' });
         }
 
@@ -85,7 +100,7 @@ async function checkIn(req, res) {
 async function checkOut(req, res) {
     try {
         const userId = req.user.id;
-        const employee = await prisma.employee.findUnique({ where: { userId } });
+        let employee = await prisma.employee.findUnique({ where: { userId } });
         if (!employee) {
             return res.status(404).json({ message: 'Employee profile not found' });
         }
@@ -139,10 +154,10 @@ async function getAttendanceLogs(req, res) {
             }
         };
 
-        if (role === 'EMPLOYEE') {
+        if (role === 'EMPLOYEE' || req.query.mine === 'true') {
             const employee = await prisma.employee.findUnique({ where: { userId } });
             if (!employee) {
-                return res.status(404).json({ message: 'Employee profile not found' });
+                return res.json([]);
             }
             whereClause.employeeId = employee.id;
         }
