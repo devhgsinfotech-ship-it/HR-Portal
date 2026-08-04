@@ -40,6 +40,9 @@ const leaveRoutes = require('./src/routes/leaveRoutes');
 const attendanceRoutes = require('./src/routes/attendanceRoutes');
 const holidayRoutes = require('./src/routes/holidayRoutes'); // Added Holiday Routes
 
+// Initialize Cron Jobs
+require('./src/cron/attendanceJobs');
+
 app.use('/auth', authRoutes);
 app.use('/departments', departmentRoutes);
 app.use('/designations', designationRoutes);

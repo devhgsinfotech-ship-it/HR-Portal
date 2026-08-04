@@ -11,4 +11,13 @@ router.post('/check-in', attendanceController.checkIn);
 router.post('/check-out', attendanceController.checkOut);
 router.get('/logs', attendanceController.getAttendanceLogs);
 
+// Regularization routes
+router.post('/regularize', attendanceController.submitRegularization);
+router.get('/regularize/requests', attendanceController.getRegularizationRequests);
+router.put('/regularize/:id', attendanceController.reviewRegularization);
+
+// Attendance Policy routes (HR/Admin only)
+router.get('/policy', attendanceController.getPolicy);
+router.put('/policy', attendanceController.upsertPolicy);
+
 module.exports = router;

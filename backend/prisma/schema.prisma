@@ -51,6 +51,9 @@ enum AttendanceStatus {
   ABSENT
   HALF_DAY
   ON_LEAVE
+  MISSING_PUNCH
+  IRREGULAR
+  FLAGGED
 }
 
 enum AssetStatus {
@@ -104,6 +107,7 @@ model Company {
   leaveTypes      LeaveType[]
   holidays        Holiday[]
   assets          Asset[]
+  attendancePolicy AttendancePolicy?
   assetCategories AssetCategory[]
   settings        CompanySetting?
   announcements   Announcement[]
@@ -132,6 +136,7 @@ model User {
   emailVerifyTokens     EmailVerifyToken[]
   notificationsReceived Notification[]     @relation("NotificationReceiver")
   notificationsSent     Notification[]     @relation("NotificationSender")
+  regularizations       AttendanceRegularization[] // Requests reviewed by this user
 
   @@map("users")
 }
@@ -283,8 +288,21 @@ model LeaveBalance {
 }
 
 // ============================================================
-// ATTENDANCE RECORDS
+// ATTENDANCE RECORDS & POLICIES
 // ============================================================
+
+model AttendancePolicy {
+  id                     Int      @id @default(autoincrement())
+  companyId              Int      @unique
+  company                Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  minimumHoursForHalfDay Decimal  @default(4.0) @db.Decimal(5, 2)
+  minimumHoursForFullDay Decimal  @default(8.0) @db.Decimal(5, 2)
+  allowWebPunch          Boolean  @default(true)
+  requireGeofence        Boolean  @default(false)
+  updatedAt              DateTime @updatedAt
+
+  @@map("attendance_policies")
+}
 
 model AttendanceRecord {
   id             Int              @id @default(autoincrement())
@@ -297,11 +315,32 @@ model AttendanceRecord {
   breakOut       DateTime?
   workingHours   Decimal?         @db.Decimal(5, 2)
   status         AttendanceStatus @default(PRESENT)
+  punchLocation  String?
+  deviceType     String?          @default("WEB") // WEB, MOBILE, BIOMETRIC
   notes          String?
   createdAt      DateTime         @default(now())
+  
+  regularizations AttendanceRegularization[]
 
   @@unique([employeeId, date])
   @@map("attendance_records")
+}
+
+model AttendanceRegularization {
+  id                 Int              @id @default(autoincrement())
+  attendanceRecordId Int
+  attendanceRecord   AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+  requestedCheckIn   DateTime?
+  requestedCheckOut  DateTime?
+  reason             String
+  status             LeaveStatus      @default(PENDING) // Reusing PENDING, APPROVED, REJECTED
+  reviewedById       Int?
+  reviewedBy         User?            @relation(fields: [reviewedById], references: [id])
+  remarks            String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@map("attendance_regularizations")
 }
 
 // ============================================================

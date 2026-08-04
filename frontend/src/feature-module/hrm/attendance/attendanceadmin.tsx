@@ -24,19 +24,37 @@ interface AttendanceAdminData {
 }
 
 const AttendanceAdmin = () => {
+  const [activeTab, setActiveTab] = useState<'logs' | 'requests' | 'policy'>('logs');
   const [dbLogs, setDbLogs] = useState<any[]>([]);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loadingAction, setLoadingAction] = useState(false);
+  const [policy, setPolicy] = useState({ minimumHoursForHalfDay: 4, minimumHoursForFullDay: 8, allowWebPunch: true, requireGeofence: false });
+  const [policySaving, setPolicySaving] = useState(false);
+  const [policyMsg, setPolicyMsg] = useState('');
 
   const fetchLogs = async () => {
     try {
       const res = await apiClient.get('/attendance/logs');
+      
+      const formatLiteralTime = (dateStr: string) => {
+        if (!dateStr) return 'N/A';
+        const d = new Date(dateStr);
+        const h = d.getUTCHours();
+        const m = d.getUTCMinutes();
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const hh = h % 12 || 12;
+        const mm = m < 10 ? '0' + m : m;
+        return `${hh}:${mm} ${ampm}`;
+      };
+
       const mapped = res.data.map((rec: any) => ({
         key: rec.id,
         Employee: `${rec.employee?.firstName || ''} ${rec.employee?.lastName || ''}`.trim() || 'Employee',
         Role: rec.employee?.designation?.name || 'Staff',
         Image: rec.employee?.profilePhotoUrl ? (rec.employee.profilePhotoUrl.startsWith('/') ? rec.employee.profilePhotoUrl.substring(1) : rec.employee.profilePhotoUrl) : 'user-01.jpg',
         Status: rec.status,
-        CheckIn: rec.checkIn ? new Date(rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
-        CheckOut: rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        CheckIn: rec.checkIn ? formatLiteralTime(rec.checkIn) : 'N/A',
+        CheckOut: rec.checkOut ? formatLiteralTime(rec.checkOut) : 'N/A',
         Break: '00:00 Min',
         Late: '0 Min',
         ProductionHours: rec.workingHours ? `${rec.workingHours}` : '0'
@@ -47,11 +65,68 @@ const AttendanceAdmin = () => {
     }
   };
 
+  const fetchRequests = async () => {
+    try {
+      const res = await apiClient.get('/attendance/regularize/requests');
+      
+      const formatLiteralTime = (dateStr: string) => {
+        if (!dateStr) return 'N/A';
+        const d = new Date(dateStr);
+        const h = d.getUTCHours();
+        const m = d.getUTCMinutes();
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const hh = h % 12 || 12;
+        const mm = m < 10 ? '0' + m : m;
+        return `${hh}:${mm} ${ampm}`;
+      };
+
+      const mapped = res.data.map((req: any) => ({
+        key: req.id,
+        Employee: `${req.attendanceRecord.employee.firstName} ${req.attendanceRecord.employee.lastName}`.trim(),
+        Image: req.attendanceRecord.employee.profilePhotoUrl ? (req.attendanceRecord.employee.profilePhotoUrl.startsWith('/') ? req.attendanceRecord.employee.profilePhotoUrl.substring(1) : req.attendanceRecord.employee.profilePhotoUrl) : 'user-01.jpg',
+        Role: req.attendanceRecord.employee.designation?.name || 'Staff',
+        Date: new Date(req.attendanceRecord.date).toLocaleDateString(),
+        RequestedIn: req.requestedCheckIn ? formatLiteralTime(req.requestedCheckIn) : 'N/A',
+        RequestedOut: req.requestedCheckOut ? formatLiteralTime(req.requestedCheckOut) : 'N/A',
+        Reason: req.reason,
+        Status: req.status
+      }));
+      setRequests(mapped);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchPolicy = async () => {
+    try {
+      const res = await apiClient.get('/attendance/policy');
+      setPolicy(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const savePolicy = async (e: any) => {
+    e.preventDefault();
+    setPolicySaving(true);
+    setPolicyMsg('');
+    try {
+      await apiClient.put('/attendance/policy', policy);
+      setPolicyMsg('Policy saved successfully!');
+    } catch (err: any) {
+      setPolicyMsg(err.response?.data?.message || 'Error saving policy');
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
   useEffect(() => {
     fetchLogs();
+    fetchRequests();
+    fetchPolicy();
   }, []);
 
-  const data: AttendanceAdminData[] = dbLogs.length > 0 ? dbLogs : attendance_admin_details;
+  const data: AttendanceAdminData[] = dbLogs; // Always use real data
   const columns = [
     {
       title: "Employee",
@@ -133,6 +208,62 @@ const AttendanceAdmin = () => {
         </div>
       ),
     },
+  ];
+
+  const handleReviewRequest = async (id: number, status: string) => {
+    setLoadingAction(true);
+    try {
+      await apiClient.put(`/attendance/regularize/${id}`, { status, remarks: '' });
+      fetchLogs();
+      fetchRequests();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error reviewing request');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const requestColumns = [
+    {
+      title: "Employee",
+      dataIndex: "Employee",
+      render: (_text: string, record: any) => (
+        <div className="d-flex align-items-center file-name-icon">
+          <span className="avatar avatar-md border avatar-rounded">
+            <ImageWithBasePath src={`assets/img/users/${record.Image}`} className="img-fluid" alt={`${record.Employee} Profile`} />
+          </span>
+          <div className="ms-2">
+            <h6 className="fw-medium">{record.Employee}</h6>
+            <span className="fs-12 fw-normal ">{record.Role}</span>
+          </div>
+        </div>
+      )
+    },
+    { title: "Date", dataIndex: "Date" },
+    { title: "Requested In", dataIndex: "RequestedIn" },
+    { title: "Requested Out", dataIndex: "RequestedOut" },
+    { title: "Reason", dataIndex: "Reason" },
+    {
+      title: "Status",
+      dataIndex: "Status",
+      render: (text: string) => (
+        <span className={`badge ${text === 'APPROVED' ? 'badge-success-transparent' : text === 'REJECTED' ? 'badge-danger-transparent' : 'badge-warning-transparent'} d-inline-flex align-items-center`}>
+          <i className="ti ti-point-filled me-1" />
+          {text}
+        </span>
+      )
+    },
+    {
+      title: "Action",
+      render: (_text: string, record: any) => (
+        record.Status === 'PENDING' ? (
+          <div className="d-flex gap-2">
+            <button className="btn btn-sm btn-success" disabled={loadingAction} onClick={() => handleReviewRequest(record.key, 'APPROVED')}>Approve</button>
+            <button className="btn btn-sm btn-danger" disabled={loadingAction} onClick={() => handleReviewRequest(record.key, 'REJECTED')}>Reject</button>
+          </div>
+        ) : null
+      )
+    }
   ];
 
   const statusChoose = [
@@ -242,12 +373,40 @@ const AttendanceAdmin = () => {
           <div className="card border-0">
             <div className="card-body">
               <div className="row align-items-center mb-4">
-                <div className="col-md-5">
-                  <div className="mb-3 mb-md-0">
-                    <h4 className="mb-1">Attendance Details Today</h4>
-                    <p>Data from the 800+ total no of employees</p>
+                <div className="col-md-7">
+                  <div className="mb-3 mb-md-0 d-flex gap-3 flex-wrap">
+                    <button 
+                      className={`btn ${activeTab === 'logs' ? 'btn-primary' : 'btn-light'}`}
+                      onClick={() => setActiveTab('logs')}
+                    >
+                      <i className="ti ti-list me-1" />Team Logs
+                    </button>
+                    <button 
+                      className={`btn ${activeTab === 'requests' ? 'btn-primary' : 'btn-light'}`}
+                      onClick={() => setActiveTab('requests')}
+                    >
+                      <i className="ti ti-clock-edit me-1" />Correction Requests 
+                      {requests.filter(r => r.Status === 'PENDING').length > 0 && 
+                        <span className="badge bg-danger ms-2">{requests.filter(r => r.Status === 'PENDING').length}</span>
+                      }
+                    </button>
+                    <button 
+                      className={`btn ${activeTab === 'policy' ? 'btn-primary' : 'btn-light'}`}
+                      onClick={() => setActiveTab('policy')}
+                    >
+                      <i className="ti ti-settings me-1" />Attendance Policy
+                    </button>
                   </div>
                 </div>
+              </div>
+
+              <div className="row align-items-center mb-4">
+                <div className="col-md-5">
+                      <div className="mb-3 mb-md-0">
+                        <h4 className="mb-1">Attendance Details Today</h4>
+                        <p>Data from the 800+ total no of employees</p>
+                      </div>
+                    </div>
                 <div className="col-md-7">
                   <div className="d-flex align-items-center justify-content-md-end">
                     <h6>Total Absenties today</h6>
@@ -488,7 +647,120 @@ const AttendanceAdmin = () => {
               </div>
             </div>
             <div className="card-body p-0">
-              <Table dataSource={data} columns={columns} Selection={true} />
+              {activeTab === "logs" ? (
+                <>
+                  <Table
+                    dataSource={data}
+                    columns={columns}
+                    Selection={true}
+                  />
+                </>
+              ) : activeTab === "requests" ? (
+                <>
+                  <div className="p-3">
+                    <h4 className="mb-4">Pending Regularization Requests</h4>
+                  </div>
+                  <Table
+                    dataSource={requests}
+                    columns={requestColumns}
+                    Selection={false}
+                  />
+                </>
+              ) : (
+                /* Policy Settings Panel */
+                <div className="p-4">
+                  <h4 className="mb-1">Attendance Policy Settings</h4>
+                  <p className="text-muted mb-4">Configure working hour thresholds. These rules are automatically applied when employees punch out.</p>
+                  {policyMsg && (
+                    <div className={`alert ${policyMsg.includes('success') ? 'alert-success' : 'alert-danger'} mb-3`}>
+                      {policyMsg}
+                    </div>
+                  )}
+                  <form onSubmit={savePolicy}>
+                    <div className="row g-3 mb-4">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">
+                          <i className="ti ti-clock-half-2 me-1 text-warning" />
+                          Minimum Hours for Half Day
+                        </label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0.5"
+                          max="12"
+                          className="form-control"
+                          value={policy.minimumHoursForHalfDay}
+                          onChange={e => setPolicy(p => ({ ...p, minimumHoursForHalfDay: parseFloat(e.target.value) }))}
+                        />
+                        <div className="form-text">Employees working at least this many hours get a HALF_DAY mark.</div>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">
+                          <i className="ti ti-clock me-1 text-success" />
+                          Minimum Hours for Full Day
+                        </label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0.5"
+                          max="24"
+                          className="form-control"
+                          value={policy.minimumHoursForFullDay}
+                          onChange={e => setPolicy(p => ({ ...p, minimumHoursForFullDay: parseFloat(e.target.value) }))}
+                        />
+                        <div className="form-text">Employees working at least this many hours get a PRESENT mark.</div>
+                      </div>
+                    </div>
+
+                    <div className="row g-3 mb-4">
+                      <div className="col-md-6">
+                        <div className="form-check form-switch">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id="allowWebPunch"
+                            checked={policy.allowWebPunch}
+                            onChange={e => setPolicy(p => ({ ...p, allowWebPunch: e.target.checked }))}
+                          />
+                          <label className="form-check-label fw-semibold" htmlFor="allowWebPunch">
+                            Allow Web Punch (browser check-in)
+                          </label>
+                        </div>
+                        <div className="form-text">Allow employees to punch in/out from the web browser.</div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="form-check form-switch">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id="requireGeofence"
+                            checked={policy.requireGeofence}
+                            onChange={e => setPolicy(p => ({ ...p, requireGeofence: e.target.checked }))}
+                          />
+                          <label className="form-check-label fw-semibold" htmlFor="requireGeofence">
+                            Require Geofence (location-based)
+                          </label>
+                        </div>
+                        <div className="form-text">Flag punch-ins from outside the office location for review.</div>
+                      </div>
+                    </div>
+
+                    <div className="bg-light rounded p-3 mb-4">
+                      <h6 className="mb-2">How policy works:</h6>
+                      <ul className="mb-0 small text-muted">
+                        <li>Worked &lt; <strong>{policy.minimumHoursForHalfDay}h</strong> → Status: <span className="badge badge-danger-transparent">IRREGULAR</span></li>
+                        <li>Worked {policy.minimumHoursForHalfDay}h–{policy.minimumHoursForFullDay}h → Status: <span className="badge badge-warning-transparent">HALF_DAY</span></li>
+                        <li>Worked ≥ <strong>{policy.minimumHoursForFullDay}h</strong> → Status: <span className="badge badge-success-transparent">PRESENT</span></li>
+                        <li>Forgot to punch out → Status: <span className="badge badge-danger-transparent">MISSING_PUNCH</span> (set by nightly CRON)</li>
+                      </ul>
+                    </div>
+
+                    <button type="submit" className="btn btn-primary px-4" disabled={policySaving}>
+                      {policySaving ? 'Saving...' : 'Save Policy'}
+                    </button>
+                  </form>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { all_routes } from '../../../router/all_routes';
 import apiClient from '../../../core/utils/apiClient';
 import PredefinedDateRanges from '../../../core/common/datePicker';
-import { attendance_employee_details } from '../../../core/data/json/attendanceemployee';
 import ImageWithBasePath from '../../../core/common/imageWithBasePath';
 import Table from "../../../core/common/dataTable/index";
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
@@ -18,6 +17,7 @@ interface AttendanceEmployeeData {
   Late: string;
   Overtime: string;
   ProductionHours: string;
+  key?: number;
 }
 
 const AttendanceEmployee = () => {
@@ -25,6 +25,10 @@ const AttendanceEmployee = () => {
   const [todayRecord, setTodayRecord] = useState<any>(null);
   const [dbLogs, setDbLogs] = useState<any[]>([]);
   const [loadingAction, setLoadingAction] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<any>(null);
+  const [regularizeReason, setRegularizeReason] = useState('');
+  const [regularizeIn, setRegularizeIn] = useState('');
+  const [regularizeOut, setRegularizeOut] = useState('');
 
   const fetchTodayStatus = async () => {
     try {
@@ -39,11 +43,22 @@ const AttendanceEmployee = () => {
   const fetchLogs = async () => {
     try {
       const res = await apiClient.get('/attendance/logs?mine=true');
+      const formatLiteralTime = (dateStr: string) => {
+        if (!dateStr) return 'N/A';
+        const d = new Date(dateStr);
+        const h = d.getUTCHours();
+        const m = d.getUTCMinutes();
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const hh = h % 12 || 12;
+        const mm = m < 10 ? '0' + m : m;
+        return `${hh}:${mm} ${ampm}`;
+      };
+
       const mapped = res.data.map((rec: any) => ({
         key: rec.id,
         Date: new Date(rec.date).toLocaleDateString(),
-        CheckIn: rec.checkIn ? new Date(rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
-        CheckOut: rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        CheckIn: rec.checkIn ? formatLiteralTime(rec.checkIn) : 'N/A',
+        CheckOut: rec.checkOut ? formatLiteralTime(rec.checkOut) : 'N/A',
         Status: rec.status,
         Break: '00:00 Min',
         Late: '0 Min',
@@ -78,7 +93,33 @@ const AttendanceEmployee = () => {
     }
   };
 
-  const data: AttendanceEmployeeData[] = dbLogs.length > 0 ? dbLogs : attendance_employee_details;
+  const handleRegularizeSubmit = async (e: any) => {
+    e.preventDefault();
+    if (!selectedRecord) return;
+
+    setLoadingAction(true);
+    try {
+      await apiClient.post('/attendance/regularize', {
+        recordId: selectedRecord.key,
+        requestedCheckIn: regularizeIn,
+        requestedCheckOut: regularizeOut,
+        reason: regularizeReason
+      });
+      alert('Regularization request submitted successfully!');
+      setRegularizeReason('');
+      setRegularizeIn('');
+      setRegularizeOut('');
+      const closeBtn = document.getElementById('close-regularize-modal');
+      if (closeBtn) closeBtn.click();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error submitting request');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  // ALWAYS use real API data — empty means no records yet (never fall back to fake JSON)
+  const data: AttendanceEmployeeData[] = dbLogs;
   const columns = [
     {
       title: "Date",
@@ -93,13 +134,19 @@ const AttendanceEmployee = () => {
     {
       title: "Status",
       dataIndex: "Status",
-      render: (text: string, record: AttendanceEmployeeData) => (
-        <span className={`badge ${text === 'Present' ? 'badge-success-transparent' : 'badge-danger-transparent'} d-inline-flex align-items-center`}>
-          <i className="ti ti-point-filled me-1" />
-          {record.Status}
-        </span>
-
-      ),
+      render: (text: string, record: AttendanceEmployeeData) => {
+        let badgeClass = 'badge-danger-transparent';
+        if (text === 'PRESENT') badgeClass = 'badge-success-transparent';
+        if (text === 'HALF_DAY') badgeClass = 'badge-warning-transparent';
+        if (text === 'MISSING_PUNCH' || text === 'IRREGULAR') badgeClass = 'badge-danger-transparent';
+        
+        return (
+          <span className={`badge ${badgeClass} d-inline-flex align-items-center`}>
+            <i className="ti ti-point-filled me-1" />
+            {text}
+          </span>
+        );
+      },
       sorter: (a: AttendanceEmployeeData, b: AttendanceEmployeeData) => a.Status.length - b.Status.length,
     },
     {
@@ -138,7 +185,22 @@ const AttendanceEmployee = () => {
       ),
       sorter: (a: AttendanceEmployeeData, b: AttendanceEmployeeData) => a.ProductionHours.length - b.ProductionHours.length,
     },
-  ]
+    {
+      title: "Action",
+      render: (_text: string, record: AttendanceEmployeeData) => (
+        (record.Status === 'MISSING_PUNCH' || record.Status === 'IRREGULAR') ? (
+          <button
+            className="btn btn-sm btn-primary"
+            data-bs-toggle="modal"
+            data-bs-target="#regularize_modal"
+            onClick={() => setSelectedRecord(record)}
+          >
+            Regularize
+          </button>
+        ) : null
+      )
+    }
+  ];
 
   return (
     <>
@@ -256,7 +318,13 @@ const AttendanceEmployee = () => {
                     </div>
                     <h6 className="fw-medium d-flex align-items-center justify-content-center mb-3">
                       <i className="ti ti-fingerprint text-primary me-1" />
-                      {todayRecord?.checkIn ? `Punch In at ${new Date(todayRecord.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not Punched In'}
+                      {todayRecord?.checkIn ? `Punch In at ${(() => {
+                        const d = new Date(todayRecord.checkIn);
+                        const h = d.getUTCHours();
+                        const m = d.getUTCMinutes();
+                        const ampm = h >= 12 ? 'PM' : 'AM';
+                        return `${h % 12 || 12}:${m < 10 ? '0' + m : m} ${ampm}`;
+                      })()}` : 'Not Punched In'}
                     </h6>
                     <button
                       type="button"
@@ -763,10 +831,42 @@ const AttendanceEmployee = () => {
         </div>
       </div>
       {/* /Attendance Report */}
+
+      {/* Regularize Modal */}
+      <div className="modal fade" id="regularize_modal">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Regularize Attendance</h5>
+              <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close" id="close-regularize-modal"></button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleRegularizeSubmit}>
+                <div className="mb-3">
+                  <label className="form-label">Requested Check-In Time</label>
+                  <input type="datetime-local" className="form-control" value={regularizeIn} onChange={e => setRegularizeIn(e.target.value)} required />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Requested Check-Out Time</label>
+                  <input type="datetime-local" className="form-control" value={regularizeOut} onChange={e => setRegularizeOut(e.target.value)} required />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Reason</label>
+                  <textarea className="form-control" rows={3} value={regularizeReason} onChange={e => setRegularizeReason(e.target.value)} required placeholder="E.g., Forgot to punch out, system error..."></textarea>
+                </div>
+                <div className="text-end">
+                  <button type="button" className="btn btn-light me-2" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={loadingAction}>
+                    {loadingAction ? 'Submitting...' : 'Submit Request'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
     </>
+  );
+};
 
-
-  )
-}
-
-export default AttendanceEmployee
+export default AttendanceEmployee;
