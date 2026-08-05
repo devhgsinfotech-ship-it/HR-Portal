@@ -28,7 +28,7 @@ const AttendanceAdmin = () => {
   const [dbLogs, setDbLogs] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [loadingAction, setLoadingAction] = useState(false);
-  const [policy, setPolicy] = useState({ minimumHoursForHalfDay: 4, minimumHoursForFullDay: 8, allowWebPunch: true, requireGeofence: false });
+  const [policy, setPolicy] = useState({ minimumHoursForHalfDay: 4, minimumHoursForFullDay: 8, allowWebPunch: true, requireGeofence: false, officeStartTime: '09:00', officeEndTime: '18:00' });
   const [policySaving, setPolicySaving] = useState(false);
   const [policyMsg, setPolicyMsg] = useState('');
 
@@ -687,6 +687,35 @@ const AttendanceAdmin = () => {
                           onChange={e => setPolicy(p => ({ ...p, minimumHoursForFullDay: parseFloat(e.target.value) }))}
                         />
                         <div className="form-text">Employees working at least this many hours get a PRESENT mark.</div>
+                      </div>
+                    </div>
+
+                    <div className="row g-3 mb-4">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">
+                          <i className="ti ti-sunrise me-1 text-primary" />
+                          Office Start Time
+                        </label>
+                        <input
+                          type="time"
+                          className="form-control"
+                          value={policy.officeStartTime}
+                          onChange={e => setPolicy(p => ({ ...p, officeStartTime: e.target.value }))}
+                        />
+                        <div className="form-text">The official start time (e.g. 09:00 AM) to calculate late punch-ins.</div>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">
+                          <i className="ti ti-sunset me-1 text-primary" />
+                          Office End Time
+                        </label>
+                        <input
+                          type="time"
+                          className="form-control"
+                          value={policy.officeEndTime}
+                          onChange={e => setPolicy(p => ({ ...p, officeEndTime: e.target.value }))}
+                        />
+                        <div className="form-text">The official end time (e.g. 06:00 PM) to calculate early departures or overtime.</div>
                       </div>
                     </div>
 

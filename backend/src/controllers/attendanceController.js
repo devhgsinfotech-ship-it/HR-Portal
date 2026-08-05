@@ -369,6 +369,11 @@ async function getPolicy(req, res) {
                 requireGeofence: false
             };
         }
+
+        const settings = await prisma.companySetting.findUnique({ where: { companyId } });
+        policy.officeStartTime = settings?.officeStartTime || "09:00";
+        policy.officeEndTime = settings?.officeEndTime || "18:00";
+
         res.json(policy);
     } catch (error) {
         console.error('Error fetching policy:', error);
@@ -382,7 +387,7 @@ async function upsertPolicy(req, res) {
         const companyId = req.user.companyId;
         if (!companyId) return res.status(400).json({ message: 'No company associated' });
         
-        const { minimumHoursForHalfDay, minimumHoursForFullDay, allowWebPunch, requireGeofence } = req.body;
+        const { minimumHoursForHalfDay, minimumHoursForFullDay, allowWebPunch, requireGeofence, officeStartTime, officeEndTime } = req.body;
         
         const policy = await prisma.attendancePolicy.upsert({
             where: { companyId },
@@ -400,6 +405,23 @@ async function upsertPolicy(req, res) {
                 requireGeofence: requireGeofence !== undefined ? requireGeofence : false
             }
         });
+
+        if (officeStartTime && officeEndTime) {
+            await prisma.companySetting.upsert({
+                where: { companyId },
+                create: {
+                    companyId,
+                    officeStartTime,
+                    officeEndTime
+                },
+                update: {
+                    officeStartTime,
+                    officeEndTime
+                }
+            });
+            policy.officeStartTime = officeStartTime;
+            policy.officeEndTime = officeEndTime;
+        }
         
         res.json({ message: 'Attendance policy saved successfully', policy });
     } catch (error) {
