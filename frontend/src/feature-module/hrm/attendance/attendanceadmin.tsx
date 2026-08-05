@@ -28,7 +28,7 @@ const AttendanceAdmin = () => {
   const [dbLogs, setDbLogs] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [loadingAction, setLoadingAction] = useState(false);
-  const [policy, setPolicy] = useState({ minimumHoursForHalfDay: 4, minimumHoursForFullDay: 8, allowWebPunch: true, requireGeofence: false, officeStartTime: '09:00', officeEndTime: '18:00' });
+  const [policy, setPolicy] = useState({ minimumHoursForHalfDay: 4, minimumHoursForFullDay: 8, allowWebPunch: true, requireGeofence: false, officeStartTime: '09:00', officeEndTime: '18:00', lateGracePeriod: 15 });
   const [policySaving, setPolicySaving] = useState(false);
   const [policyMsg, setPolicyMsg] = useState('');
 
@@ -44,8 +44,9 @@ const AttendanceAdmin = () => {
         Status: rec.status,
         CheckIn: rec.checkIn ? new Date(rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
         CheckOut: rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
-        Break: '00:00 Min',
-        Late: '0 Min',
+        Break: rec.breakMinutes ? `${rec.breakMinutes} Min` : '0 Min',
+        Late: rec.lateMinutes ? `${rec.lateMinutes} Min` : '0 Min',
+        Overtime: rec.overtimeHours ? `${rec.overtimeHours} hrs` : '0.00 hrs',
         ProductionHours: rec.workingHours ? `${rec.workingHours}` : '0'
       }));
       setDbLogs(mapped);
@@ -716,6 +717,24 @@ const AttendanceAdmin = () => {
                           onChange={e => setPolicy(p => ({ ...p, officeEndTime: e.target.value }))}
                         />
                         <div className="form-text">The official end time (e.g. 06:00 PM) to calculate early departures or overtime.</div>
+                      </div>
+                    </div>
+
+                    <div className="row g-3 mb-4">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">
+                          <i className="ti ti-clock-pause me-1 text-danger" />
+                          Late Grace Period (Minutes)
+                        </label>
+                        <input
+                          type="number"
+                          className="form-control"
+                          min="0"
+                          max="120"
+                          value={policy.lateGracePeriod}
+                          onChange={e => setPolicy(p => ({ ...p, lateGracePeriod: parseInt(e.target.value) || 0 }))}
+                        />
+                        <div className="form-text">Employees punching in after Start Time + Grace Period will be marked Late.</div>
                       </div>
                     </div>
 

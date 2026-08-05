@@ -159,8 +159,84 @@ async function checkOut(req, res) {
 
         res.json({ message: 'Checked out successfully', record: updatedRecord });
     } catch (error) {
-        console.error('Error in check-out:', error);
+        console.error('Error during check-out:', error);
         res.status(500).json({ message: 'Server error during check-out: ' + error.message });
+    }
+}
+
+// ── BREAK-IN (Employee) ───────────────────────────────────
+async function breakIn(req, res) {
+    try {
+        const userId = req.user.id;
+        let employee = await prisma.employee.findUnique({ where: { userId } });
+        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
+
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        const record = await prisma.attendanceRecord.findFirst({
+            where: { employeeId: employee.id, date: { gte: todayStart, lte: todayEnd } }
+        });
+
+        if (!record || !record.checkIn) {
+            return res.status(400).json({ message: 'You have not checked in today' });
+        }
+        if (record.checkOut) {
+            return res.status(400).json({ message: 'Already checked out today' });
+        }
+        if (record.breakIn && !record.breakOut) {
+            return res.status(400).json({ message: 'You are already on a break' });
+        }
+
+        const now = new Date();
+        const updatedRecord = await prisma.attendanceRecord.update({
+            where: { id: record.id },
+            data: { breakIn: now, breakOut: null } // Reset breakOut for a new break
+        });
+
+        res.json({ message: 'Break started successfully', record: updatedRecord });
+    } catch (error) {
+        console.error('Error during break-in:', error);
+        res.status(500).json({ message: 'Server error during break-in: ' + error.message });
+    }
+}
+
+// ── BREAK-OUT (Employee) ───────────────────────────────────
+async function breakOut(req, res) {
+    try {
+        const userId = req.user.id;
+        let employee = await prisma.employee.findUnique({ where: { userId } });
+        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
+
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        const record = await prisma.attendanceRecord.findFirst({
+            where: { employeeId: employee.id, date: { gte: todayStart, lte: todayEnd } }
+        });
+
+        if (!record || !record.checkIn) {
+            return res.status(400).json({ message: 'You have not checked in today' });
+        }
+        if (!record.breakIn || record.breakOut) {
+            return res.status(400).json({ message: 'You are not currently on a break' });
+        }
+
+        const now = new Date();
+        
+        const updatedRecord = await prisma.attendanceRecord.update({
+            where: { id: record.id },
+            data: { breakOut: now }
+        });
+
+        res.json({ message: 'Break ended successfully', record: updatedRecord });
+    } catch (error) {
+        console.error('Error during break-out:', error);
+        res.status(500).json({ message: 'Server error during break-out: ' + error.message });
     }
 }
 
@@ -203,7 +279,69 @@ async function getAttendanceLogs(req, res) {
             take: 200
         });
 
-        res.json(records);
+        // Fetch policy and settings for dynamic calculations
+        let policy = null;
+        let settings = null;
+        if (companyId) {
+            policy = await prisma.attendancePolicy.findUnique({ where: { companyId } });
+            settings = await prisma.companySetting.findUnique({ where: { companyId } });
+        }
+
+        const minFullDay = policy ? parseFloat(policy.minimumHoursForFullDay.toString()) : 8.0;
+        const officeStartTime = settings?.officeStartTime || "09:00";
+        const gracePeriod = policy?.lateGracePeriod || 15;
+
+        // Add dynamic Keka-style calculations
+        const enrichedRecords = records.map(record => {
+            let lateMinutes = 0;
+            let overtimeHours = 0;
+            let breakMinutes = 0;
+
+            // Calculate Late
+            if (record.checkIn && officeStartTime) {
+                const checkInDate = new Date(record.checkIn);
+                
+                // Get local time in the specified timezone to avoid Docker/Node UTC vs Local mismatches
+                const formatter = new Intl.DateTimeFormat('en-US', { 
+                    timeZone: settings?.timezone || 'Asia/Kolkata', 
+                    hour: 'numeric', minute: 'numeric', hour12: false 
+                });
+                const parts = formatter.formatToParts(checkInDate);
+                const actualHour = parseInt(parts.find(p => p.type === 'hour').value) % 24;
+                const actualMin = parseInt(parts.find(p => p.type === 'minute').value);
+                
+                const [startHour, startMin] = officeStartTime.split(':').map(Number);
+                
+                const thresholdMinutes = startHour * 60 + startMin + gracePeriod;
+                const actualMinutes = actualHour * 60 + actualMin;
+
+                if (actualMinutes > thresholdMinutes) {
+                    lateMinutes = actualMinutes - thresholdMinutes;
+                }
+            }
+
+            // Calculate Overtime
+            if (record.workingHours && record.workingHours > minFullDay) {
+                overtimeHours = parseFloat((record.workingHours - minFullDay).toFixed(2));
+            }
+
+            // Calculate Break (if they took a break today and ended it)
+            if (record.breakIn && record.breakOut) {
+                breakMinutes = Math.floor((new Date(record.breakOut) - new Date(record.breakIn)) / (1000 * 60));
+            } else if (record.breakIn) {
+                // Currently on break
+                breakMinutes = Math.floor((new Date() - new Date(record.breakIn)) / (1000 * 60));
+            }
+
+            return {
+                ...record,
+                lateMinutes,
+                overtimeHours,
+                breakMinutes
+            };
+        });
+
+        res.json(enrichedRecords);
     } catch (error) {
         console.error('Error fetching attendance logs:', error);
         res.status(500).json({ message: 'Internal server error' });
@@ -344,6 +482,8 @@ module.exports = {
     getTodayStatus,
     checkIn,
     checkOut,
+    breakIn,
+    breakOut,
     getAttendanceLogs,
     submitRegularization,
     getRegularizationRequests,

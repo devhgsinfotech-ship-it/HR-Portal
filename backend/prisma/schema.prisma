@@ -299,6 +299,7 @@ model AttendancePolicy {
   minimumHoursForFullDay Decimal  @default(8.0) @db.Decimal(5, 2)
   allowWebPunch          Boolean  @default(true)
   requireGeofence        Boolean  @default(false)
+  lateGracePeriod        Int      @default(15)
   updatedAt              DateTime @updatedAt
 
   @@map("attendance_policies")

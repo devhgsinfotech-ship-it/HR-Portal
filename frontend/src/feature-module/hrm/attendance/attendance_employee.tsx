@@ -49,9 +49,9 @@ const AttendanceEmployee = () => {
         CheckIn: rec.checkIn ? new Date(rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
         CheckOut: rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
         Status: rec.status,
-        Break: '00:00 Min',
-        Late: '0 Min',
-        Overtime: '0.00 hrs',
+        Break: rec.breakMinutes ? `${rec.breakMinutes} Min` : '0 Min',
+        Late: rec.lateMinutes ? `${rec.lateMinutes} Min` : '0 Min',
+        Overtime: rec.overtimeHours ? `${rec.overtimeHours} hrs` : '0.00 hrs',
         ProductionHours: rec.workingHours ? `${rec.workingHours} hrs` : '0 hrs'
       }));
       setDbLogs(mapped);
@@ -77,6 +77,23 @@ const AttendanceEmployee = () => {
       await fetchLogs();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Error executing punch action');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handleBreak = async () => {
+    setLoadingAction(true);
+    try {
+      if (todayRecord?.breakIn && !todayRecord?.breakOut) {
+        await apiClient.post('/attendance/break-out');
+      } else {
+        await apiClient.post('/attendance/break-in');
+      }
+      await fetchTodayStatus();
+      await fetchLogs();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error executing break action');
     } finally {
       setLoadingAction(false);
     }
@@ -320,10 +337,20 @@ const AttendanceEmployee = () => {
                       type="button"
                       disabled={loadingAction}
                       onClick={handlePunch}
-                      className={`btn w-100 ${isCheckedIn ? 'btn-danger' : 'btn-success'}`}
+                      className={`btn w-100 mb-2 ${isCheckedIn ? 'btn-danger' : 'btn-success'}`}
                     >
                       {loadingAction ? 'Processing...' : isCheckedIn ? 'Punch Out' : 'Punch In'}
                     </button>
+                    {isCheckedIn && (
+                      <button
+                        type="button"
+                        disabled={loadingAction}
+                        onClick={handleBreak}
+                        className={`btn w-100 ${(todayRecord?.breakIn && !todayRecord?.breakOut) ? 'btn-warning' : 'btn-outline-warning'}`}
+                      >
+                        {loadingAction ? 'Processing...' : (todayRecord?.breakIn && !todayRecord?.breakOut) ? 'Resume Work' : 'Take a Break'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
