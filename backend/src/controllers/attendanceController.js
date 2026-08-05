@@ -25,7 +25,8 @@ async function getTodayStatus(req, res) {
 
         res.json({
             isCheckedIn: !!(record && record.checkIn && !record.checkOut),
-            record
+            record,
+            employee
         });
     } catch (error) {
         console.error('Error fetching today attendance:', error);

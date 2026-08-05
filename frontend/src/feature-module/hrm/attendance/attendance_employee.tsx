@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import type { AppRootState as RootState } from '../../../core/data/redux/store';
 import { all_routes } from '../../../router/all_routes';
 import apiClient from '../../../core/utils/apiClient';
 import PredefinedDateRanges from '../../../core/common/datePicker';
@@ -24,25 +26,92 @@ const AttendanceEmployee = () => {
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [todayRecord, setTodayRecord] = useState<any>(null);
   const [dbLogs, setDbLogs] = useState<any[]>([]);
+  const [employeeProfile, setEmployeeProfile] = useState<any>(null);
   const [loadingAction, setLoadingAction] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [regularizeReason, setRegularizeReason] = useState('');
   const [regularizeIn, setRegularizeIn] = useState('');
   const [regularizeOut, setRegularizeOut] = useState('');
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  const user = useSelector((state: RootState) => state.auth.user);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000); // update every minute
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchTodayStatus = async () => {
     try {
       const res = await apiClient.get('/attendance/today');
       setIsCheckedIn(res.data.isCheckedIn);
       setTodayRecord(res.data.record);
+      setEmployeeProfile(res.data.employee);
     } catch (err) {
       console.error(err);
     }
   };
 
+  const [stats, setStats] = useState({
+    todayHours: 0,
+    weekHours: 0,
+    monthHours: 0,
+    overtimeMonth: 0,
+    todayBreakMinutes: 0,
+    todayOvertimeHours: 0,
+  });
+
   const fetchLogs = async () => {
     try {
       const res = await apiClient.get('/attendance/logs?mine=true');
+      
+      let weekHours = 0;
+      let monthHours = 0;
+      let overtimeMonth = 0;
+      
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0,0,0,0);
+
+      const todayDateStr = now.toLocaleDateString();
+      let todayBreakMinutes = 0;
+      let todayOvertimeHours = 0;
+
+      let todayHours = 0;
+
+      res.data.forEach((rec: any) => {
+        const d = new Date(rec.date);
+        const hrs = rec.workingHours ? parseFloat(rec.workingHours) : 0;
+        const ovt = rec.overtimeHours ? parseFloat(rec.overtimeHours) : 0;
+
+        if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+            monthHours += hrs;
+            overtimeMonth += ovt;
+        }
+        if (d >= startOfWeek) {
+            weekHours += hrs;
+        }
+        
+        if (d.toLocaleDateString() === todayDateStr) {
+            todayBreakMinutes = rec.breakMinutes || 0;
+            todayOvertimeHours = rec.overtimeHours || 0;
+            todayHours = hrs;
+        }
+      });
+      
+      setStats({
+          todayHours,
+          weekHours: parseFloat(weekHours.toFixed(2)),
+          monthHours: parseFloat(monthHours.toFixed(2)),
+          overtimeMonth: parseFloat(overtimeMonth.toFixed(2)),
+          todayBreakMinutes,
+          todayOvertimeHours
+      });
+
       const mapped = res.data.map((rec: any) => ({
         key: rec.id,
         Date: new Date(rec.date).toLocaleDateString(),
@@ -307,9 +376,9 @@ const AttendanceEmployee = () => {
                 <div className="card-body">
                   <div className="mb-3 text-center">
                     <h6 className="fw-medium text-gray-5 mb-2">
-                      Good Morning, Adrian
+                      {user?.name || 'Employee'}
                     </h6>
-                    <h4>08:35 AM, 11 Mar 2025</h4>
+                    <h4>{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, {currentTime.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })}</h4>
                   </div>
                   <div
                     className="attendance-circle-progress mx-auto mb-3"
@@ -322,7 +391,11 @@ const AttendanceEmployee = () => {
                       <span className="progress-bar border-success" />
                     </span>
                     <div className="avatar avatar-xxl avatar-rounded">
-                      <ImageWithBasePath src="assets/img/profiles/avatar-27.jpg" alt="avatar" />
+                      {employeeProfile?.profilePhotoUrl ? (
+                        <ImageWithBasePath src={employeeProfile.profilePhotoUrl} alt="avatar" />
+                      ) : (
+                        <ImageWithBasePath src="assets/img/profiles/avatar-27.jpg" alt="avatar" />
+                      )}
                     </div>
                   </div>
                   <div className="text-center">
@@ -365,7 +438,7 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-clock-stop" />
                         </span>
                         <h2 className="mb-2">
-                          8.36 / <span className="fs-20 text-gray-5"> 9</span>
+                          {stats.todayHours} / <span className="fs-20 text-gray-5"> 9</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Today</p>
                       </div>
@@ -374,7 +447,7 @@ const AttendanceEmployee = () => {
                           <span className="avatar avatar-xs rounded-circle bg-success flex-shrink-0 me-2">
                             <i className="ti ti-arrow-up fs-12" />
                           </span>
-                          <span>5% This Week</span>
+                          <span>-- This Week</span>
                         </p>
                       </div>
                     </div>
@@ -388,7 +461,7 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-clock-up" />
                         </span>
                         <h2 className="mb-2">
-                          10 / <span className="fs-20 text-gray-5"> 40</span>
+                          {stats.weekHours} / <span className="fs-20 text-gray-5"> 40</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Week</p>
                       </div>
@@ -397,7 +470,7 @@ const AttendanceEmployee = () => {
                           <span className="avatar avatar-xs rounded-circle bg-success flex-shrink-0 me-2">
                             <i className="ti ti-arrow-up fs-12" />
                           </span>
-                          <span>7% Last Week</span>
+                          <span>-- Last Week</span>
                         </p>
                       </div>
                     </div>
@@ -411,7 +484,7 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-calendar-up" />
                         </span>
                         <h2 className="mb-2">
-                          75 / <span className="fs-20 text-gray-5"> 98</span>
+                          {stats.monthHours} / <span className="fs-20 text-gray-5"> 98</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Month</p>
                       </div>
@@ -420,7 +493,7 @@ const AttendanceEmployee = () => {
                           <span className="avatar avatar-xs rounded-circle bg-danger flex-shrink-0 me-2">
                             <i className="ti ti-arrow-down fs-12" />
                           </span>
-                          <span>8% Last Month</span>
+                          <span>-- Last Month</span>
                         </p>
                       </div>
                     </div>
@@ -434,7 +507,7 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-calendar-star" />
                         </span>
                         <h2 className="mb-2">
-                          16 / <span className="fs-20 text-gray-5"> 28</span>
+                          {stats.overtimeMonth} / <span className="fs-20 text-gray-5"> 28</span>
                         </h2>
                         <p className="fw-medium text-truncate">
                           Overtime this Month
@@ -445,7 +518,7 @@ const AttendanceEmployee = () => {
                           <span className="avatar avatar-xs rounded-circle bg-danger flex-shrink-0 me-2">
                             <i className="ti ti-arrow-down fs-12" />
                           </span>
-                          <span>6% Last Month</span>
+                          <span>-- Last Month</span>
                         </p>
                       </div>
                     </div>
@@ -461,7 +534,7 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-dark-transparent me-1" />
                               Total Working hours
                             </p>
-                            <h3>12h 36m</h3>
+                            <h3>{Math.floor(stats.todayHours)}h {Math.round((stats.todayHours % 1) * 60)}m</h3>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -470,7 +543,7 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-success me-1" />
                               Productive Hours
                             </p>
-                            <h3>08h 36m</h3>
+                            <h3>{Math.floor(stats.todayHours)}h {Math.round((stats.todayHours % 1) * 60)}m</h3>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -479,7 +552,7 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-warning me-1" />
                               Break hours
                             </p>
-                            <h3>22m 15s</h3>
+                            <h3>{Math.floor(stats.todayBreakMinutes / 60)}h {stats.todayBreakMinutes % 60}m</h3>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -488,7 +561,7 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-info me-1" />
                               Overtime
                             </p>
-                            <h3>02h 15m</h3>
+                            <h3>{Math.floor(stats.todayOvertimeHours)}h {Math.round((stats.todayOvertimeHours % 1) * 60)}m</h3>
                           </div>
                         </div>
                       </div>
