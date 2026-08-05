@@ -12,7 +12,17 @@ interface Image {
 
 const ImageWithBasePath = (props: Image) => {
   // Combine the base path and the provided src to create the full image source URL
-  const fullSrc = `${img_path}${props.src}`;
+  let fullSrc = `${img_path}${props.src}`;
+
+  // Global fix for backend uploaded images passed as assets/img/users/uploads/...
+  if (props.src && props.src.includes('uploads/')) {
+    const uploadPath = props.src.substring(props.src.indexOf('uploads/'));
+    const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    fullSrc = `${backendUrl}/${uploadPath}`;
+  } else if (props.src && props.src.startsWith('http')) {
+    fullSrc = props.src;
+  }
+
   return (
     <img
       className={props.className}
@@ -21,6 +31,12 @@ const ImageWithBasePath = (props: Image) => {
       alt={props.alt}
       width={props.width}
       id={props.id}
+      onError={(e: any) => {
+        // Fallback to default user image on error
+        if (!e.target.src.includes('user-01.jpg')) {
+           e.target.src = `${img_path}assets/img/users/user-01.jpg`;
+        }
+      }}
     />
   );
 };
