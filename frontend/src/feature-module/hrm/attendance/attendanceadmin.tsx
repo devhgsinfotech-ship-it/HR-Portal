@@ -36,25 +36,14 @@ const AttendanceAdmin = () => {
     try {
       const res = await apiClient.get('/attendance/logs');
       
-      const formatLiteralTime = (dateStr: string) => {
-        if (!dateStr) return 'N/A';
-        const d = new Date(dateStr);
-        const h = d.getUTCHours();
-        const m = d.getUTCMinutes();
-        const ampm = h >= 12 ? 'PM' : 'AM';
-        const hh = h % 12 || 12;
-        const mm = m < 10 ? '0' + m : m;
-        return `${hh}:${mm} ${ampm}`;
-      };
-
       const mapped = res.data.map((rec: any) => ({
         key: rec.id,
         Employee: `${rec.employee?.firstName || ''} ${rec.employee?.lastName || ''}`.trim() || 'Employee',
         Role: rec.employee?.designation?.name || 'Staff',
         Image: rec.employee?.profilePhotoUrl ? (rec.employee.profilePhotoUrl.startsWith('/') ? rec.employee.profilePhotoUrl.substring(1) : rec.employee.profilePhotoUrl) : 'user-01.jpg',
         Status: rec.status,
-        CheckIn: rec.checkIn ? formatLiteralTime(rec.checkIn) : 'N/A',
-        CheckOut: rec.checkOut ? formatLiteralTime(rec.checkOut) : 'N/A',
+        CheckIn: rec.checkIn ? new Date(rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        CheckOut: rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
         Break: '00:00 Min',
         Late: '0 Min',
         ProductionHours: rec.workingHours ? `${rec.workingHours}` : '0'
@@ -69,25 +58,14 @@ const AttendanceAdmin = () => {
     try {
       const res = await apiClient.get('/attendance/regularize/requests');
       
-      const formatLiteralTime = (dateStr: string) => {
-        if (!dateStr) return 'N/A';
-        const d = new Date(dateStr);
-        const h = d.getUTCHours();
-        const m = d.getUTCMinutes();
-        const ampm = h >= 12 ? 'PM' : 'AM';
-        const hh = h % 12 || 12;
-        const mm = m < 10 ? '0' + m : m;
-        return `${hh}:${mm} ${ampm}`;
-      };
-
       const mapped = res.data.map((req: any) => ({
         key: req.id,
         Employee: `${req.attendanceRecord.employee.firstName} ${req.attendanceRecord.employee.lastName}`.trim(),
         Image: req.attendanceRecord.employee.profilePhotoUrl ? (req.attendanceRecord.employee.profilePhotoUrl.startsWith('/') ? req.attendanceRecord.employee.profilePhotoUrl.substring(1) : req.attendanceRecord.employee.profilePhotoUrl) : 'user-01.jpg',
         Role: req.attendanceRecord.employee.designation?.name || 'Staff',
         Date: new Date(req.attendanceRecord.date).toLocaleDateString(),
-        RequestedIn: req.requestedCheckIn ? formatLiteralTime(req.requestedCheckIn) : 'N/A',
-        RequestedOut: req.requestedCheckOut ? formatLiteralTime(req.requestedCheckOut) : 'N/A',
+        RequestedIn: req.requestedCheckIn ? new Date(req.requestedCheckIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        RequestedOut: req.requestedCheckOut ? new Date(req.requestedCheckOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
         Reason: req.reason,
         Status: req.status
       }));

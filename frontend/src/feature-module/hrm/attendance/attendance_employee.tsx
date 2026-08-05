@@ -43,22 +43,11 @@ const AttendanceEmployee = () => {
   const fetchLogs = async () => {
     try {
       const res = await apiClient.get('/attendance/logs?mine=true');
-      const formatLiteralTime = (dateStr: string) => {
-        if (!dateStr) return 'N/A';
-        const d = new Date(dateStr);
-        const h = d.getUTCHours();
-        const m = d.getUTCMinutes();
-        const ampm = h >= 12 ? 'PM' : 'AM';
-        const hh = h % 12 || 12;
-        const mm = m < 10 ? '0' + m : m;
-        return `${hh}:${mm} ${ampm}`;
-      };
-
       const mapped = res.data.map((rec: any) => ({
         key: rec.id,
         Date: new Date(rec.date).toLocaleDateString(),
-        CheckIn: rec.checkIn ? formatLiteralTime(rec.checkIn) : 'N/A',
-        CheckOut: rec.checkOut ? formatLiteralTime(rec.checkOut) : 'N/A',
+        CheckIn: rec.checkIn ? new Date(rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        CheckOut: rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
         Status: rec.status,
         Break: '00:00 Min',
         Late: '0 Min',
@@ -97,12 +86,19 @@ const AttendanceEmployee = () => {
     e.preventDefault();
     if (!selectedRecord) return;
 
+    // Convert datetime-local value (local browser time) → proper UTC ISO string
+    // Without this, the backend (UTC Docker) interprets "09:10" as 09:10 UTC instead of 09:10 IST
+    const toUTCIso = (localStr: string): string | undefined => {
+      if (!localStr) return undefined;
+      return new Date(localStr).toISOString(); // Browser Date() respects local timezone → outputs UTC
+    };
+
     setLoadingAction(true);
     try {
       await apiClient.post('/attendance/regularize', {
         recordId: selectedRecord.key,
-        requestedCheckIn: regularizeIn,
-        requestedCheckOut: regularizeOut,
+        requestedCheckIn: toUTCIso(regularizeIn),
+        requestedCheckOut: toUTCIso(regularizeOut),
         reason: regularizeReason
       });
       alert('Regularization request submitted successfully!');
@@ -318,13 +314,7 @@ const AttendanceEmployee = () => {
                     </div>
                     <h6 className="fw-medium d-flex align-items-center justify-content-center mb-3">
                       <i className="ti ti-fingerprint text-primary me-1" />
-                      {todayRecord?.checkIn ? `Punch In at ${(() => {
-                        const d = new Date(todayRecord.checkIn);
-                        const h = d.getUTCHours();
-                        const m = d.getUTCMinutes();
-                        const ampm = h >= 12 ? 'PM' : 'AM';
-                        return `${h % 12 || 12}:${m < 10 ? '0' + m : m} ${ampm}`;
-                      })()}` : 'Not Punched In'}
+                      {todayRecord?.checkIn ? `Punch In at ${new Date(todayRecord.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not Punched In'}
                     </h6>
                     <button
                       type="button"
