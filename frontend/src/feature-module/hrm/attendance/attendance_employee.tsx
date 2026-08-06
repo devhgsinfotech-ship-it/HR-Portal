@@ -321,7 +321,7 @@ const AttendanceEmployee = () => {
     {
       title: "Action",
       render: (_text: string, record: AttendanceEmployeeData) => (
-        (record.Status === 'MISSING_PUNCH' || record.Status === 'IRREGULAR') ? (
+        (record.Status === 'MISSING_PUNCH' || record.Status === 'IRREGULAR' || record.Status === 'HALF_DAY') ? (
           <button
             className="btn btn-sm btn-primary"
             data-bs-toggle="modal"
