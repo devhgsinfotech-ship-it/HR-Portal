@@ -31,8 +31,12 @@ const AttendanceEmployee = () => {
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [regularizeReason, setRegularizeReason] = useState('');
   const [regularizeIn, setRegularizeIn] = useState('');
+  const [regularizeBreakDurationHours, setRegularizeBreakDurationHours] = useState('');
+  const [regularizeBreakDurationMins, setRegularizeBreakDurationMins] = useState('');
   const [regularizeOut, setRegularizeOut] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [incompleteYesterday, setIncompleteYesterday] = useState<any>(null);
+  const [showIncompletePopup, setShowIncompletePopup] = useState(false);
 
   const user = useSelector((state: RootState) => state.auth.user);
 
@@ -47,6 +51,11 @@ const AttendanceEmployee = () => {
       setIsCheckedIn(res.data.isCheckedIn);
       setTodayRecord(res.data.record);
       setEmployeeProfile(res.data.employee);
+      // Show incomplete popup if there's an unclosed session from a previous day
+      if (res.data.incompleteYesterday) {
+        setIncompleteYesterday(res.data.incompleteYesterday);
+        setShowIncompletePopup(true);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -60,6 +69,7 @@ const AttendanceEmployee = () => {
     todayBreakMinutes: 0,
     todayOvertimeHours: 0,
   });
+  const [attendancePolicy, setAttendancePolicy] = useState<any>({ minimumHoursForFullDay: 8, minimumHoursForHalfDay: 4 });
 
   const fetchLogs = async () => {
     try {
@@ -112,6 +122,13 @@ const AttendanceEmployee = () => {
           todayOvertimeHours
       });
 
+      const formatHrs = (hrs: any) => {
+        if (!hrs) return '0h 0m';
+        const h = Math.floor(parseFloat(hrs));
+        const m = Math.round((parseFloat(hrs) - h) * 60);
+        return `${h}h ${m}m`;
+      };
+
       const mapped = res.data.map((rec: any) => ({
         key: rec.id,
         Date: new Date(rec.date).toLocaleDateString(),
@@ -120,8 +137,8 @@ const AttendanceEmployee = () => {
         Status: rec.status,
         Break: rec.breakMinutes ? `${rec.breakMinutes} Min` : '0 Min',
         Late: rec.lateMinutes ? `${rec.lateMinutes} Min` : '0 Min',
-        Overtime: rec.overtimeHours ? `${rec.overtimeHours} hrs` : '0.00 hrs',
-        ProductionHours: rec.workingHours ? `${rec.workingHours} hrs` : '0 hrs'
+        Overtime: formatHrs(rec.overtimeHours),
+        ProductionHours: formatHrs(rec.workingHours)
       }));
       setDbLogs(mapped);
     } catch (err) {
@@ -132,6 +149,8 @@ const AttendanceEmployee = () => {
   useEffect(() => {
     fetchTodayStatus();
     fetchLogs();
+    // Fetch policy for dynamic denominators
+    apiClient.get('/attendance/policy').then(res => setAttendancePolicy(res.data)).catch(() => {});
   }, []);
 
   const handlePunch = async () => {
@@ -181,15 +200,23 @@ const AttendanceEmployee = () => {
 
     setLoadingAction(true);
     try {
+      let requestedBreakDuration = undefined;
+      if (regularizeBreakDurationHours !== '' || regularizeBreakDurationMins !== '') {
+        requestedBreakDuration = (parseInt(regularizeBreakDurationHours || '0') * 60) + parseInt(regularizeBreakDurationMins || '0');
+      }
+
       await apiClient.post('/attendance/regularize', {
         recordId: selectedRecord.key,
         requestedCheckIn: toUTCIso(regularizeIn),
+        requestedBreakDuration: requestedBreakDuration,
         requestedCheckOut: toUTCIso(regularizeOut),
         reason: regularizeReason
       });
       alert('Regularization request submitted successfully!');
       setRegularizeReason('');
       setRegularizeIn('');
+      setRegularizeBreakDurationHours('');
+      setRegularizeBreakDurationMins('');
       setRegularizeOut('');
       const closeBtn = document.getElementById('close-regularize-modal');
       if (closeBtn) closeBtn.click();
@@ -197,6 +224,30 @@ const AttendanceEmployee = () => {
       alert(err.response?.data?.message || 'Error submitting request');
     } finally {
       setLoadingAction(false);
+    }
+  };
+
+  // Helper: convert a Date or ISO string to datetime-local format (YYYY-MM-DDTHH:MM)
+  const toDatetimeLocal = (dt: any): string => {
+    if (!dt) return '';
+    const d = new Date(dt);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  // Opens the regularize modal pre-filled with the incomplete yesterday record
+  const handleRegularizeYesterday = () => {
+    if (!incompleteYesterday) return;
+    setSelectedRecord({ key: incompleteYesterday.id, Date: new Date(incompleteYesterday.date).toLocaleDateString() });
+    setRegularizeIn(toDatetimeLocal(incompleteYesterday.checkIn));
+    setRegularizeOut(''); // Employee must fill the correct checkout time
+    setRegularizeReason('Forgot to punch out / resume from break');
+    setShowIncompletePopup(false);
+    // Open the existing regularize modal via Bootstrap
+    const modal = document.getElementById('regularize_modal');
+    if (modal) {
+      const bsModal = (window as any).bootstrap?.Modal?.getOrCreateInstance(modal);
+      if (bsModal) bsModal.show();
     }
   };
 
@@ -286,6 +337,57 @@ const AttendanceEmployee = () => {
 
   return (
     <>
+      {/* ── INCOMPLETE ATTENDANCE POPUP ────────────────────────────── */}
+      {showIncompletePopup && incompleteYesterday && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '2rem', maxWidth: 440, width: '90%', boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <span style={{ background: '#fff3cd', borderRadius: 12, padding: '10px 14px', fontSize: 28 }}>⚠️</span>
+              <div>
+                <h5 style={{ margin: 0, fontWeight: 700, color: '#1a1a2e' }}>Incomplete Attendance</h5>
+                <p style={{ margin: 0, color: '#888', fontSize: 13 }}>
+                  {new Date(incompleteYesterday.date).toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}
+                </p>
+              </div>
+            </div>
+            <div style={{ background: '#f8f9fa', borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: '#555', fontSize: 13 }}>Punch In</span>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>
+                  {incompleteYesterday.checkIn ? new Date(incompleteYesterday.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                </span>
+              </div>
+              {incompleteYesterday.breakIn && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ color: '#555', fontSize: 13 }}>Break In</span>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>{new Date(incompleteYesterday.breakIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+              )}
+              {incompleteYesterday.breakIn && !incompleteYesterday.breakOut && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ color: '#555', fontSize: 13 }}>Break Out</span>
+                  <span style={{ color: '#dc3545', fontWeight: 600, fontSize: 13 }}>❌ Missing</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#555', fontSize: 13 }}>Punch Out</span>
+                <span style={{ color: '#dc3545', fontWeight: 600, fontSize: 13 }}>❌ Missing</span>
+              </div>
+            </div>
+            <p style={{ fontSize: 13, color: '#666', marginBottom: 20 }}>
+              You have an incomplete attendance record. Regularize to submit correct times for HR approval, or continue to today's punch-in.
+            </p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button className="btn btn-primary flex-fill" onClick={handleRegularizeYesterday}>
+                <i className="ti ti-edit me-1" />Regularize Yesterday
+              </button>
+              <button className="btn btn-outline-secondary flex-fill" onClick={() => setShowIncompletePopup(false)}>
+                Continue to Today
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Page Wrapper */}
       <div className="page-wrapper">
         <div className="content">
@@ -438,7 +540,7 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-clock-stop" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.todayHours} / <span className="fs-20 text-gray-5"> 9</span>
+                          {stats.todayHours} / <span className="fs-20 text-gray-5"> {attendancePolicy.minimumHoursForFullDay}</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Today</p>
                       </div>
@@ -461,7 +563,7 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-clock-up" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.weekHours} / <span className="fs-20 text-gray-5"> 40</span>
+                          {stats.weekHours} / <span className="fs-20 text-gray-5"> {(parseFloat(attendancePolicy.minimumHoursForFullDay) * 5).toFixed(0)}</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Week</p>
                       </div>
@@ -484,7 +586,7 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-calendar-up" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.monthHours} / <span className="fs-20 text-gray-5"> 98</span>
+                          {stats.monthHours} / <span className="fs-20 text-gray-5"> {(parseFloat(attendancePolicy.minimumHoursForFullDay) * 22).toFixed(0)}</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Month</p>
                       </div>
@@ -507,7 +609,7 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-calendar-star" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.overtimeMonth} / <span className="fs-20 text-gray-5"> 28</span>
+                          {stats.overtimeMonth} / <span className="fs-20 text-gray-5"> {(parseFloat(attendancePolicy.minimumHoursForFullDay) * 22).toFixed(0)}</span>
                         </h2>
                         <p className="fw-medium text-truncate">
                           Overtime this Month
@@ -543,7 +645,14 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-success me-1" />
                               Productive Hours
                             </p>
-                            <h3>{Math.floor(stats.todayHours)}h {Math.round((stats.todayHours % 1) * 60)}m</h3>
+                            <h3>{
+                              (() => {
+                                const safeBreak = Math.max(0, stats.todayBreakMinutes);
+                                const productiveMins = Math.max(0, Math.round(stats.todayHours * 60) - safeBreak);
+                                return `${Math.floor(productiveMins / 60)}h ${productiveMins % 60}m`;
+                              })()
+                            }</h3>
+                          <p className="text-muted fs-11 mb-0">Total shift time (break excluded)</p>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -552,7 +661,12 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-warning me-1" />
                               Break hours
                             </p>
-                            <h3>{Math.floor(stats.todayBreakMinutes / 60)}h {stats.todayBreakMinutes % 60}m</h3>
+                            <h3>{
+                              (() => {
+                                const bm = Math.max(0, stats.todayBreakMinutes);
+                                return `${Math.floor(bm / 60)}h ${bm % 60}m`;
+                              })()
+                            }</h3>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -939,6 +1053,13 @@ const AttendanceEmployee = () => {
                 <div className="mb-3">
                   <label className="form-label">Requested Check-Out Time</label>
                   <input type="datetime-local" className="form-control" value={regularizeOut} onChange={e => setRegularizeOut(e.target.value)} required />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Break Duration (If applicable)</label>
+                  <div className="d-flex align-items-center">
+                    <input type="number" className="form-control me-2" placeholder="Hours" min="0" value={regularizeBreakDurationHours} onChange={e => setRegularizeBreakDurationHours(e.target.value)} />
+                    <input type="number" className="form-control" placeholder="Minutes" min="0" max="59" value={regularizeBreakDurationMins} onChange={e => setRegularizeBreakDurationMins(e.target.value)} />
+                  </div>
                 </div>
                 <div className="mb-3">
                   <label className="form-label">Reason</label>

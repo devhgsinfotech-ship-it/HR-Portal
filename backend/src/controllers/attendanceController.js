@@ -23,10 +23,24 @@ async function getTodayStatus(req, res) {
             }
         });
 
+        // ── DETECT INCOMPLETE SESSION FROM A PREVIOUS DAY ───────────
+        // Find the most recent record that has a punch-in but NO punch-out
+        // and is NOT today (i.e., a forgotten session from a previous day)
+        const incompleteYesterday = await prisma.attendanceRecord.findFirst({
+            where: {
+                employeeId: employee.id,
+                checkIn: { not: null },
+                checkOut: null,
+                date: { lt: todayStart }  // strictly before today
+            },
+            orderBy: { date: 'desc' }  // get the most recent one
+        });
+
         res.json({
             isCheckedIn: !!(record && record.checkIn && !record.checkOut),
             record,
-            employee
+            employee,
+            incompleteYesterday: incompleteYesterday || null
         });
     } catch (error) {
         console.error('Error fetching today attendance:', error);
@@ -134,8 +148,21 @@ async function checkOut(req, res) {
         }
 
         const now = new Date();
-        const diffMs = now - new Date(record.checkIn);
-        const workingHours = parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
+        // Net working hours = total time on shift MINUS break time
+        const totalDiffMs = now - new Date(record.checkIn);
+        
+        // Auto-close break if they punch out while on a break
+        let finalBreakOut = record.breakOut;
+        if (record.breakIn && !record.breakOut) {
+            finalBreakOut = now;
+        }
+
+        let breakDiffMs = 0;
+        if (record.breakIn && finalBreakOut) {
+            const bDiff = new Date(finalBreakOut) - new Date(record.breakIn);
+            breakDiffMs = Math.max(0, bDiff);
+        }
+        const workingHours = parseFloat(((totalDiffMs - breakDiffMs) / (1000 * 60 * 60)).toFixed(2));
 
         // Smart Status Evaluation based on Policy
         const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -155,7 +182,12 @@ async function checkOut(req, res) {
 
         const updatedRecord = await prisma.attendanceRecord.update({
             where: { id: record.id },
-            data: { checkOut: now, workingHours, status: newStatus }
+            data: { 
+                checkOut: now, 
+                breakOut: finalBreakOut, 
+                workingHours, 
+                status: newStatus 
+            }
         });
 
         res.json({ message: 'Checked out successfully', record: updatedRecord });
@@ -328,10 +360,12 @@ async function getAttendanceLogs(req, res) {
 
             // Calculate Break (if they took a break today and ended it)
             if (record.breakIn && record.breakOut) {
-                breakMinutes = Math.floor((new Date(record.breakOut) - new Date(record.breakIn)) / (1000 * 60));
-            } else if (record.breakIn) {
-                // Currently on break
-                breakMinutes = Math.floor((new Date() - new Date(record.breakIn)) / (1000 * 60));
+                const raw = Math.floor((new Date(record.breakOut) - new Date(record.breakIn)) / (1000 * 60));
+                breakMinutes = Math.max(0, raw); // guard: never negative
+            } else if (record.breakIn && !record.breakOut) {
+                // Currently on break — live count
+                const raw = Math.floor((new Date() - new Date(record.breakIn)) / (1000 * 60));
+                breakMinutes = Math.max(0, raw);
             }
 
             return {
@@ -352,7 +386,7 @@ async function getAttendanceLogs(req, res) {
 // ── SUBMIT REGULARIZATION REQUEST (Employee) ────────────────
 async function submitRegularization(req, res) {
     try {
-        const { recordId, requestedCheckIn, requestedCheckOut, reason } = req.body;
+        const { recordId, requestedCheckIn, requestedCheckOut, requestedBreakOut, requestedBreakDuration, reason } = req.body;
         const userId = req.user.id;
         
         const employee = await prisma.employee.findUnique({ where: { userId } });
@@ -365,12 +399,20 @@ async function submitRegularization(req, res) {
 
         const reqCheckIn = requestedCheckIn ? new Date(requestedCheckIn) : record.checkIn;
         const reqCheckOut = requestedCheckOut ? new Date(requestedCheckOut) : record.checkOut;
+        
+        let reqBreakOut = record.breakOut;
+        if (requestedBreakOut) {
+            reqBreakOut = new Date(requestedBreakOut);
+        } else if (requestedBreakDuration !== undefined && record.breakIn) {
+            reqBreakOut = new Date(new Date(record.breakIn).getTime() + parseInt(requestedBreakDuration) * 60000);
+        }
 
         const regularization = await prisma.attendanceRegularization.create({
             data: {
                 attendanceRecordId: record.id,
                 requestedCheckIn: reqCheckIn,
                 requestedCheckOut: reqCheckOut,
+                requestedBreakOut: reqBreakOut,
                 reason,
                 status: 'PENDING'
             }
@@ -441,11 +483,22 @@ async function reviewRegularization(req, res) {
         if (status === 'APPROVED') {
             const reqCheckIn = request.requestedCheckIn || request.attendanceRecord.checkIn;
             const reqCheckOut = request.requestedCheckOut || request.attendanceRecord.checkOut;
+            const reqBreakOut = request.requestedBreakOut || request.attendanceRecord.breakOut;
+            const breakIn = request.attendanceRecord.breakIn;
             
             let workingHours = request.attendanceRecord.workingHours;
             if (reqCheckIn && reqCheckOut) {
-                const diffMs = new Date(reqCheckOut) - new Date(reqCheckIn);
-                workingHours = parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
+                const totalDiffMs = new Date(reqCheckOut) - new Date(reqCheckIn);
+                let breakDiffMs = 0;
+                
+                // If there was a break, subtract it
+                if (breakIn && reqBreakOut) {
+                    breakDiffMs = new Date(reqBreakOut) - new Date(breakIn);
+                    if (breakDiffMs < 0) breakDiffMs = 0;
+                }
+                
+                const netWorkingMs = totalDiffMs - breakDiffMs;
+                workingHours = parseFloat((netWorkingMs / (1000 * 60 * 60)).toFixed(2));
             }
 
             // Smart policy evaluation for the new hours
@@ -466,6 +519,7 @@ async function reviewRegularization(req, res) {
                 data: {
                     checkIn: reqCheckIn,
                     checkOut: reqCheckOut,
+                    breakOut: reqBreakOut,
                     workingHours,
                     status: newStatus
                 }
@@ -507,7 +561,9 @@ async function getPolicy(req, res) {
                 minimumHoursForHalfDay: 4.0,
                 minimumHoursForFullDay: 8.0,
                 allowWebPunch: true,
-                requireGeofence: false
+                requireGeofence: false,
+                lateGracePeriod: 15,
+                autoCheckoutTime: '18:00'
             };
         }
 
@@ -528,7 +584,7 @@ async function upsertPolicy(req, res) {
         const companyId = req.user.companyId;
         if (!companyId) return res.status(400).json({ message: 'No company associated' });
         
-        const { minimumHoursForHalfDay, minimumHoursForFullDay, allowWebPunch, requireGeofence, officeStartTime, officeEndTime } = req.body;
+        const { minimumHoursForHalfDay, minimumHoursForFullDay, allowWebPunch, requireGeofence, officeStartTime, officeEndTime, lateGracePeriod, autoCheckoutTime } = req.body;
         
         const policy = await prisma.attendancePolicy.upsert({
             where: { companyId },
@@ -537,13 +593,17 @@ async function upsertPolicy(req, res) {
                 minimumHoursForHalfDay: parseFloat(minimumHoursForHalfDay) || 4.0,
                 minimumHoursForFullDay: parseFloat(minimumHoursForFullDay) || 8.0,
                 allowWebPunch: allowWebPunch !== undefined ? allowWebPunch : true,
-                requireGeofence: requireGeofence !== undefined ? requireGeofence : false
+                requireGeofence: requireGeofence !== undefined ? requireGeofence : false,
+                lateGracePeriod: parseInt(lateGracePeriod) || 15,
+                autoCheckoutTime: autoCheckoutTime || '18:00'
             },
             update: {
                 minimumHoursForHalfDay: parseFloat(minimumHoursForHalfDay) || 4.0,
                 minimumHoursForFullDay: parseFloat(minimumHoursForFullDay) || 8.0,
                 allowWebPunch: allowWebPunch !== undefined ? allowWebPunch : true,
-                requireGeofence: requireGeofence !== undefined ? requireGeofence : false
+                requireGeofence: requireGeofence !== undefined ? requireGeofence : false,
+                lateGracePeriod: parseInt(lateGracePeriod) || 15,
+                autoCheckoutTime: autoCheckoutTime || '18:00'
             }
         });
 

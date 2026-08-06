@@ -300,6 +300,7 @@ model AttendancePolicy {
   allowWebPunch          Boolean  @default(true)
   requireGeofence        Boolean  @default(false)
   lateGracePeriod        Int      @default(15)
+  autoCheckoutTime       String   @default("18:00") // HH:MM in IST, used for on-login detection
   updatedAt              DateTime @updatedAt
 
   @@map("attendance_policies")
@@ -332,6 +333,7 @@ model AttendanceRegularization {
   attendanceRecordId Int
   attendanceRecord   AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
   requestedCheckIn   DateTime?
+  requestedBreakOut  DateTime?
   requestedCheckOut  DateTime?
   reason             String
   status             LeaveStatus      @default(PENDING) // Reusing PENDING, APPROVED, REJECTED

@@ -28,7 +28,7 @@ const AttendanceAdmin = () => {
   const [dbLogs, setDbLogs] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [loadingAction, setLoadingAction] = useState(false);
-  const [policy, setPolicy] = useState({ minimumHoursForHalfDay: 4, minimumHoursForFullDay: 8, allowWebPunch: true, requireGeofence: false, officeStartTime: '09:00', officeEndTime: '18:00', lateGracePeriod: 15 });
+  const [policy, setPolicy] = useState({ minimumHoursForHalfDay: 4, minimumHoursForFullDay: 8, allowWebPunch: true, requireGeofence: false, officeStartTime: '09:00', officeEndTime: '18:00', lateGracePeriod: 15, autoCheckoutTime: '18:00' });
   const [policySaving, setPolicySaving] = useState(false);
   const [policyMsg, setPolicyMsg] = useState('');
 
@@ -36,6 +36,13 @@ const AttendanceAdmin = () => {
     try {
       const res = await apiClient.get('/attendance/logs');
       
+      const formatHrs = (hrs: any) => {
+        if (!hrs) return '0h 0m';
+        const h = Math.floor(parseFloat(hrs));
+        const m = Math.round((parseFloat(hrs) - h) * 60);
+        return `${h}h ${m}m`;
+      };
+
       const mapped = res.data.map((rec: any) => ({
         key: rec.id,
         Employee: `${rec.employee?.firstName || ''} ${rec.employee?.lastName || ''}`.trim() || 'Employee',
@@ -46,8 +53,8 @@ const AttendanceAdmin = () => {
         CheckOut: rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
         Break: rec.breakMinutes ? `${rec.breakMinutes} Min` : '0 Min',
         Late: rec.lateMinutes ? `${rec.lateMinutes} Min` : '0 Min',
-        Overtime: rec.overtimeHours ? `${rec.overtimeHours} hrs` : '0.00 hrs',
-        ProductionHours: rec.workingHours ? `${rec.workingHours}` : '0'
+        Overtime: formatHrs(rec.overtimeHours),
+        ProductionHours: formatHrs(rec.workingHours)
       }));
       setDbLogs(mapped);
     } catch (err) {
@@ -66,6 +73,7 @@ const AttendanceAdmin = () => {
         Role: req.attendanceRecord.employee.designation?.name || 'Staff',
         Date: new Date(req.attendanceRecord.date).toLocaleDateString(),
         RequestedIn: req.requestedCheckIn ? new Date(req.requestedCheckIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        RequestedBreakOut: req.requestedBreakOut ? new Date(req.requestedBreakOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
         RequestedOut: req.requestedCheckOut ? new Date(req.requestedCheckOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
         Reason: req.reason,
         Status: req.status
@@ -220,6 +228,7 @@ const AttendanceAdmin = () => {
     },
     { title: "Date", dataIndex: "Date" },
     { title: "Requested In", dataIndex: "RequestedIn" },
+    { title: "Req. Break Out", dataIndex: "RequestedBreakOut" },
     { title: "Requested Out", dataIndex: "RequestedOut" },
     { title: "Reason", dataIndex: "Reason" },
     {
@@ -735,6 +744,19 @@ const AttendanceAdmin = () => {
                           onChange={e => setPolicy(p => ({ ...p, lateGracePeriod: parseInt(e.target.value) || 0 }))}
                         />
                         <div className="form-text">Employees punching in after Start Time + Grace Period will be marked Late.</div>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">
+                          <i className="ti ti-clock-bolt me-1 text-warning" />
+                          Incomplete Attendance Detection Time (IST)
+                        </label>
+                        <input
+                          type="time"
+                          className="form-control"
+                          value={(policy as any).autoCheckoutTime || '18:00'}
+                          onChange={e => setPolicy(p => ({ ...p, autoCheckoutTime: e.target.value }))}
+                        />
+                        <div className="form-text">If an employee forgets to punch out, the system will flag the session as <strong>Incomplete</strong> at this time and prompt regularization next login.</div>
                       </div>
                     </div>
 
