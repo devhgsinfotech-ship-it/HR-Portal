@@ -12,6 +12,8 @@ router.post('/check-out', attendanceController.checkOut);
 router.post('/break-in', attendanceController.breakIn);
 router.post('/break-out', attendanceController.breakOut);
 router.get('/logs', attendanceController.getAttendanceLogs);
+// Admin direct edit route
+router.put('/logs/:id', attendanceController.updateAttendanceLog);
 
 // Regularization routes
 router.post('/regularize', attendanceController.submitRegularization);

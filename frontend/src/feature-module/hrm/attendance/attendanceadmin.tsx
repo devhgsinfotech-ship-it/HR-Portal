@@ -31,6 +31,51 @@ const AttendanceAdmin = () => {
   const [policy, setPolicy] = useState({ minimumHoursForHalfDay: 4, minimumHoursForFullDay: 8, allowWebPunch: true, requireGeofence: false, officeStartTime: '09:00', officeEndTime: '18:00', lateGracePeriod: 15, autoCheckoutTime: '18:00' });
   const [policySaving, setPolicySaving] = useState(false);
   const [policyMsg, setPolicyMsg] = useState('');
+  
+  // Edit Modal State
+  const [editRecord, setEditRecord] = useState<any>(null);
+  const [editIn, setEditIn] = useState('');
+  const [editOut, setEditOut] = useState('');
+  const [editBreakMinutes, setEditBreakMinutes] = useState('');
+  const [editStatus, setEditStatus] = useState('');
+
+  // Helper: convert a Date or ISO string to datetime-local format (YYYY-MM-DDTHH:MM)
+  const toDatetimeLocal = (dt: any): string => {
+    if (!dt) return '';
+    const d = new Date(dt);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const handleEditSubmit = async (e: any) => {
+    e.preventDefault();
+    if (!editRecord) return;
+    
+    const toUTCIso = (localStr: string): string | undefined => {
+      if (!localStr) return undefined;
+      return new Date(localStr).toISOString();
+    };
+
+    setLoadingAction(true);
+    try {
+      await apiClient.put(`/attendance/logs/${editRecord.key}`, {
+        checkIn: toUTCIso(editIn),
+        checkOut: toUTCIso(editOut),
+        breakMinutes: parseInt(editBreakMinutes) || 0,
+        status: editStatus
+      });
+      alert('Attendance record updated successfully!');
+      
+      const closeBtn = document.getElementById('close-edit-modal');
+      if (closeBtn) closeBtn.click();
+      
+      fetchLogs();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error updating record');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
 
   const fetchLogs = async () => {
     try {
@@ -54,7 +99,11 @@ const AttendanceAdmin = () => {
         Break: rec.breakMinutes ? `${rec.breakMinutes} Min` : '0 Min',
         Late: rec.lateMinutes ? `${rec.lateMinutes} Min` : '0 Min',
         Overtime: formatHrs(rec.overtimeHours),
-        ProductionHours: formatHrs(rec.workingHours)
+        ProductionHours: formatHrs(rec.workingHours),
+        _rawCheckIn: rec.checkIn,
+        _rawCheckOut: rec.checkOut,
+        _rawBreakMinutes: rec.breakMinutes,
+        _rawDate: rec.date
       }));
       setDbLogs(mapped);
     } catch (err) {
@@ -181,7 +230,7 @@ const AttendanceAdmin = () => {
     {
       title: "",
       dataIndex: "actions",
-      render: () => (
+      render: (_text: string, record: AttendanceAdminData) => (
         <div className="action-icon d-inline-flex">
           <button
             type="button"
@@ -189,6 +238,16 @@ const AttendanceAdmin = () => {
             data-bs-toggle="modal"
             data-bs-target="#edit_attendance"
             aria-label="Edit attendance"
+            onClick={() => {
+              setEditRecord(record);
+              const original = (dbLogs as any[]).find((l: any) => l.key === (record as any).key);
+              if (original) {
+                 setEditIn(original._rawCheckIn ? toDatetimeLocal(original._rawCheckIn) : '');
+                 setEditOut(original._rawCheckOut ? toDatetimeLocal(original._rawCheckOut) : '');
+                 setEditBreakMinutes(original._rawBreakMinutes?.toString() || '0');
+                 setEditStatus(original.Status);
+              }
+            }}
           >
             <i className="ti ti-edit" />
           </button>
@@ -841,86 +900,56 @@ const AttendanceAdmin = () => {
             <form>
               <div className="modal-body pb-0">
                 <div className="row">
-                  <div className="col-md-12">
+                  <div className="col-md-12 mb-3">
+                    <p className="text-muted mb-0">Modifying record for <strong>{editRecord?.Employee}</strong> on <strong>{editRecord ? new Date(dbLogs.find((l:any)=>l.key===editRecord.key)?._rawDate).toLocaleDateString() : ''}</strong></p>
+                  </div>
+                  <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">Date</label>
-                      <div className="input-icon input-icon-new position-relative w-100 me-2">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar" />
-                        </span>
-                      </div>
+                      <label className="form-label">Check In (Local Time)</label>
+                      <input 
+                        type="datetime-local" 
+                        className="form-control" 
+                        value={editIn}
+                        onChange={(e) => setEditIn(e.target.value)}
+                      />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">Check In</label>
-                      <div className="input-icon input-icon-new position-relative w-100">
-                        <TimePicker getPopupContainer={getModalContainer2} use12Hours placeholder="Choose" format="h:mm A" className="form-control timepicker" />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-clock-hour-3" />
-                        </span>
-                      </div>
+                      <label className="form-label">Check Out (Local Time)</label>
+                      <input 
+                        type="datetime-local" 
+                        className="form-control" 
+                        value={editOut}
+                        onChange={(e) => setEditOut(e.target.value)}
+                      />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">Check Out</label>
-                      <div className="input-icon input-icon-new position-relative w-100">
-                        <TimePicker getPopupContainer={getModalContainer2} use12Hours placeholder="Choose" format="h:mm A" className="form-control timepicker" />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-clock-hour-3" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Break</label>
+                      <label className="form-label">Break Duration (Minutes)</label>
                       <input
-                        type="text"
+                        type="number"
                         className="form-control"
-                        defaultValue="30 Min	"
+                        value={editBreakMinutes}
+                        onChange={(e) => setEditBreakMinutes(e.target.value)}
                       />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">Late</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue="32 Min"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label">Production Hours</label>
-                      <div className="input-icon input-icon-new position-relative w-100">
-                        <TimePicker getPopupContainer={getModalContainer2} use12Hours placeholder="Choose" format="h:mm A" className="form-control timepicker" />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-clock-hour-3" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-12">
-                    <div className="mb-3 ">
-                      <label className="form-label">Status</label>
-                      <CommonSelect
-                        className='select'
-                        options={statusChoose}
-                        defaultValue={statusChoose[1]}
-                      />
+                      <label className="form-label">Status Override</label>
+                      <select 
+                        className="form-select"
+                        value={editStatus}
+                        onChange={(e) => setEditStatus(e.target.value)}
+                      >
+                        <option value="PRESENT">PRESENT</option>
+                        <option value="HALF_DAY">HALF_DAY</option>
+                        <option value="IRREGULAR">IRREGULAR</option>
+                        <option value="MISSING_PUNCH">MISSING_PUNCH</option>
+                        <option value="ABSENT">ABSENT</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -930,11 +959,12 @@ const AttendanceAdmin = () => {
                   type="button"
                   className="btn btn-light me-2"
                   data-bs-dismiss="modal"
+                  id="close-edit-modal"
                 >
                   Cancel
                 </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                  Save Changes
+                <button type="button" className="btn btn-primary" onClick={handleEditSubmit} disabled={loadingAction}>
+                  {loadingAction ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

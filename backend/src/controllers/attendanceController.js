@@ -532,6 +532,73 @@ async function reviewRegularization(req, res) {
         res.status(500).json({ message: 'Internal server error' });
     }
 }
+// ── UPDATE ATTENDANCE LOG (HR/Admin) ─────────────────────────
+async function updateAttendanceLog(req, res) {
+    try {
+        const { id } = req.params;
+        const { checkIn, checkOut, breakMinutes, status } = req.body;
+        
+        // HR/Manager can do this
+        if (req.user.role !== 'HR' && req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'MANAGER') {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        const record = await prisma.attendanceRecord.findUnique({ 
+            where: { id: parseInt(id) }
+        });
+
+        if (!record) return res.status(404).json({ message: 'Record not found' });
+
+        const reqCheckIn = checkIn ? new Date(checkIn) : record.checkIn;
+        const reqCheckOut = checkOut ? new Date(checkOut) : record.checkOut;
+        
+        let workingHours = record.workingHours;
+        let reqBreakIn = record.breakIn;
+        let reqBreakOut = record.breakOut;
+        
+        // If we have both checkIn and checkOut, recalculate working hours
+        if (reqCheckIn && reqCheckOut) {
+            const totalDiffMs = new Date(reqCheckOut) - new Date(reqCheckIn);
+            let breakDiffMs = 0;
+            
+            if (breakMinutes !== undefined && breakMinutes !== null) {
+                breakDiffMs = parseInt(breakMinutes) * 60000;
+                
+                // Adjust breakOut so it matches the new breakMinutes
+                if (breakDiffMs > 0) {
+                    reqBreakIn = record.breakIn || new Date(new Date(reqCheckIn).getTime() + (totalDiffMs / 2) - (breakDiffMs / 2));
+                    reqBreakOut = new Date(new Date(reqBreakIn).getTime() + breakDiffMs);
+                } else {
+                    reqBreakIn = null;
+                    reqBreakOut = null;
+                }
+            } else if (record.breakIn && record.breakOut) {
+                breakDiffMs = new Date(record.breakOut) - new Date(record.breakIn);
+                if (breakDiffMs < 0) breakDiffMs = 0;
+            }
+            
+            const netWorkingMs = totalDiffMs - breakDiffMs;
+            workingHours = parseFloat((netWorkingMs / (1000 * 60 * 60)).toFixed(2));
+        }
+
+        const updatedRecord = await prisma.attendanceRecord.update({
+            where: { id: record.id },
+            data: {
+                checkIn: reqCheckIn,
+                checkOut: reqCheckOut,
+                breakIn: reqBreakIn,
+                breakOut: reqBreakOut,
+                workingHours,
+                status: status || record.status
+            }
+        });
+
+        res.json({ message: 'Attendance record updated successfully', record: updatedRecord });
+    } catch (error) {
+        console.error('Error updating attendance log:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
 
 module.exports = {
     getTodayStatus,
@@ -543,6 +610,7 @@ module.exports = {
     submitRegularization,
     getRegularizationRequests,
     reviewRegularization,
+    updateAttendanceLog,
     getPolicy,
     upsertPolicy
 };
