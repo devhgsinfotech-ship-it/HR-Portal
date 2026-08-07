@@ -81,6 +81,12 @@ async function getLeaveRequests(req, res) {
                 return res.json([]);
             }
             whereClause.employeeId = employee.id;
+        } else if (role === 'MANAGER') {
+            const managerEmployee = await prisma.employee.findUnique({ where: { userId } });
+            if (!managerEmployee) {
+                return res.json([]);
+            }
+            whereClause.employee.reportingManagerId = managerEmployee.id;
         }
 
         const leaveRequests = await prisma.leaveRequest.findMany({
@@ -196,6 +202,14 @@ async function updateLeaveStatus(req, res) {
 
         if (!existingRequest || existingRequest.employee.user.companyId !== companyId) {
             return res.status(404).json({ message: 'Leave request not found' });
+        }
+
+        // Manager guard: can only approve/reject leaves for their direct reports
+        if (req.user.role === 'MANAGER') {
+            const managerEmployee = await prisma.employee.findUnique({ where: { userId } });
+            if (!managerEmployee || existingRequest.employee.reportingManagerId !== managerEmployee.id) {
+                return res.status(403).json({ message: 'You can only manage leaves of your direct reports' });
+            }
         }
 
         const reviewer = await prisma.employee.findUnique({ where: { userId } });

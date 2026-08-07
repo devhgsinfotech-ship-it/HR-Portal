@@ -43,8 +43,8 @@ const EmployeeList = () => {
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
   const [dbDepartments, setDbDepartments] = useState<any[]>([]);
   const [dbDesignations, setDbDesignations] = useState<any[]>([]);
-  const [newEmp, setNewEmp] = useState({ firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '' });
-  const [editEmp, setEditEmp] = useState<any>({ id: '', firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', profilePhotoUrl: '', employeeCode: '', username: '', company: '', password: '', confirmPassword: '' });
+  const [newEmp, setNewEmp] = useState({ firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '' });
+  const [editEmp, setEditEmp] = useState<any>({ id: '', firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', profilePhotoUrl: '', employeeCode: '', username: '', company: '', password: '', confirmPassword: '', role: 'EMPLOYEE', reportingManagerId: '' });
   const [errorMsg, setErrorMsg] = useState('');
   const [newEmpFile, setNewEmpFile] = useState<File | null>(null);
   const [editEmpFile, setEditEmpFile] = useState<File | null>(null);
@@ -125,7 +125,7 @@ const EmployeeList = () => {
         if (backdrop) backdrop.remove();
       }
       fetchData();
-      setNewEmp({ firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '' });
+      setNewEmp({ firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '' });
       setNewEmpFile(null);
       setEmailStatus({});
       setIsEmailEdited(false);
@@ -331,6 +331,8 @@ const EmployeeList = () => {
               employeeCode: record.raw?.employeeCode || '',
               username: record.raw?.user?.name || '',
               company: record.raw?.user?.company?.name || '',
+              role: record.raw?.user?.role || 'EMPLOYEE',
+              reportingManagerId: record.raw?.reportingManagerId || '',
               password: '',
               confirmPassword: ''
             })}
@@ -958,6 +960,33 @@ const EmployeeList = () => {
                           />
                         </div>
                       </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Role <span className="text-danger">*</span></label>
+                          <CommonSelect
+                            className="select"
+                            options={[
+                              { value: 'EMPLOYEE', label: 'Employee' },
+                              { value: 'MANAGER', label: 'Manager' },
+                              { value: 'HR', label: 'HR' },
+                              { value: 'SUPER_ADMIN', label: 'Super Admin' }
+                            ]}
+                            onChange={(opt) => setNewEmp({...newEmp, role: opt?.value || 'EMPLOYEE'})}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Reporting Manager</label>
+                          <CommonSelect
+                            className="select"
+                            options={[{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: emp.Name }))]}
+                            onChange={(opt) => setNewEmp({...newEmp, reportingManagerId: opt?.value || ''})}
+                          />
+                          <small className="text-muted">HR assigns who manages this employee</small>
+                        </div>
+                      </div>
+
                       <div className="col-md-12">
                         <div className="mb-3">
                           <label className="form-label">
@@ -2003,6 +2032,46 @@ const EmployeeList = () => {
                           />
                         </div>
                       </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Role <span className="text-danger">*</span></label>
+                          <CommonSelect
+                            className="select"
+                            options={[
+                              { value: 'EMPLOYEE', label: 'Employee' },
+                              { value: 'MANAGER', label: 'Manager' },
+                              { value: 'HR', label: 'HR' },
+                              { value: 'SUPER_ADMIN', label: 'Super Admin' }
+                            ]}
+                            onChange={(opt) => setEditEmp({...editEmp, role: opt?.value || 'EMPLOYEE'})}
+                            defaultValue={(() => {
+                              const roles = [
+                                { value: 'EMPLOYEE', label: 'Employee' },
+                                { value: 'MANAGER', label: 'Manager' },
+                                { value: 'HR', label: 'HR' },
+                                { value: 'SUPER_ADMIN', label: 'Super Admin' }
+                              ];
+                              return roles.find(r => r.value === editEmp.role) || roles[0];
+                            })()}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Reporting Manager</label>
+                          <CommonSelect
+                            className="select"
+                            options={[{ value: '', label: '-- None --' }, ...dbEmployees.filter((emp: any) => emp.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: emp.Name }))]}
+                            onChange={(opt) => setEditEmp({...editEmp, reportingManagerId: opt?.value || ''})}
+                            defaultValue={(() => {
+                              const allOptions = [{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: emp.Name }))];
+                              return allOptions.find(m => m.value === String(editEmp.reportingManagerId)) || allOptions[0];
+                            })()}
+                          />
+                          <small className="text-muted">HR assigns who manages this employee</small>
+                        </div>
+                      </div>
+
                       <div className="col-md-12">
                         <div className="mb-3">
                           <label className="form-label">

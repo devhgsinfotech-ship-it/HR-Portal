@@ -290,8 +290,15 @@ async function getAttendanceLogs(req, res) {
             const employee = await prisma.employee.findUnique({ where: { userId } });
             if (!employee) return res.json([]);
             whereClause.employeeId = employee.id;
+        } else if (role === 'MANAGER') {
+            const managerEmployee = await prisma.employee.findUnique({ where: { userId } });
+            if (!managerEmployee) return res.json([]);
+            whereClause.employee = { 
+                user: { companyId },
+                reportingManagerId: managerEmployee.id 
+            };
         } else {
-            // HR/Manager: filter by company
+            // HR/Admin: filter by company
             if (companyId) {
                 whereClause.employee = { user: { companyId } };
             }
@@ -429,14 +436,22 @@ async function submitRegularization(req, res) {
 async function getRegularizationRequests(req, res) {
     try {
         const companyId = req.user.companyId;
-        const requests = await prisma.attendanceRegularization.findMany({
-            where: {
-                attendanceRecord: {
-                    employee: {
-                        user: { companyId }
-                    }
+        let whereClause = {
+            attendanceRecord: {
+                employee: {
+                    user: { companyId }
                 }
-            },
+            }
+        };
+
+        if (req.user.role === 'MANAGER') {
+            const managerEmployee = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+            if (!managerEmployee) return res.json([]);
+            whereClause.attendanceRecord.employee.reportingManagerId = managerEmployee.id;
+        }
+
+        const requests = await prisma.attendanceRegularization.findMany({
+            where: whereClause,
             include: {
                 attendanceRecord: {
                     include: {
@@ -464,10 +479,23 @@ async function reviewRegularization(req, res) {
 
         const request = await prisma.attendanceRegularization.findUnique({ 
             where: { id: parseInt(id) },
-            include: { attendanceRecord: true }
+            include: { 
+                attendanceRecord: {
+                    include: { employee: true }
+                }
+            }
         });
 
         if (!request) return res.status(404).json({ message: 'Request not found' });
+
+        // Manager guard: can only review requests from their direct reports
+        if (req.user.role === 'MANAGER') {
+            const managerEmployee = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+            const emp = request.attendanceRecord?.employee;
+            if (!managerEmployee || !emp || emp.reportingManagerId !== managerEmployee.id) {
+                return res.status(403).json({ message: 'You can only review requests from your direct reports' });
+            }
+        }
 
         // Update the regularization request
         const updatedRequest = await prisma.attendanceRegularization.update({
@@ -544,10 +572,19 @@ async function updateAttendanceLog(req, res) {
         }
 
         const record = await prisma.attendanceRecord.findUnique({ 
-            where: { id: parseInt(id) }
+            where: { id: parseInt(id) },
+            include: { employee: true }
         });
 
         if (!record) return res.status(404).json({ message: 'Record not found' });
+
+        // Manager guard: can only edit records belonging to their direct reports
+        if (req.user.role === 'MANAGER') {
+            const managerEmployee = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+            if (!managerEmployee || record.employee.reportingManagerId !== managerEmployee.id) {
+                return res.status(403).json({ message: 'You can only edit attendance of your direct reports' });
+            }
+        }
 
         const reqCheckIn = checkIn ? new Date(checkIn) : record.checkIn;
         const reqCheckOut = checkOut ? new Date(checkOut) : record.checkOut;

@@ -16,6 +16,10 @@ const LeaveAdmin = () => {
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
   const [dbTypes, setDbTypes] = useState<any[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  // Determine current user role for scoped view
+  const currentUser = (() => { try { return JSON.parse(localStorage.getItem('authUser') || '{}'); } catch { return {}; } })();
+  const isManager = (currentUser?.role || '') === 'MANAGER';
+  const pageTitle = isManager ? 'Team Leaves' : 'Leave List';
   
   const [newLeave, setNewLeave] = useState({
     employeeId: '',
@@ -356,7 +360,7 @@ const LeaveAdmin = () => {
           {/* Leaves list */}
           <div className="card">
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-              <h5>Leave List</h5>
+              <h5>{pageTitle}</h5>
               <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
                 <div className="me-3">
                   <div className="input-icon position-relative">

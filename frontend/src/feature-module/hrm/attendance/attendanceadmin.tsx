@@ -25,6 +25,11 @@ interface AttendanceAdminData {
 
 const AttendanceAdmin = () => {
   const [activeTab, setActiveTab] = useState<'logs' | 'requests' | 'policy'>('logs');
+  // Determine current user role for scoped view
+  const currentUser = (() => { try { return JSON.parse(localStorage.getItem('authUser') || '{}'); } catch { return {}; } })();
+  const userRole: string = currentUser?.role || '';
+  const isManager = userRole === 'MANAGER';
+  const pageTitle = isManager ? 'Team Attendance' : 'Admin Attendance';
   const [dbLogs, setDbLogs] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [loadingAction, setLoadingAction] = useState(false);
@@ -437,12 +442,14 @@ const AttendanceAdmin = () => {
                         <span className="badge bg-danger ms-2">{requests.filter(r => r.Status === 'PENDING').length}</span>
                       }
                     </button>
-                    <button 
-                      className={`btn ${activeTab === 'policy' ? 'btn-primary' : 'btn-light'}`}
-                      onClick={() => setActiveTab('policy')}
-                    >
-                      <i className="ti ti-settings me-1" />Attendance Policy
-                    </button>
+                    {!isManager && (
+                      <button 
+                        className={`btn ${activeTab === 'policy' ? 'btn-primary' : 'btn-light'}`}
+                        onClick={() => setActiveTab('policy')}
+                      >
+                        <i className="ti ti-settings me-1" />Attendance Policy
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -450,8 +457,8 @@ const AttendanceAdmin = () => {
               <div className="row align-items-center mb-4">
                 <div className="col-md-5">
                       <div className="mb-3 mb-md-0">
-                        <h4 className="mb-1">Attendance Details Today</h4>
-                        <p>Data from the 800+ total no of employees</p>
+                        <h4 className="mb-1">{pageTitle}</h4>
+                        <p>{isManager ? 'Showing attendance for your direct reports' : 'Data from the 800+ total no of employees'}</p>
                       </div>
                     </div>
                 <div className="col-md-7">

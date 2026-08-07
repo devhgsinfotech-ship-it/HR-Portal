@@ -31,7 +31,7 @@ async function checkEmailAvailability(req, res) {
 
 async function createEmployee(req, res) {
     try {
-        const { firstName, lastName, email, phone, designationId, departmentId, dateOfJoining } = req.body;
+        const { firstName, lastName, email, password, phone, departmentId, designationId, dateOfJoining, role, reportingManagerId } = req.body;
         const companyId = req.user.companyId;
         const profilePhotoUrl = req.file ? `/uploads/profiles/${req.file.filename}` : null;
 
@@ -76,7 +76,7 @@ async function createEmployee(req, res) {
                     name: `${firstName} ${lastName || ''}`.trim(),
                     email,
                     password: hashedPassword,
-                    role: 'EMPLOYEE',
+                    role: role || 'EMPLOYEE',
                     accountStatus: 'ACTIVE', // Automatically active since HR is adding them
                 }
             });
@@ -92,6 +92,7 @@ async function createEmployee(req, res) {
                     departmentId: departmentId && departmentId !== 'undefined' ? parseInt(departmentId, 10) : null,
                     designationId: designationId && designationId !== 'undefined' ? parseInt(designationId, 10) : null,
                     dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : new Date(),
+                    reportingManagerId: (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null') ? parseInt(reportingManagerId, 10) : null,
                     profilePhotoUrl,
                 },
                 include: {
@@ -143,7 +144,7 @@ async function updateEmployee(req, res) {
     try {
         const { id } = req.params;
         const companyId = req.user.companyId;
-        const { firstName, lastName, phone, departmentId, designationId, dateOfJoining, email, password } = req.body;
+        const { firstName, lastName, phone, departmentId, designationId, dateOfJoining, email, password, role, reportingManagerId } = req.body;
 
         // Ensure the employee belongs to this company
         const existing = await prisma.employee.findUnique({
@@ -165,6 +166,9 @@ async function updateEmployee(req, res) {
 
         if (dateOfJoining) {
             dataToUpdate.dateOfJoining = new Date(dateOfJoining);
+        }
+        if (reportingManagerId !== undefined) {
+            dataToUpdate.reportingManagerId = (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null') ? parseInt(reportingManagerId, 10) : null;
         }
 
         if (req.file) {
@@ -196,6 +200,9 @@ async function updateEmployee(req, res) {
                 return res.status(409).json({ message: 'An account with this email already exists' });
             }
             userUpdateData.email = email;
+        }
+        if (role) {
+            userUpdateData.role = role;
         }
 
         if (Object.keys(userUpdateData).length > 0) {
