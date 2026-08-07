@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import apiClient from "../../../core/utils/apiClient";
 import { Link } from "react-router-dom";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { all_routes } from "../../../router/all_routes";
@@ -21,6 +22,48 @@ type Task = {
 };
 
 const EmployeeDashboard = () => {
+  const [employeeData, setEmployeeData] = useState<any>(null);
+  const [attendanceStatus, setAttendanceStatus] = useState<any>(null);
+  const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
+  const [leaveBalances, setLeaveBalances] = useState<any[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  const fetchData = async () => {
+    try {
+      const [empRes, statusRes, logsRes, balancesRes, requestsRes] = await Promise.all([
+        apiClient.get('/employees/me').catch(() => ({ data: null })),
+        apiClient.get('/attendance/today').catch(() => ({ data: null })),
+        apiClient.get('/attendance/logs?mine=true').catch(() => ({ data: [] })),
+        apiClient.get('/leaves/balances').catch(() => ({ data: [] })),
+        apiClient.get('/leaves/requests').catch(() => ({ data: [] }))
+      ]);
+      setEmployeeData(empRes.data);
+      setAttendanceStatus(statusRes.data);
+      setAttendanceLogs(logsRes.data || []);
+      setLeaveBalances(balancesRes.data || []);
+      setLeaveRequests(requestsRes.data || []);
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handlePunch = async () => {
+    try {
+      if (attendanceStatus?.isCheckedIn) {
+        await apiClient.post('/attendance/check-out');
+      } else {
+        await apiClient.post('/attendance/check-in');
+      }
+      fetchData(); // refresh data
+    } catch (error) {
+      console.error("Failed to punch in/out:", error);
+    }
+  };
 
   //New Chart
   const [leavesChart] = useState<any>({
@@ -41,7 +84,7 @@ const EmployeeDashboard = () => {
       enabled: false
     },
 
-    series: [15, 10, 5, 10, 60],
+    series: [15, 10, 5, 10, 60], // Will be updated dynamically
     colors: ['#F26522', '#FFC107', '#E70D0D', '#03C95A', '#0C4B5E'],
     responsive: [{
       breakpoint: 480,
@@ -167,6 +210,69 @@ const EmployeeDashboard = () => {
     }
   };
 
+  // --- Dynamic Dashboard Calculations ---
+  // Leave & Attendance Summary
+  const totalLeaves = leaveBalances.reduce((sum, lb) => sum + (Number(lb.totalDays) || 0), 0);
+  const takenLeaves = leaveBalances.reduce((sum, lb) => sum + (Number(lb.usedDays) || 0), 0);
+  const pendingRequests = leaveRequests.filter(req => req.status === 'PENDING').length;
+  const workedDays = attendanceLogs.filter(log => log.status === 'PRESENT' || log.status === 'HALF_DAY').length;
+  const absentDays = attendanceLogs.filter(log => log.status === 'ABSENT').length;
+  const onTimeDays = attendanceLogs.filter(log => log.status === 'PRESENT' && (log.lateMinutes || 0) === 0).length;
+  const lateDays = attendanceLogs.filter(log => log.lateMinutes && log.lateMinutes > 0).length;
+
+  // Today's Time Calculations
+  let totalHoursStr = "00h 00m";
+  let productiveHoursStr = "00h 00m";
+  let breakHoursStr = "00m 00s";
+  let overtimeStr = "00h 00m";
+
+  if (attendanceStatus?.record) {
+    const record = attendanceStatus.record;
+    
+    // Total Hours (Elapsed since checkIn)
+    const checkInTime = new Date(record.checkIn).getTime();
+    const endTime = record.checkOut ? new Date(record.checkOut).getTime() : Date.now();
+    const totalMs = Math.max(0, endTime - checkInTime);
+    
+    const totalH = Math.floor(totalMs / 3600000);
+    const totalM = Math.floor((totalMs % 3600000) / 60000);
+    totalHoursStr = `${totalH.toString().padStart(2, '0')}h ${totalM.toString().padStart(2, '0')}m`;
+
+    // Break Hours
+    let breakMs = 0;
+    if (record.breakIn) {
+      const bIn = new Date(record.breakIn).getTime();
+      const bOut = record.breakOut ? new Date(record.breakOut).getTime() : Date.now();
+      breakMs = Math.max(0, bOut - bIn);
+    }
+    const breakM = Math.floor(breakMs / 60000);
+    const breakS = Math.floor((breakMs % 60000) / 1000);
+    breakHoursStr = `${breakM.toString().padStart(2, '0')}m ${breakS.toString().padStart(2, '0')}s`;
+
+    // Productive Hours (Total - Break)
+    const prodMs = Math.max(0, totalMs - breakMs);
+    const prodH = Math.floor(prodMs / 3600000);
+    const prodM = Math.floor((prodMs % 3600000) / 60000);
+    productiveHoursStr = `${prodH.toString().padStart(2, '0')}h ${prodM.toString().padStart(2, '0')}m`;
+
+    // Overtime (> 8 hours productive)
+    const minFullDayMs = 8 * 3600000;
+    if (prodMs > minFullDayMs) {
+      const overMs = prodMs - minFullDayMs;
+      const overH = Math.floor(overMs / 3600000);
+      const overM = Math.floor((overMs % 3600000) / 60000);
+      overtimeStr = `${overH.toString().padStart(2, '0')}h ${overM.toString().padStart(2, '0')}m`;
+    }
+  }
+
+  // Update Leave Chart Series Dynamically
+  useEffect(() => {
+    // 0: On time, 1: Late, 2: WFH, 3: Absent, 4: Sick Leave
+    const sickLeaveTaken = leaveBalances.find(lb => lb.leaveType?.name?.toLowerCase().includes('sick'))?.usedDays || 0;
+    leavesChart.series = [onTimeDays, lateDays, 0, absentDays, sickLeaveTaken];
+  }, [onTimeDays, lateDays, absentDays, leaveBalances]);
+
+
 
   return (
     <>
@@ -260,22 +366,31 @@ const EmployeeDashboard = () => {
               <div className="card position-relative flex-fill">
                 <div className="card-header bg-dark">
                   <div className="d-flex align-items-center flex-wrap gap-2">
-                    <span className="avatar avatar-lg avatar-rounded border border-white border-2 flex-shrink-0 me-2 position-relative">
-                      <ImageWithBasePath src="assets/img/users/user-01.jpg" alt="Img" />
+                    <span className="avatar avatar-lg avatar-rounded border border-white border-2 flex-shrink-0 me-2 position-relative overflow-hidden">
+                      {employeeData?.profilePhotoUrl ? (
+                        <img 
+                          src={employeeData.profilePhotoUrl.startsWith('http') ? employeeData.profilePhotoUrl : `${apiUrl}${employeeData.profilePhotoUrl}`} 
+                          alt="Img" 
+                          className="img-fluid rounded-circle" 
+                          style={{width: '100%', height: '100%', objectFit: 'cover'}}
+                        />
+                      ) : (
+                        <ImageWithBasePath src="assets/img/users/user-01.jpg" alt="Img" />
+                      )}
                       <span className="position-absolute employee-verify-badge bg-white fs-14 d-inline-flex align-items-center justify-content-center rounded-circle">
                         <i className="ti ti-discount-check-filled text-success" />
                       </span>
                     </span>
                     <div>
-                      <h5 className="text-white mb-1">Stephan Peralt</h5>
+                      <h5 className="text-white mb-1">{employeeData?.firstName ? `${employeeData.firstName} ${employeeData.lastName}` : "Loading..."}</h5>
                       <div className="d-flex align-items-center">
                         <p className="text-white fs-12 mb-0">
-                          Senior Product Designer
+                          {employeeData?.designation?.name || "N/A"}
                         </p>
                         <span className="mx-1">
                           <i className="ti ti-point-filled text-primary" />
                         </span>
-                        <p className="fs-12">UI/UX Design</p>
+                        <p className="fs-12">{employeeData?.department?.name || "N/A"}</p>
                       </div>
                     </div>
                   </div>
@@ -283,19 +398,19 @@ const EmployeeDashboard = () => {
                 <div className="card-body rounded-top">
                   <div className="mb-3">
                     <span className="d-block mb-1 fs-13">Phone Number</span>
-                    <p className="text-gray-9">+1 324 3453 545</p>
+                    <p className="text-gray-9">{employeeData?.phone || "N/A"}</p>
                   </div>
                   <div className="mb-3">
                     <span className="d-block mb-1 fs-13">Email Address</span>
-                    <p className="text-gray-9">steperde124@example.com</p>
+                    <p className="text-gray-9">{employeeData?.user?.email || "N/A"}</p>
                   </div>
                   <div className="mb-3">
-                    <span className="d-block mb-1 fs-13">Report Office</span>
-                    <p className="text-gray-9">Doglas Martini</p>
+                    <span className="d-block mb-1 fs-13">Reporting Manager</span>
+                    <p className="text-gray-9">{employeeData?.reportingManager ? `${employeeData.reportingManager.firstName} ${employeeData.reportingManager.lastName}` : "N/A"}</p>
                   </div>
                   <div>
                     <span className="d-block mb-1 fs-13">Joined on</span>
-                    <p className="text-gray-9">15 Jan 2024</p>
+                    <p className="text-gray-9">{employeeData?.dateOfJoining ? new Date(employeeData.dateOfJoining).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : "N/A"}</p>
                   </div>
                 </div>
               </div>
@@ -349,9 +464,9 @@ const EmployeeDashboard = () => {
                       <div className="mb-3">
                         <div className="mb-3">
                           <p className="d-flex align-items-center">
-                            <i className="ti ti-circle-filled fs-8 text-dark me-1" />
+                            <i className="ti ti-circle-filled fs-8 text-secondary me-1" />
                             <span className="text-gray-9 fw-semibold me-1">
-                              1254
+                              {onTimeDays}
                             </span>
                             on time
                           </p>
@@ -359,7 +474,7 @@ const EmployeeDashboard = () => {
                         <div className="mb-3">
                           <p className="d-flex align-items-center">
                             <i className="ti ti-circle-filled fs-8 text-success me-1" />
-                            <span className="text-gray-9 fw-semibold me-1">32</span>
+                            <span className="text-gray-9 fw-semibold me-1">{lateDays}</span>
                             Late Attendance
                           </p>
                         </div>
@@ -367,7 +482,7 @@ const EmployeeDashboard = () => {
                           <p className="d-flex align-items-center">
                             <i className="ti ti-circle-filled fs-8 text-primary me-1" />
                             <span className="text-gray-9 fw-semibold me-1">
-                              658
+                              0
                             </span>
                             Work From Home
                           </p>
@@ -375,14 +490,14 @@ const EmployeeDashboard = () => {
                         <div className="mb-3">
                           <p className="d-flex align-items-center">
                             <i className="ti ti-circle-filled fs-8 text-danger me-1" />
-                            <span className="text-gray-9 fw-semibold me-1">14</span>
+                            <span className="text-gray-9 fw-semibold me-1">{absentDays}</span>
                             Absent
                           </p>
                         </div>
                         <div>
                           <p className="d-flex align-items-center">
                             <i className="ti ti-circle-filled fs-8 text-warning me-1" />
-                            <span className="text-gray-9 fw-semibold me-1">68</span>
+                            <span className="text-gray-9 fw-semibold me-1">{leaveBalances.find(lb => lb.leaveType?.name?.toLowerCase().includes('sick'))?.usedDays || 0}</span>
                             Sick Leave
                           </p>
                         </div>
@@ -464,37 +579,37 @@ const EmployeeDashboard = () => {
                     <div className="col-sm-6">
                       <div className="mb-4">
                         <span className="d-block mb-1">Total Leaves</span>
-                        <h4>16</h4>
+                        <h4>{totalLeaves}</h4>
                       </div>
                     </div>
                     <div className="col-sm-6">
                       <div className="mb-4">
                         <span className="d-block mb-1">Taken</span>
-                        <h4>10</h4>
+                        <h4>{takenLeaves}</h4>
                       </div>
                     </div>
                     <div className="col-sm-6">
                       <div className="mb-4">
                         <span className="d-block mb-1">Absent</span>
-                        <h4>2</h4>
+                        <h4>{absentDays}</h4>
                       </div>
                     </div>
                     <div className="col-sm-6">
                       <div className="mb-4">
                         <span className="d-block mb-1">Request</span>
-                        <h4>0</h4>
+                        <h4>{pendingRequests}</h4>
                       </div>
                     </div>
                     <div className="col-sm-6">
                       <div className="mb-4">
                         <span className="d-block mb-1">Worked Days</span>
-                        <h4>240</h4>
+                        <h4>{workedDays}</h4>
                       </div>
                     </div>
                     <div className="col-sm-6">
                       <div className="mb-4">
                         <span className="d-block mb-1">Loss of Pay</span>
-                        <h4>2</h4>
+                        <h4>{absentDays}</h4>
                       </div>
                     </div>
                     <div className="col-sm-12">
@@ -520,20 +635,20 @@ const EmployeeDashboard = () => {
                 <div className="card-body">
                   <div className="mb-4 text-center">
                     <h6 className="fw-medium text-gray-5 mb-1">Attendance</h6>
-                    <h4>08:35 AM, 11 Mar 2025</h4>
+                    <h4>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</h4>
                   </div>
-                  <CircleProgress value={65} />
+                  <CircleProgress value={attendanceStatus?.isCheckedIn ? 65 : 0} />
                   <div className="text-center">
                     <div className="badge badge-dark badge-md mb-3">
-                      Production : 3.45 hrs
+                      Production : {attendanceStatus?.record?.workingHours || 0} hrs
                     </div>
                     <h6 className="fw-medium d-flex align-items-center justify-content-center mb-4">
                       <i className="ti ti-fingerprint text-primary me-1" />
-                      Punch In at 10.00 AM
+                      {attendanceStatus?.record?.checkIn ? `Punch In at ${new Date(attendanceStatus.record.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : "Not Punched In Yet"}
                     </h6>
-                    <Link to="#" className="btn btn-primary w-100">
-                      Punch Out
-                    </Link>
+                    <button onClick={handlePunch} className="btn btn-primary w-100">
+                      {attendanceStatus?.isCheckedIn ? "Punch Out" : "Punch In"}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -644,7 +759,7 @@ const EmployeeDashboard = () => {
                               <i className="ti ti-point-filled text-dark-transparent me-1" />
                               Total Working hours
                             </p>
-                            <h3>12h 36m</h3>
+                            <h3>{totalHoursStr}</h3>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -653,7 +768,7 @@ const EmployeeDashboard = () => {
                               <i className="ti ti-point-filled text-success me-1" />
                               Productive Hours
                             </p>
-                            <h3>08h 36m</h3>
+                            <h3>{productiveHoursStr}</h3>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -662,7 +777,7 @@ const EmployeeDashboard = () => {
                               <i className="ti ti-point-filled text-warning me-1" />
                               Break hours
                             </p>
-                            <h3>22m 15s</h3>
+                            <h3>{breakHoursStr}</h3>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -671,7 +786,7 @@ const EmployeeDashboard = () => {
                               <i className="ti ti-point-filled text-info me-1" />
                               Overtime
                             </p>
-                            <h3>02h 15m</h3>
+                            <h3>{overtimeStr}</h3>
                           </div>
                         </div>
                       </div>
