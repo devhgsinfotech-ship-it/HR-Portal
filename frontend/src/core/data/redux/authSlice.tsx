@@ -8,6 +8,7 @@ export interface AuthUser {
     role: "SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
     companyId: number | null;
     subdomain: string | null;
+    profilePhotoUrl?: string | null;
 }
 
 export interface AuthState {
@@ -39,6 +40,13 @@ const authSlice = createSlice({
             localStorage.setItem("token", action.payload.token);
             localStorage.setItem("authUser", JSON.stringify(action.payload.user));
         },
+        // Update specific user fields
+        updateUser: (state, action: PayloadAction<Partial<AuthUser>>) => {
+            if (state.user) {
+                state.user = { ...state.user, ...action.payload };
+                localStorage.setItem("authUser", JSON.stringify(state.user));
+            }
+        },
         // Called on logout
         logout: (state) => {
             state.token = null;
@@ -51,5 +59,5 @@ const authSlice = createSlice({
     },
 });
 
-export const { setCredentials, logout } = authSlice.actions;
+export const { setCredentials, logout, updateUser } = authSlice.actions;
 export default authSlice.reducer;

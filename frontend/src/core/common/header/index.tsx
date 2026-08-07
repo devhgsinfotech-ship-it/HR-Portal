@@ -71,6 +71,7 @@ const Header = React.memo(() => {
   );
   const user = useSelector((state: RootState) => state.auth.user);
   const Location = useLocation();
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -872,23 +873,42 @@ const Header = React.memo(() => {
                     className="dropdown-toggle d-flex align-items-center"
                     data-bs-toggle="dropdown"
                   >
-                    <span className="avatar avatar-md online">
-                      <ImageWithBasePath
-                        src="assets/img/profiles/avatar-12.jpg"
-                        alt="Img"
-                        className="img-fluid rounded-circle"
-                      />
+                    <span className="avatar avatar-md online overflow-hidden">
+                      {user?.profilePhotoUrl ? (
+                        <img
+                          src={user.profilePhotoUrl.startsWith('http') ? user.profilePhotoUrl : `${apiUrl}${user.profilePhotoUrl}`}
+                          alt="Img"
+                          className="img-fluid rounded-circle"
+                          style={{width: '100%', height: '100%', objectFit: 'cover'}}
+                        />
+                      ) : (
+                        <ImageWithBasePath
+                          src="assets/img/profiles/avatar-12.jpg"
+                          alt="Img"
+                          className="img-fluid rounded-circle"
+                        />
+                      )}
                     </span>
                   </Link>
                   <div className="dropdown-menu shadow-none">
                     <div className="card mb-0">
                       <div className="card-header">
                         <div className="d-flex align-items-center">
-                          <span className="avatar avatar-lg me-2 avatar-rounded">
-                            <ImageWithBasePath
-                              src="assets/img/profiles/avatar-12.jpg"
-                              alt="img"
-                            />
+                          <span className="avatar avatar-lg me-2 avatar-rounded overflow-hidden">
+                            {user?.profilePhotoUrl ? (
+                              <img
+                                src={user.profilePhotoUrl.startsWith('http') ? user.profilePhotoUrl : `${apiUrl}${user.profilePhotoUrl}`}
+                                alt="Img"
+                                className="img-fluid rounded-circle"
+                                style={{width: '100%', height: '100%', objectFit: 'cover'}}
+                              />
+                            ) : (
+                              <ImageWithBasePath
+                                src="assets/img/profiles/avatar-12.jpg"
+                                alt="img"
+                                className="img-fluid rounded-circle"
+                              />
+                            )}
                           </span>
                           <div>
                             <h5 className="mb-0">{user?.name || "Admin"}</h5>
@@ -951,23 +971,41 @@ const Header = React.memo(() => {
               className="nav-link dropdown-toggle"
               data-bs-toggle="dropdown"
             >
-              <span className="user-img">
-                <ImageWithBasePath
-                  src="assets/img/profiles/avatar-12.jpg"
-                  alt="Img"
-                  className="img-fluid rounded-circle"
-                />
+              <span className="user-img overflow-hidden">
+                {user?.profilePhotoUrl ? (
+                  <img
+                    src={user.profilePhotoUrl.startsWith('http') ? user.profilePhotoUrl : `${apiUrl}${user.profilePhotoUrl}`}
+                    alt="Img"
+                    className="img-fluid rounded-circle"
+                    style={{width: '100%', height: '100%', objectFit: 'cover'}}
+                  />
+                ) : (
+                  <ImageWithBasePath
+                    src="assets/img/profiles/avatar-12.jpg"
+                    alt="Img"
+                    className="img-fluid rounded-circle"
+                  />
+                )}
               </span>
             </Link>
             <div className="dropdown-menu dropdown-menu-end">
               <div className="dropdown-header">
                 <div className="d-flex align-items-center">
-                  <span className="avatar avatar-sm me-2">
-                    <ImageWithBasePath
-                      src="assets/img/profiles/avatar-12.jpg"
-                      alt="Img"
-                      className="img-fluid rounded-circle"
-                    />
+                  <span className="avatar avatar-sm me-2 overflow-hidden">
+                    {user?.profilePhotoUrl ? (
+                      <img
+                        src={user.profilePhotoUrl.startsWith('http') ? user.profilePhotoUrl : `${apiUrl}${user.profilePhotoUrl}`}
+                        alt="Img"
+                        className="img-fluid rounded-circle"
+                        style={{width: '100%', height: '100%', objectFit: 'cover'}}
+                      />
+                    ) : (
+                      <ImageWithBasePath
+                        src="assets/img/profiles/avatar-12.jpg"
+                        alt="Img"
+                        className="img-fluid rounded-circle"
+                      />
+                    )}
                   </span>
                   <div>
                     <h6 className="mb-0">{user?.name || "Admin"}</h6>

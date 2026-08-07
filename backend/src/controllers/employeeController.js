@@ -260,10 +260,97 @@ async function deleteEmployee(req, res) {
     }
 }
 
+async function getMe(req, res) {
+    try {
+        const userId = req.user.id;
+        const employee = await prisma.employee.findUnique({
+            where: { userId },
+            include: {
+                user: { select: { id: true, name: true, email: true, role: true } },
+                department: true,
+                designation: true
+            }
+        });
+        if (!employee) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+        res.json(employee);
+    } catch (error) {
+        console.error('Error fetching my profile:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function updateMe(req, res) {
+    try {
+        const userId = req.user.id;
+        const { firstName, lastName, phone, password, address, country, state, city, postalCode } = req.body;
+        
+        const existing = await prisma.employee.findUnique({
+            where: { userId },
+            include: { user: true }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+
+        const dataToUpdate = {};
+        if (firstName) dataToUpdate.firstName = firstName;
+        if (lastName) dataToUpdate.lastName = lastName;
+        if (phone) dataToUpdate.phone = phone;
+        if (address !== undefined) dataToUpdate.address = address;
+        if (country !== undefined) dataToUpdate.country = country;
+        if (state !== undefined) dataToUpdate.state = state;
+        if (city !== undefined) dataToUpdate.city = city;
+        if (postalCode !== undefined) dataToUpdate.postalCode = postalCode;
+
+        if (req.file) {
+            dataToUpdate.profilePhotoUrl = `/uploads/profiles/${req.file.filename}`;
+        }
+
+        const userUpdateData = {};
+        if (firstName || lastName) {
+            userUpdateData.name = `${firstName || existing.firstName} ${lastName || existing.lastName}`.trim();
+        }
+        
+        if (password && password.trim() !== '') {
+            if (password.length < 6) {
+                return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+            }
+            userUpdateData.password = await require('bcrypt').hash(password, 10);
+        }
+
+        if (Object.keys(userUpdateData).length > 0) {
+            await prisma.user.update({
+                where: { id: userId },
+                data: userUpdateData
+            });
+        }
+
+        const updatedEmployee = await prisma.employee.update({
+            where: { id: existing.id },
+            data: dataToUpdate,
+            include: {
+                user: { select: { id: true, name: true, email: true, role: true } },
+                department: true,
+                designation: true
+            }
+        });
+
+        res.json(updatedEmployee);
+    } catch (error) {
+        console.error('Error updating my profile:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     checkEmailAvailability,
     createEmployee,
     getEmployees,
     updateEmployee,
-    deleteEmployee
+    deleteEmployee,
+    getMe,
+    updateMe
 };

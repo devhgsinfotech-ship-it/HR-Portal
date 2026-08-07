@@ -156,6 +156,10 @@ model Employee {
   dateOfBirth         DateTime?
   phone               String?
   address             String?
+  country             String?
+  state               String?
+  city                String?
+  postalCode          String?
   profilePhotoUrl     String?
   dateOfJoining       DateTime?
   employmentType      EmploymentType  @default(FULL_TIME)

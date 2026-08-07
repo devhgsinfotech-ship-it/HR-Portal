@@ -16,7 +16,12 @@ async function login(req, res) {
         // 1. Find user
         const user = await prisma.user.findUnique({
             where: { email },
-            include: { company: true },
+            include: { 
+                company: true,
+                employee: {
+                    select: { profilePhotoUrl: true }
+                }
+            },
         });
 
         if (!user) {
@@ -71,6 +76,7 @@ async function login(req, res) {
                 role: user.role,
                 companyId: user.companyId,
                 subdomain: user.company?.subdomain || null,
+                profilePhotoUrl: user.employee?.profilePhotoUrl || null,
             },
         });
 

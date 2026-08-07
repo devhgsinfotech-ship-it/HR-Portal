@@ -25,6 +25,10 @@ router.use(verifyToken);
 // Employees can view employees, but only HR/Admin can modify
 router.get('/', employeeController.getEmployees);
 
+// My Profile endpoints
+router.get('/me', employeeController.getMe);
+router.put('/me', upload.single('profileImage'), employeeController.updateMe);
+
 // HR only routes
 router.use(requireRole('HR', 'SUPER_ADMIN'));
 router.get('/check-email', employeeController.checkEmailAvailability);
