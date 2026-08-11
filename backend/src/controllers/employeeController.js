@@ -531,6 +531,66 @@ async function approveOnboarding(req, res) {
     }
 }
 
+async function resendInvite(req, res) {
+    try {
+        const { id } = req.params;
+        const employee = await prisma.employee.findUnique({
+            where: { id: parseInt(id, 10) },
+            include: {
+                user: {
+                    include: {
+                        company: true
+                    }
+                }
+            }
+        });
+
+        if (!employee) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        if (employee.onboardingStatus !== 'INVITED') {
+            return res.status(400).json({ message: 'Employee is not in INVITED status' });
+        }
+
+        // Delete any existing invite tokens
+        await prisma.inviteToken.deleteMany({
+            where: { employeeId: employee.id }
+        });
+
+        // Generate new token
+        const inviteToken = crypto.randomBytes(32).toString('hex');
+        const tokenExpiry = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+
+        await prisma.inviteToken.create({
+            data: {
+                employeeId: employee.id,
+                userId: employee.user.id,
+                token: inviteToken,
+                expiresAt: tokenExpiry
+            }
+        });
+
+        // Send email
+        const baseDomain = process.env.FRONTEND_DOMAIN || 'localhost:3000';
+        const company = employee.user.company;
+        const workspaceUrl = company.subdomain ? `http://${company.subdomain}.${baseDomain}` : `http://${baseDomain}`;
+        
+        emailService.sendEmployeeInviteEmail(
+            employee.user.email,
+            inviteToken,
+            company.name,
+            employee.firstName,
+            workspaceUrl
+        ).catch(err => console.error("Failed to resend invite email:", err));
+
+        res.json({ message: 'Invite resent successfully!' });
+    } catch (error) {
+        console.error('Error resending invite:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     checkEmailAvailability,
     createEmployee,
@@ -542,5 +602,6 @@ module.exports = {
     onboardingPersonal,
     onboardingBank,
     onboardingDocuments,
-    approveOnboarding
+    approveOnboarding,
+    resendInvite
 };

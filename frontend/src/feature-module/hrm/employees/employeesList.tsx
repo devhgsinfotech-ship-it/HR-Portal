@@ -392,6 +392,24 @@ const EmployeeList = () => {
               <i className="ti ti-check" />
             </Link>
           )}
+          {record.onboardingStatus === 'INVITED' && (
+            <Link
+              to="#"
+              className="ms-2 text-info"
+              title="Resend Invite"
+              onClick={async (e) => {
+                e.preventDefault();
+                try {
+                  await apiClient.post(`/employees/${record.id}/resend-invite`);
+                  alert('Invite resent successfully!');
+                } catch (err: any) {
+                  alert(err.response?.data?.message || 'Error resending invite');
+                }
+              }}
+            >
+              <i className="ti ti-mail-forward" />
+            </Link>
+          )}
           <Link
             to="#"
             data-bs-toggle="modal"

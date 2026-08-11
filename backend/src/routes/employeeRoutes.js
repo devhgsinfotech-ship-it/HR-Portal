@@ -37,6 +37,7 @@ router.post('/onboarding/documents', upload.fields([
 
 // HR Approves Onboarding
 router.post('/:id/approve-onboarding', requireRole('SUPER_ADMIN', 'HR'), employeeController.approveOnboarding);
+router.post('/:id/resend-invite', requireRole('SUPER_ADMIN', 'HR'), employeeController.resendInvite);
 
 
 // Employees can view employees, but only HR/Admin can modify
