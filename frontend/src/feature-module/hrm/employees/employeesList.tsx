@@ -50,7 +50,12 @@ const EmployeeList = () => {
   
   const [dbDepartments, setDbDepartments] = useState<any[]>([]);
   const [dbDesignations, setDbDesignations] = useState<any[]>([]);
-  const [newEmp, setNewEmp] = useState({ firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '' });
+  const [newEmp, setNewEmp] = useState({ 
+    firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '',
+    basic: 0, hra: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0,
+    pfDeduction: 0, professionalTax: 0, otherDeductions: 0,
+    grossSalary: 0, netSalary: 0
+  });
   const [editEmp, setEditEmp] = useState<any>({ id: '', firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', profilePhotoUrl: '', employeeCode: '', username: '', company: '', password: '', confirmPassword: '', role: 'EMPLOYEE', reportingManagerId: '' });
   const [errorMsg, setErrorMsg] = useState('');
   const [newEmpFile, setNewEmpFile] = useState<File | null>(null);
@@ -122,7 +127,7 @@ const EmployeeList = () => {
     try {
       const formData = new FormData();
       Object.entries(newEmp).forEach(([key, value]) => {
-        formData.append(key, value);
+        formData.append(key, String(value));
       });
       if (newEmpFile) formData.append('profileImage', newEmpFile);
 
@@ -136,7 +141,10 @@ const EmployeeList = () => {
         if (backdrop) backdrop.remove();
       }
       fetchData();
-      setNewEmp({ firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '' });
+      setNewEmp({ 
+        firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '',
+        basic: 0, hra: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0, pfDeduction: 0, professionalTax: 0, otherDeductions: 0, grossSalary: 0, netSalary: 0
+      });
       setNewEmpFile(null);
       setEmailStatus({});
       setIsEmailEdited(false);
@@ -349,7 +357,17 @@ const EmployeeList = () => {
               role: record.raw?.user?.role || 'EMPLOYEE',
               reportingManagerId: record.raw?.reportingManagerId || '',
               password: '',
-              confirmPassword: ''
+              confirmPassword: '',
+              basic: record.raw?.salaryStructure?.basic || 0,
+              hra: record.raw?.salaryStructure?.hra || 0,
+              conveyance: record.raw?.salaryStructure?.conveyance || 0,
+              medicalAllowance: record.raw?.salaryStructure?.medicalAllowance || 0,
+              specialAllowance: record.raw?.salaryStructure?.specialAllowance || 0,
+              pfDeduction: record.raw?.salaryStructure?.pfDeduction || 0,
+              professionalTax: record.raw?.salaryStructure?.professionalTax || 0,
+              otherDeductions: record.raw?.salaryStructure?.otherDeductions || 0,
+              grossSalary: record.raw?.salaryStructure?.grossSalary || 0,
+              netSalary: record.raw?.salaryStructure?.netSalary || 0
             })}
           >
             <i className="ti ti-edit" />
@@ -810,6 +828,19 @@ const EmployeeList = () => {
                       Permissions
                     </button>
                   </li>
+                  <li className="nav-item" role="presentation">
+                    <button
+                      className="nav-link"
+                      id="salary-tab"
+                      data-bs-toggle="tab"
+                      data-bs-target="#salary"
+                      type="button"
+                      role="tab"
+                      aria-selected="false"
+                    >
+                      Salary Details
+                    </button>
+                  </li>
                 </ul>
               </div>
               <div className="tab-content" id="myTabContent">
@@ -1072,6 +1103,122 @@ const EmployeeList = () => {
                             rows={3}
                             defaultValue={""}
                           />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button
+                      type="button"
+                      className="btn btn-outline-light border me-2"
+                      data-bs-dismiss="modal"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                    >
+                      Save{" "}
+                    </button>
+                  </div>
+                </div>
+                <div
+                  className="tab-pane fade"
+                  id="salary"
+                  role="tabpanel"
+                  aria-labelledby="salary-tab"
+                  tabIndex={0}
+                >
+                  <div className="modal-body pb-0">
+                    <div className="row">
+                      <div className="col-12 mb-3">
+                        <h6 className="fw-semibold">Allowances (Earnings)</h6>
+                      </div>
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">Basic Salary</label>
+                        <input type="number" className="form-control" value={newEmp.basic} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const gross = val + newEmp.hra + newEmp.conveyance + newEmp.medicalAllowance + newEmp.specialAllowance;
+                          const net = gross - (newEmp.pfDeduction + newEmp.professionalTax + newEmp.otherDeductions);
+                          setNewEmp({...newEmp, basic: val, grossSalary: gross, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">HRA</label>
+                        <input type="number" className="form-control" value={newEmp.hra} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const gross = newEmp.basic + val + newEmp.conveyance + newEmp.medicalAllowance + newEmp.specialAllowance;
+                          const net = gross - (newEmp.pfDeduction + newEmp.professionalTax + newEmp.otherDeductions);
+                          setNewEmp({...newEmp, hra: val, grossSalary: gross, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Conveyance</label>
+                        <input type="number" className="form-control" value={newEmp.conveyance} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const gross = newEmp.basic + newEmp.hra + val + newEmp.medicalAllowance + newEmp.specialAllowance;
+                          const net = gross - (newEmp.pfDeduction + newEmp.professionalTax + newEmp.otherDeductions);
+                          setNewEmp({...newEmp, conveyance: val, grossSalary: gross, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Medical Allowance</label>
+                        <input type="number" className="form-control" value={newEmp.medicalAllowance} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const gross = newEmp.basic + newEmp.hra + newEmp.conveyance + val + newEmp.specialAllowance;
+                          const net = gross - (newEmp.pfDeduction + newEmp.professionalTax + newEmp.otherDeductions);
+                          setNewEmp({...newEmp, medicalAllowance: val, grossSalary: gross, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Special Allowance</label>
+                        <input type="number" className="form-control" value={newEmp.specialAllowance} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const gross = newEmp.basic + newEmp.hra + newEmp.conveyance + newEmp.medicalAllowance + val;
+                          const net = gross - (newEmp.pfDeduction + newEmp.professionalTax + newEmp.otherDeductions);
+                          setNewEmp({...newEmp, specialAllowance: val, grossSalary: gross, netSalary: net});
+                        }} />
+                      </div>
+
+                      <div className="col-12 mt-3 mb-3">
+                        <h6 className="fw-semibold">Deductions</h6>
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">PF Deduction</label>
+                        <input type="number" className="form-control" value={newEmp.pfDeduction} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const net = newEmp.grossSalary - (val + newEmp.professionalTax + newEmp.otherDeductions);
+                          setNewEmp({...newEmp, pfDeduction: val, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Professional Tax</label>
+                        <input type="number" className="form-control" value={newEmp.professionalTax} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const net = newEmp.grossSalary - (newEmp.pfDeduction + val + newEmp.otherDeductions);
+                          setNewEmp({...newEmp, professionalTax: val, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Other Deductions</label>
+                        <input type="number" className="form-control" value={newEmp.otherDeductions} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const net = newEmp.grossSalary - (newEmp.pfDeduction + newEmp.professionalTax + val);
+                          setNewEmp({...newEmp, otherDeductions: val, netSalary: net});
+                        }} />
+                      </div>
+
+                      <div className="col-12 mt-3">
+                        <div className="d-flex justify-content-between p-3 bg-light rounded">
+                          <div>
+                            <span className="text-muted d-block">Gross Salary</span>
+                            <h4 className="text-primary mb-0">₹ {newEmp.grossSalary}</h4>
+                          </div>
+                          <div className="text-end">
+                            <span className="text-muted d-block">Net Salary</span>
+                            <h4 className="text-success mb-0">₹ {newEmp.netSalary}</h4>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1852,6 +1999,19 @@ const EmployeeList = () => {
                       Permissions
                     </button>
                   </li>
+                  <li className="nav-item" role="presentation">
+                    <button
+                      className="nav-link"
+                      id="salary-tab2"
+                      data-bs-toggle="tab"
+                      data-bs-target="#salary2"
+                      type="button"
+                      role="tab"
+                      aria-selected="false"
+                    >
+                      Salary Details
+                    </button>
+                  </li>
                 </ul>
               </div>
               <div className="tab-content" id="myTabContent2">
@@ -2157,6 +2317,122 @@ const EmployeeList = () => {
                             rows={3}
                             defaultValue={""}
                           />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button
+                      type="button"
+                      className="btn btn-outline-light border me-2"
+                      data-bs-dismiss="modal"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                    >
+                      Save{" "}
+                    </button>
+                  </div>
+                </div>
+                <div
+                  className="tab-pane fade"
+                  id="salary2"
+                  role="tabpanel"
+                  aria-labelledby="salary-tab2"
+                  tabIndex={0}
+                >
+                  <div className="modal-body pb-0">
+                    <div className="row">
+                      <div className="col-12 mb-3">
+                        <h6 className="fw-semibold">Allowances (Earnings)</h6>
+                      </div>
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">Basic Salary</label>
+                        <input type="number" className="form-control" value={editEmp.basic} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const gross = val + editEmp.hra + editEmp.conveyance + editEmp.medicalAllowance + editEmp.specialAllowance;
+                          const net = gross - (editEmp.pfDeduction + editEmp.professionalTax + editEmp.otherDeductions);
+                          setEditEmp({...editEmp, basic: val, grossSalary: gross, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">HRA</label>
+                        <input type="number" className="form-control" value={editEmp.hra} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const gross = editEmp.basic + val + editEmp.conveyance + editEmp.medicalAllowance + editEmp.specialAllowance;
+                          const net = gross - (editEmp.pfDeduction + editEmp.professionalTax + editEmp.otherDeductions);
+                          setEditEmp({...editEmp, hra: val, grossSalary: gross, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Conveyance</label>
+                        <input type="number" className="form-control" value={editEmp.conveyance} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const gross = editEmp.basic + editEmp.hra + val + editEmp.medicalAllowance + editEmp.specialAllowance;
+                          const net = gross - (editEmp.pfDeduction + editEmp.professionalTax + editEmp.otherDeductions);
+                          setEditEmp({...editEmp, conveyance: val, grossSalary: gross, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Medical Allowance</label>
+                        <input type="number" className="form-control" value={editEmp.medicalAllowance} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const gross = editEmp.basic + editEmp.hra + editEmp.conveyance + val + editEmp.specialAllowance;
+                          const net = gross - (editEmp.pfDeduction + editEmp.professionalTax + editEmp.otherDeductions);
+                          setEditEmp({...editEmp, medicalAllowance: val, grossSalary: gross, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Special Allowance</label>
+                        <input type="number" className="form-control" value={editEmp.specialAllowance} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const gross = editEmp.basic + editEmp.hra + editEmp.conveyance + editEmp.medicalAllowance + val;
+                          const net = gross - (editEmp.pfDeduction + editEmp.professionalTax + editEmp.otherDeductions);
+                          setEditEmp({...editEmp, specialAllowance: val, grossSalary: gross, netSalary: net});
+                        }} />
+                      </div>
+
+                      <div className="col-12 mt-3 mb-3">
+                        <h6 className="fw-semibold">Deductions</h6>
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">PF Deduction</label>
+                        <input type="number" className="form-control" value={editEmp.pfDeduction} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const net = editEmp.grossSalary - (val + editEmp.professionalTax + editEmp.otherDeductions);
+                          setEditEmp({...editEmp, pfDeduction: val, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Professional Tax</label>
+                        <input type="number" className="form-control" value={editEmp.professionalTax} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const net = editEmp.grossSalary - (editEmp.pfDeduction + val + editEmp.otherDeductions);
+                          setEditEmp({...editEmp, professionalTax: val, netSalary: net});
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Other Deductions</label>
+                        <input type="number" className="form-control" value={editEmp.otherDeductions} onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const net = editEmp.grossSalary - (editEmp.pfDeduction + editEmp.professionalTax + val);
+                          setEditEmp({...editEmp, otherDeductions: val, netSalary: net});
+                        }} />
+                      </div>
+
+                      <div className="col-12 mt-3">
+                        <div className="d-flex justify-content-between p-3 bg-light rounded">
+                          <div>
+                            <span className="text-muted d-block">Gross Salary</span>
+                            <h4 className="text-primary mb-0">₹ {editEmp.grossSalary}</h4>
+                          </div>
+                          <div className="text-end">
+                            <span className="text-muted d-block">Net Salary</span>
+                            <h4 className="text-success mb-0">₹ {editEmp.netSalary}</h4>
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -33,7 +33,8 @@ async function checkEmailAvailability(req, res) {
 async function createEmployee(req, res) {
     try {
         const { 
-            firstName, lastName, email, password, phone, departmentId, designationId, dateOfJoining, role, reportingManagerId
+            firstName, lastName, email, password, phone, departmentId, designationId, dateOfJoining, role, reportingManagerId,
+            basic, hra, conveyance, medicalAllowance, specialAllowance, pfDeduction, professionalTax, otherDeductions, grossSalary, netSalary
         } = req.body;
         const companyId = req.user.companyId;
         const profilePhotoUrl = req.file ? `/uploads/profiles/${req.file.filename}` : null;
@@ -138,7 +139,7 @@ async function createEmployee(req, res) {
                         professionalTax: professionalTax ? parseFloat(professionalTax) : 0,
                         otherDeductions: otherDeductions ? parseFloat(otherDeductions) : 0,
                         grossSalary: parseFloat(grossSalary),
-                        netSalary: netSalary ? parseFloat(netSalary) : parseFloat(grossSalary),
+                        netSalary: netSalary ? parseFloat(netSalary) : 0
                     }
                 });
             }
@@ -178,6 +179,7 @@ async function getEmployees(req, res) {
                 department: true,
                 designation: true,
                 bankDetails: true,
+                salaryStructure: true
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -193,7 +195,10 @@ async function updateEmployee(req, res) {
     try {
         const { id } = req.params;
         const companyId = req.user.companyId;
-        const { firstName, lastName, phone, departmentId, designationId, dateOfJoining, email, password, role, reportingManagerId } = req.body;
+        const { 
+            firstName, lastName, phone, departmentId, designationId, dateOfJoining, email, password, role, reportingManagerId,
+            basic, hra, conveyance, medicalAllowance, specialAllowance, pfDeduction, professionalTax, otherDeductions, grossSalary, netSalary 
+        } = req.body;
 
         // Ensure the employee belongs to this company
         const existing = await prisma.employee.findUnique({
@@ -274,6 +279,38 @@ async function updateEmployee(req, res) {
                 designation: true,
             }
         });
+
+        // Salary update
+        if (grossSalary !== undefined && grossSalary !== null && grossSalary !== '') {
+            await prisma.salaryStructure.upsert({
+                where: { employeeId: existing.id },
+                update: {
+                    basic: basic ? parseFloat(basic) : 0,
+                    hra: hra ? parseFloat(hra) : 0,
+                    conveyance: conveyance ? parseFloat(conveyance) : 0,
+                    medicalAllowance: medicalAllowance ? parseFloat(medicalAllowance) : 0,
+                    specialAllowance: specialAllowance ? parseFloat(specialAllowance) : 0,
+                    pfDeduction: pfDeduction ? parseFloat(pfDeduction) : 0,
+                    professionalTax: professionalTax ? parseFloat(professionalTax) : 0,
+                    otherDeductions: otherDeductions ? parseFloat(otherDeductions) : 0,
+                    grossSalary: parseFloat(grossSalary),
+                    netSalary: netSalary ? parseFloat(netSalary) : 0
+                },
+                create: {
+                    employeeId: existing.id,
+                    basic: basic ? parseFloat(basic) : 0,
+                    hra: hra ? parseFloat(hra) : 0,
+                    conveyance: conveyance ? parseFloat(conveyance) : 0,
+                    medicalAllowance: medicalAllowance ? parseFloat(medicalAllowance) : 0,
+                    specialAllowance: specialAllowance ? parseFloat(specialAllowance) : 0,
+                    pfDeduction: pfDeduction ? parseFloat(pfDeduction) : 0,
+                    professionalTax: professionalTax ? parseFloat(professionalTax) : 0,
+                    otherDeductions: otherDeductions ? parseFloat(otherDeductions) : 0,
+                    grossSalary: parseFloat(grossSalary),
+                    netSalary: netSalary ? parseFloat(netSalary) : 0
+                }
+            });
+        }
 
         res.json(employee);
     } catch (error) {
