@@ -26,6 +26,14 @@ enum AccountStatus {
   DISABLED
 }
 
+enum OnboardingStatus {
+  INVITED
+  PROFILE_SUBMITTED
+  DOCS_SUBMITTED
+  HR_REVIEW
+  COMPLETED
+}
+
 enum Gender {
   MALE
   FEMALE
@@ -111,7 +119,8 @@ model Company {
   assetCategories AssetCategory[]
   settings        CompanySetting?
   announcements   Announcement[]
-
+  shiftPolicies   ShiftPolicy[]
+  leavePolicies   LeavePolicy[]
   @@map("companies")
 }
 
@@ -172,8 +181,19 @@ model Employee {
   subordinates        Employee[]      @relation("ManagerSubordinates")
   emergencyContactName  String?
   emergencyContactPhone String?
+  onboardingStatus    OnboardingStatus @default(INVITED)
+  shiftPolicyId       Int?
+  shiftPolicy         ShiftPolicy?    @relation(fields: [shiftPolicyId], references: [id], onDelete: SetNull)
+  leavePolicyId       Int?
+  leavePolicy         LeavePolicy?    @relation(fields: [leavePolicyId], references: [id], onDelete: SetNull)
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
+
+  aadhaarPath         String?
+  panPath             String?
+  resumePath          String?
+
+  bankDetails         BankDetails?
 
   salaryStructure     SalaryStructure?
   payslips            Payslip[]
@@ -603,5 +623,57 @@ model EmailVerifyToken {
   createdAt DateTime @default(now())
 
   @@map("email_verify_tokens")
+}
+
+// ============================================================
+// ONBOARDING & POLICIES
+// ============================================================
+
+model BankDetails {
+  id            Int      @id @default(autoincrement())
+  employeeId    Int      @unique
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  accountName   String
+  accountNumber String
+  bankName      String
+  ifscCode      String
+  branchName    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("bank_details")
+}
+
+model ShiftPolicy {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  startTime   String   // e.g. "09:00:00"
+  endTime     String   // e.g. "18:00:00"
+  gracePeriod Int      @default(15) // Minutes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employees   Employee[]
+
+  @@map("shift_policies")
+}
+
+model LeavePolicy {
+  id             Int      @id @default(autoincrement())
+  companyId      Int
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  casualLeaves   Int      @default(0)
+  sickLeaves     Int      @default(0)
+  earnedLeaves   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  employees      Employee[]
+
+  @@map("leave_policies")
 }
 

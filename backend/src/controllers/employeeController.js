@@ -1,7 +1,8 @@
 // backend/src/controllers/employeeController.js
 const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
-
+const crypto = require('crypto');
+const emailService = require('../utils/emailService');
 async function checkEmailAvailability(req, res) {
     try {
         const { email } = req.query;
@@ -31,7 +32,9 @@ async function checkEmailAvailability(req, res) {
 
 async function createEmployee(req, res) {
     try {
-        const { firstName, lastName, email, password, phone, departmentId, designationId, dateOfJoining, role, reportingManagerId } = req.body;
+        const { 
+            firstName, lastName, email, password, phone, departmentId, designationId, dateOfJoining, role, reportingManagerId
+        } = req.body;
         const companyId = req.user.companyId;
         const profilePhotoUrl = req.file ? `/uploads/profiles/${req.file.filename}` : null;
 
@@ -67,6 +70,10 @@ async function createEmployee(req, res) {
         // Default password for new employees (they can change it later)
         const hashedPassword = await bcrypt.hash('Password@123', 10);
         
+        // Generate invite token
+        const inviteToken = crypto.randomBytes(32).toString('hex');
+        const tokenExpiry = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+
         // Use a transaction to create User and Employee
         const newEmployee = await prisma.$transaction(async (tx) => {
             // 1. Create User
@@ -77,7 +84,7 @@ async function createEmployee(req, res) {
                     email,
                     password: hashedPassword,
                     role: role || 'EMPLOYEE',
-                    accountStatus: 'ACTIVE', // Automatically active since HR is adding them
+                    accountStatus: 'PENDING', // PENDING until they verify
                 }
             });
 
@@ -94,6 +101,7 @@ async function createEmployee(req, res) {
                     dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : new Date(),
                     reportingManagerId: (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null') ? parseInt(reportingManagerId, 10) : null,
                     profilePhotoUrl,
+                    onboardingStatus: 'INVITED'
                 },
                 include: {
                     user: {
@@ -106,8 +114,48 @@ async function createEmployee(req, res) {
                 }
             });
 
+            // 3. Create Invite Token
+            await tx.inviteToken.create({
+                data: {
+                    employeeId: employee.id,
+                    userId: user.id,
+                    token: inviteToken,
+                    expiresAt: tokenExpiry
+                }
+            });
+
+            // 4. Create Salary Structure (Optional during creation)
+            if (grossSalary) {
+                await tx.salaryStructure.create({
+                    data: {
+                        employeeId: employee.id,
+                        basic: basic ? parseFloat(basic) : 0,
+                        hra: hra ? parseFloat(hra) : 0,
+                        conveyance: conveyance ? parseFloat(conveyance) : 0,
+                        medicalAllowance: medicalAllowance ? parseFloat(medicalAllowance) : 0,
+                        specialAllowance: specialAllowance ? parseFloat(specialAllowance) : 0,
+                        pfDeduction: pfDeduction ? parseFloat(pfDeduction) : 0,
+                        professionalTax: professionalTax ? parseFloat(professionalTax) : 0,
+                        otherDeductions: otherDeductions ? parseFloat(otherDeductions) : 0,
+                        grossSalary: parseFloat(grossSalary),
+                        netSalary: netSalary ? parseFloat(netSalary) : parseFloat(grossSalary),
+                    }
+                });
+            }
+
             return employee;
         });
+
+        // 4. Send Email (non-blocking)
+        const baseDomain = process.env.FRONTEND_DOMAIN || 'localhost:3000';
+        const workspaceUrl = company.subdomain ? `http://${company.subdomain}.${baseDomain}` : `http://${baseDomain}`;
+        emailService.sendEmployeeInviteEmail(
+            email, 
+            inviteToken, 
+            company.name, 
+            firstName, 
+            workspaceUrl
+        ).catch(err => console.error("Failed to send invite email:", err));
 
         res.status(201).json(newEmployee);
     } catch (error) {
@@ -129,6 +177,7 @@ async function getEmployees(req, res) {
                 },
                 department: true,
                 designation: true,
+                bankDetails: true,
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -345,6 +394,106 @@ async function updateMe(req, res) {
     }
 }
 
+// ==========================================
+// ONBOARDING WIZARD ENDPOINTS
+// ==========================================
+
+async function onboardingPersonal(req, res) {
+    try {
+        const userId = req.user.id;
+        const { dateOfBirth, gender, address, emergencyContactName, emergencyContactPhone } = req.body;
+        
+        const employee = await prisma.employee.findUnique({ where: { userId } });
+        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
+
+        const updated = await prisma.employee.update({
+            where: { userId },
+            data: {
+                dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+                gender: gender || null,
+                address: address || null,
+                emergencyContactName: emergencyContactName || null,
+                emergencyContactPhone: emergencyContactPhone || null,
+                onboardingStatus: employee.onboardingStatus === 'INVITED' ? 'PROFILE_SUBMITTED' : employee.onboardingStatus
+            }
+        });
+
+        res.json({ message: 'Personal details saved successfully', employee: updated });
+    } catch (error) {
+        console.error('Onboarding Personal Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function onboardingBank(req, res) {
+    try {
+        const userId = req.user.id;
+        const { bankName, accountName, accountNumber, ifscCode, branchName } = req.body;
+        
+        const employee = await prisma.employee.findUnique({ where: { userId } });
+        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
+
+        const bankDetails = await prisma.bankDetails.upsert({
+            where: { employeeId: employee.id },
+            update: { bankName, accountName, accountNumber, ifscCode, branchName },
+            create: { employeeId: employee.id, bankName, accountName, accountNumber, ifscCode, branchName }
+        });
+
+        res.json({ message: 'Bank details saved successfully', bankDetails });
+    } catch (error) {
+        console.error('Onboarding Bank Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function onboardingDocuments(req, res) {
+    try {
+        const userId = req.user.id;
+        const employee = await prisma.employee.findUnique({ where: { userId } });
+        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
+
+        const aadhaarFile = req.files && req.files['aadhaar'] ? `/uploads/documents/${req.files['aadhaar'][0].filename}` : null;
+        const panFile = req.files && req.files['pan'] ? `/uploads/documents/${req.files['pan'][0].filename}` : null;
+        const resumeFile = req.files && req.files['resume'] ? `/uploads/documents/${req.files['resume'][0].filename}` : null;
+
+        const dataToUpdate = { onboardingStatus: 'DOCS_SUBMITTED' };
+        if (aadhaarFile) dataToUpdate.aadhaarPath = aadhaarFile;
+        if (panFile) dataToUpdate.panPath = panFile;
+        if (resumeFile) dataToUpdate.resumePath = resumeFile;
+
+        const updated = await prisma.employee.update({
+            where: { userId },
+            data: dataToUpdate
+        });
+
+        res.json({ message: 'Documents uploaded successfully. Onboarding complete pending HR review!', employee: updated });
+    } catch (error) {
+        console.error('Onboarding Documents Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function approveOnboarding(req, res) {
+    try {
+        const { id } = req.params; // Employee ID
+        
+        const employee = await prisma.employee.findUnique({ where: { id: parseInt(id) } });
+        if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+        const updated = await prisma.employee.update({
+            where: { id: parseInt(id) },
+            data: {
+                onboardingStatus: 'COMPLETED'
+            }
+        });
+
+        res.json({ message: 'Employee onboarding approved successfully!', employee: updated });
+    } catch (error) {
+        console.error('Approve Onboarding Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     checkEmailAvailability,
     createEmployee,
@@ -352,5 +501,9 @@ module.exports = {
     updateEmployee,
     deleteEmployee,
     getMe,
-    updateMe
+    updateMe,
+    onboardingPersonal,
+    onboardingBank,
+    onboardingDocuments,
+    approveOnboarding
 };

@@ -8,6 +8,7 @@ import { all_routes } from "./all_routes";
 const LazyFeature = lazy(() => import("../feature-module/feature"));
 const LazyAuthFeature = lazy(() => import("../feature-module/authFeature"));
 const LazyLayoutFeature = lazy(() => import("../feature-module/layoutFeature"));
+const OnboardingWizard = lazy(() => import("../feature-module/onboarding/OnboardingWizard"));
 
 type Role = "SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
 
@@ -73,6 +74,18 @@ const ALLRoutes: React.FC = () => {
               );
             })}
           </Route>
+        </Route>
+
+        {/* ── STANDALONE PROTECTED ROUTES (no sidebar/header) ── */}
+        <Route element={<PrivateRoute allowedRoles={["EMPLOYEE"]} />}>
+          <Route
+            path="/onboarding"
+            element={
+              <Suspense fallback={<LoadingSpinner text="Loading onboarding..." />}>
+                <OnboardingWizard />
+              </Suspense>
+            }
+          />
         </Route>
 
         {/* Layout routes — also protected */}

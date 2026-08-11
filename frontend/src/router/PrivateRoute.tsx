@@ -25,7 +25,24 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ allowedRoles }) => {
         return <Navigate to={routes.employeeDashboard} replace />;
     }
 
-    // Authorized — render the child routes
+    // Authorized — check onboarding status for Employees
+    const currentPath = window.location.pathname;
+    
+    if (user.role === 'EMPLOYEE') {
+        const onboardingStatus = (user as any).onboardingStatus || 'INVITED';
+        const isOnboardingRoute = currentPath === '/onboarding';
+
+        // If they are not fully onboarded and trying to access anything ELSE, force them to onboarding
+        if (onboardingStatus !== 'COMPLETED' && !isOnboardingRoute) {
+            return <Navigate to="/onboarding" replace />;
+        }
+
+        // If they are fully onboarded and trying to access onboarding, force them to dashboard
+        if (onboardingStatus === 'COMPLETED' && isOnboardingRoute) {
+            return <Navigate to={all_routes.employeeDashboard} replace />;
+        }
+    }
+
     return <Outlet />;
 };
 

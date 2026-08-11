@@ -93,6 +93,58 @@ async function sendVerificationEmail(toEmail, token, companyName, workspaceUrl) 
     }
 }
 
+/**
+ * Sends an invitation email to a new employee.
+ */
+async function sendEmployeeInviteEmail(toEmail, token, companyName, employeeName, workspaceUrl) {
+    try {
+        const transporter = await getTransporter();
+
+        const inviteLink = `${workspaceUrl}/invite/${token}`;
+
+        const mailOptions = {
+            from: '"SmartHR Support" <noreply@yourhrms.com>',
+            to: toEmail,
+            subject: `You have been invited to join ${companyName} on SmartHR`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                    <h2 style="color: #333;">Welcome, ${employeeName}!</h2>
+                    <p style="color: #555; font-size: 16px;">
+                        You have been invited to join <strong>${companyName}</strong>'s HR portal.
+                        Please click the button below to set up your account password and complete your onboarding profile.
+                    </p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${inviteLink}" style="background-color: #ff5722; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+                            Accept Invitation
+                        </a>
+                    </div>
+                    <p style="color: #555; font-size: 14px;">
+                        Or copy and paste this link into your browser:<br/>
+                        <a href="${inviteLink}" style="color: #ff5722; word-break: break-all;">${inviteLink}</a>
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                    <p style="color: #999; font-size: 12px; text-align: center;">
+                        This link will expire in 48 hours.
+                    </p>
+                </div>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        
+        console.log('--------------------------------------------------');
+        console.log('Employee Invite Email sent: %s', info.messageId);
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('--------------------------------------------------');
+
+        return info;
+    } catch (error) {
+        console.error('Error sending employee invite email:', error);
+        throw error;
+    }
+}
+
 module.exports = {
-    sendVerificationEmail
+    sendVerificationEmail,
+    sendEmployeeInviteEmail
 };

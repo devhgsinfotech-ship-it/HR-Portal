@@ -325,6 +325,8 @@ import AiPayrollForecast from "@/feature-module/ai-center/ai-payroll-forecast/ai
 import AiHiringForecast from "@/feature-module/ai-center/ai-hiring-forecast/aiHiringForecast";
 import AiTeamPerformanceInsights from "@/feature-module/ai-center/ai-team-performance-insights/aiTeamPerformanceInsights";
 import AiConfiguration from "@/feature-module/ai-center/ai-configuration/aiConfiguration";
+import AcceptInvite from "../feature-module/auth/acceptInvite/acceptInvite";
+import OnboardingWizard from "../feature-module/onboarding/OnboardingWizard";
 
 const routes = all_routes;
 
@@ -1851,6 +1853,10 @@ export const publicRoutes = [
 ];
 
 export const authRoutes = [
+  {
+    path: "/invite/:token",
+    element: <AcceptInvite />,
+  },
  
   {
     path: routes.login,

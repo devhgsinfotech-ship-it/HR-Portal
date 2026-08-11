@@ -12,6 +12,7 @@ import { DatePicker } from "antd";
 import CommonSelect from "../../../core/common/commonSelect";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
 import dayjs from "dayjs";
+import VerifyEmployeeModal from "./VerifyEmployeeModal";
 
 type PasswordField = "password" | "confirmPassword";
 
@@ -28,6 +29,10 @@ interface Employee {
   Designation: string;
   JoiningDate: string;
   Status: string;
+  onboardingStatus?: string;
+  aadhaarPath?: string;
+  panPath?: string;
+  resumePath?: string;
 }
 
 const PAGE_SIZE = 50; // Number of employees to load per page
@@ -41,6 +46,8 @@ const EmployeeList = () => {
   const [loading, setLoading] = useState(false);
 
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
+  const [verifyEmp, setVerifyEmp] = useState<any>(null);
+  
   const [dbDepartments, setDbDepartments] = useState<any[]>([]);
   const [dbDesignations, setDbDesignations] = useState<any[]>([]);
   const [newEmp, setNewEmp] = useState({ firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '' });
@@ -87,7 +94,11 @@ const EmployeeList = () => {
         Phone: emp.phone || 'N/A',
         Designation: emp.designation?.name || 'N/A',
         JoiningDate: emp.dateOfJoining ? new Date(emp.dateOfJoining).toLocaleDateString() : 'N/A',
-        Status: 'Active',
+        Status: emp.onboardingStatus === 'DOCS_SUBMITTED' ? 'Pending Verification' : emp.onboardingStatus === 'COMPLETED' ? 'Active' : emp.onboardingStatus,
+        onboardingStatus: emp.onboardingStatus,
+        aadhaarPath: emp.aadhaarPath,
+        panPath: emp.panPath,
+        resumePath: emp.resumePath,
         raw: emp
       }));
       setDbEmployees(mappedEmployees);
@@ -296,15 +307,19 @@ const EmployeeList = () => {
     {
       title: "Status",
       dataIndex: "Status",
-      render: (text: string) => (
-        <span
-          className={`badge ${text === "Active" ? "badge-success" : "badge-danger"
-            } d-inline-flex align-items-center badge-xs`}
-        >
-          <i className="ti ti-point-filled me-1" />
-          {text}
-        </span>
-      ),
+      render: (text: string) => {
+        let badgeClass = "badge-danger";
+        if (text === "Active" || text === "COMPLETED") badgeClass = "badge-success";
+        else if (text === "Pending Verification") badgeClass = "badge-warning";
+        else if (text === "INVITED") badgeClass = "badge-info";
+
+        return (
+          <span className={`badge ${badgeClass} d-inline-flex align-items-center badge-xs`}>
+            <i className="ti ti-point-filled me-1" />
+            {text}
+          </span>
+        );
+      },
       sorter: (a: Employee, b: Employee) => a.Status.length - b.Status.length,
     },
     {
@@ -339,6 +354,26 @@ const EmployeeList = () => {
           >
             <i className="ti ti-edit" />
           </Link>
+          {record.onboardingStatus === 'DOCS_SUBMITTED' && (
+            <Link
+              to="#"
+              className="ms-2 text-warning"
+              title="Review & Approve Onboarding"
+              onClick={(e) => {
+                e.preventDefault();
+                setVerifyEmp(record);
+                // Force open the modal using standard Bootstrap API
+                const modalEl = document.getElementById('verify_employee_modal');
+                if (modalEl) {
+                  // @ts-ignore
+                  const modal = window.bootstrap?.Modal?.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+                  modal.show();
+                }
+              }}
+            >
+              <i className="ti ti-check" />
+            </Link>
+          )}
           <Link
             to="#"
             data-bs-toggle="modal"
@@ -688,6 +723,46 @@ const EmployeeList = () => {
         </div>
       </div>
       {/* /Page Wrapper */}
+      
+      {/* Modals */}
+      <VerifyEmployeeModal employee={verifyEmp} onSuccess={() => {
+        fetchData();
+        setVerifyEmp(null);
+      }} />
+      <div className="modal fade" id="delete_employee_modal" role="dialog">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-body text-center p-4">
+              <span className="avatar avatar-xl bg-transparent-danger text-danger mb-3">
+                <i className="ti ti-trash-x fs-36" />
+              </span>
+              <h4 className="mb-1">Confirm Delete</h4>
+              <p className="mb-3">
+                Are you sure you want to delete this employee? This action cannot be undone.
+              </p>
+              <div className="d-flex justify-content-center">
+                <button
+                  type="button"
+                  className="btn btn-light me-3"
+                  data-bs-dismiss="modal"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  data-bs-dismiss="modal"
+                  className="btn btn-danger"
+                  onClick={handleDeleteEmployee}
+                >
+                  Yes, Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* /Delete Employee Modal */}
+      
       {/* Add Employee */}
       <div className="modal fade" id="add_employee">
         <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -2854,40 +2929,7 @@ const EmployeeList = () => {
           </div>
         </div>
       </div>
-      {/* Delete Employee Modal */}
-      <div className="modal fade" id="delete_employee_modal" role="dialog">
-        <div className="modal-dialog modal-dialog-centered">
-          <div className="modal-content">
-            <div className="modal-body text-center p-4">
-              <span className="avatar avatar-xl bg-transparent-danger text-danger mb-3">
-                <i className="ti ti-trash-x fs-36" />
-              </span>
-              <h4 className="mb-1">Confirm Delete</h4>
-              <p className="mb-3">
-                Are you sure you want to delete this employee? This action cannot be undone.
-              </p>
-              <div className="d-flex justify-content-center">
-                <button
-                  type="button"
-                  className="btn btn-light me-3"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  data-bs-dismiss="modal"
-                  className="btn btn-danger"
-                  onClick={handleDeleteEmployee}
-                >
-                  Yes, Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* /Delete Employee Modal */}
+
     </>
   );
 };

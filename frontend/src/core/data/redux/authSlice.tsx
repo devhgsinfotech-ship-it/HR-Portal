@@ -9,6 +9,7 @@ export interface AuthUser {
     companyId: number | null;
     subdomain: string | null;
     profilePhotoUrl?: string | null;
+    onboardingStatus?: string;
 }
 
 export interface AuthState {

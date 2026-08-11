@@ -19,7 +19,10 @@ async function login(req, res) {
             include: { 
                 company: true,
                 employee: {
-                    select: { profilePhotoUrl: true }
+                    select: { 
+                        profilePhotoUrl: true,
+                        onboardingStatus: true 
+                    }
                 }
             },
         });
@@ -77,6 +80,7 @@ async function login(req, res) {
                 companyId: user.companyId,
                 subdomain: user.company?.subdomain || null,
                 profilePhotoUrl: user.employee?.profilePhotoUrl || null,
+                onboardingStatus: user.employee?.onboardingStatus || 'COMPLETED',
             },
         });
 
@@ -281,6 +285,46 @@ async function verifyEmail(req, res) {
         res.status(500).json({ message: 'Internal server error' });
     }
 }
+async function acceptInvite(req, res) {
+    try {
+        const { token, password } = req.body;
+        if (!token || !password) {
+            return res.status(400).json({ message: 'Token and password are required' });
+        }
 
-module.exports = { login, register, verifyEmail };
+        const invite = await prisma.inviteToken.findUnique({
+            where: { token },
+            include: { user: true, employee: true }
+        });
 
+        if (!invite) {
+            return res.status(400).json({ message: 'Invalid or expired invite token' });
+        }
+
+        if (new Date() > invite.expiresAt) {
+            return res.status(400).json({ message: 'Invite token has expired' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        await prisma.$transaction([
+            prisma.user.update({
+                where: { id: invite.userId },
+                data: {
+                    password: hashedPassword,
+                    accountStatus: 'ACTIVE'
+                }
+            }),
+            prisma.inviteToken.delete({
+                where: { id: invite.id }
+            })
+        ]);
+
+        res.json({ message: 'Account set up successfully! You can now login.' });
+    } catch (error) {
+        console.error('Accept Invite Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+module.exports = { login, register, verifyEmail, acceptInvite };

@@ -9,18 +9,35 @@ const path = require('path');
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const dir = 'uploads/profiles';
+        let dir = 'uploads/profiles';
+        // If it's a document (aadhaar, pan, resume), save to a different folder
+        if (file.fieldname !== 'profileImage') {
+            dir = 'uploads/documents';
+        }
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         cb(null, dir);
     },
     filename: (req, file, cb) => {
-        cb(null, `emp-${Date.now()}${path.extname(file.originalname)}`);
+        cb(null, `${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`);
     }
 });
 const upload = multer({ storage });
 
 // All employee routes require authentication
 router.use(verifyToken);
+
+// Employee Onboarding Endpoints
+router.put('/onboarding/personal', employeeController.onboardingPersonal);
+router.post('/onboarding/bank', employeeController.onboardingBank);
+router.post('/onboarding/documents', upload.fields([
+    { name: 'aadhaar', maxCount: 1 },
+    { name: 'pan', maxCount: 1 },
+    { name: 'resume', maxCount: 1 }
+]), employeeController.onboardingDocuments);
+
+// HR Approves Onboarding
+router.post('/:id/approve-onboarding', requireRole('SUPER_ADMIN', 'HR'), employeeController.approveOnboarding);
+
 
 // Employees can view employees, but only HR/Admin can modify
 router.get('/', employeeController.getEmployees);
