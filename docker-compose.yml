@@ -65,7 +65,7 @@ services:
       - "3000:80"
     volumes:
       - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf  # ← nginx changes auto-reflect
-      - ./frontend/dist:/usr/share/nginx/html # Hot-reload my builds without needing to rebuild the docker image
+      # - ./frontend/dist:/usr/share/nginx/html # Hot-reload my builds without needing to rebuild the docker image
     depends_on:
       - backend
     networks:

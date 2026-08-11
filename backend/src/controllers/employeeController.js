@@ -352,9 +352,11 @@ async function getMe(req, res) {
         const employee = await prisma.employee.findUnique({
             where: { userId },
             include: {
-                user: { select: { id: true, name: true, email: true, role: true } },
+                user: { select: { id: true, name: true, email: true, role: true, company: true } },
                 department: true,
-                designation: true
+                designation: true,
+                bankDetails: true,
+                salaryStructure: true
             }
         });
         if (!employee) {

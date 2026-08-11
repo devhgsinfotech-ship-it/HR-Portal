@@ -40,6 +40,7 @@ const Profile = () => {
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [salaryStructure, setSalaryStructure] = useState<any>(null);
 
   useEffect(() => {
     fetchProfile();
@@ -63,6 +64,9 @@ const Profile = () => {
       });
       if (res.data.profilePhotoUrl) {
         setProfileImagePreview(res.data.profilePhotoUrl);
+      }
+      if (res.data.salaryStructure) {
+        setSalaryStructure(res.data.salaryStructure);
       }
     } catch (err) {
       console.error("Error fetching profile", err);
@@ -113,13 +117,13 @@ const Profile = () => {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setSuccessMsg("Profile updated successfully!");
-      
+
       const authUserStr = localStorage.getItem('authUser');
       if (authUserStr) {
         const authUser = JSON.parse(authUserStr);
         const newName = `${profileData.firstName} ${profileData.lastName}`.trim();
         let newPhotoUrl = res.data.profilePhotoUrl || authUser.profilePhotoUrl;
-        
+
         dispatch(updateUser({ name: newName, profilePhotoUrl: newPhotoUrl }));
       }
       window.dispatchEvent(new Event('storage'));
@@ -201,7 +205,7 @@ const Profile = () => {
                         <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
                           <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames overflow-hidden">
                             {profileImagePreview ? (
-                              <img src={profileImagePreview.startsWith('blob:') ? profileImagePreview : `http://localhost:5000${profileImagePreview}`} alt="Profile" className="img-fluid" style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+                              <img src={profileImagePreview.startsWith('blob:') ? profileImagePreview : `http://localhost:5000${profileImagePreview}`} alt="Profile" className="img-fluid" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <i className="ti ti-photo text-gray-3 fs-16" />
                             )}
@@ -396,6 +400,58 @@ const Profile = () => {
                     </div>
                   </div>
                 </div>
+
+                {salaryStructure && (
+                  <div className="border-bottom mb-3 pb-3">
+                    <h6 className="mb-3">Salary Details (Read-Only)</h6>
+                    <div className="row bg-light rounded p-4 mx-0">
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label text-muted mb-1">Basic Salary</label>
+                        <p className="fw-medium text-dark m-0">₹{salaryStructure.basic?.toLocaleString() || 0}</p>
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label text-muted mb-1">HRA</label>
+                        <p className="fw-medium text-dark m-0">₹{salaryStructure.hra?.toLocaleString() || 0}</p>
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label text-muted mb-1">Conveyance</label>
+                        <p className="fw-medium text-dark m-0">₹{salaryStructure.conveyance?.toLocaleString() || 0}</p>
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label text-muted mb-1">Medical Allowance</label>
+                        <p className="fw-medium text-dark m-0">₹{salaryStructure.medicalAllowance?.toLocaleString() || 0}</p>
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label text-muted mb-1">Special Allowance</label>
+                        <p className="fw-medium text-dark m-0">₹{salaryStructure.specialAllowance?.toLocaleString() || 0}</p>
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label text-muted mb-1">PF Deduction</label>
+                        <p className="fw-medium text-danger m-0">-₹{salaryStructure.pfDeduction?.toLocaleString() || 0}</p>
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label text-muted mb-1">Professional Tax</label>
+                        <p className="fw-medium text-danger m-0">-₹{salaryStructure.professionalTax?.toLocaleString() || 0}</p>
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label text-muted mb-1">Other Deductions</label>
+                        <p className="fw-medium text-danger m-0">-₹{salaryStructure.otherDeductions?.toLocaleString() || 0}</p>
+                      </div>
+                      <div className="col-md-12">
+                        <hr className="my-2" />
+                      </div>
+                      <div className="col-md-6 mt-2">
+                        <label className="form-label text-muted mb-1">Gross Salary</label>
+                        <p className="fw-bold text-dark fs-3 m-0">₹{salaryStructure.grossSalary?.toLocaleString() || 0}</p>
+                      </div>
+                      <div className="col-md-6 mt-2">
+                        <label className="form-label text-muted mb-1">Net Salary</label>
+                        <p className="fw-bold text-success fs-3 m-0">₹{salaryStructure.netSalary?.toLocaleString() || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="d-flex align-items-center justify-content-end">
                   <button type="button" className="btn btn-outline-light border me-3">
                     Cancel
