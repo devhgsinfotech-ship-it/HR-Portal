@@ -50,7 +50,17 @@ app.use('/employees', employeeRoutes);
 app.use('/leaves', leaveRoutes);
 app.use('/attendance', attendanceRoutes);
 app.use('/holidays', holidayRoutes);
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+const prisma = require('./src/config/prisma');
+app.get('/health', async (req, res) => {
+    try {
+        // Attempt a simple DB query
+        await prisma.$queryRaw`SELECT 1`;
+        res.json({ status: 'ok', database: 'connected' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message, stack: error.stack });
+    }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
