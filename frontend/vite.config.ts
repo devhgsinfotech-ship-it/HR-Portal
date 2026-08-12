@@ -11,7 +11,7 @@ export default defineConfig({
     alias: {
       global: "globalthis", // 👈 critical for "global is not defined"
       "@": path.resolve(__dirname, "src"),
-       moment: 'moment/moment.js'
+      moment: 'moment/moment.js'
     },
   },
   optimizeDeps: {
