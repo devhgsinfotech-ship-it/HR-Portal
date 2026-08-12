@@ -16,7 +16,7 @@ app.use(cors({
         if (origin.includes('localhost')) return callback(null, true);
 
         // Allow any subdomain of aaups.com in production
-        if (/^https?:\/\/([a-z0-9-]+\.)?aaups\.com$/.test(origin)) {
+        if (origin.includes('aaups.com')) {
             return callback(null, true);
         }
 
