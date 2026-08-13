@@ -27,7 +27,7 @@ const EmployeeDashboard = () => {
   const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
   const [leaveBalances, setLeaveBalances] = useState<any[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://api.aaups.com');
 
   const fetchData = async () => {
     try {

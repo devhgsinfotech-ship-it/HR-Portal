@@ -17,7 +17,7 @@ const ImageWithBasePath = (props: Image) => {
   // Global fix for backend uploaded images passed as assets/img/users/uploads/...
   if (props.src && props.src.includes('uploads/')) {
     const uploadPath = props.src.substring(props.src.indexOf('uploads/'));
-    const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const backendUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://api.aaups.com');
     fullSrc = `${backendUrl}/${uploadPath}`;
   } else if (props.src && props.src.startsWith('http')) {
     fullSrc = props.src;
