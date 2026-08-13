@@ -9,7 +9,7 @@ export function getSubdomain(): string | null {
     const host = window.location.hostname;
     const parts = host.split('.');
     if (parts.length >= 2 && parts[0] !== 'www' && parts[0] !== 'app') {
-        const knownRoots = ['localhost', 'yourhrms'];
+        const knownRoots = ['localhost', 'yourhrms', 'aaups'];
         if (!knownRoots.includes(parts[0])) {
             return parts[0];
         }
