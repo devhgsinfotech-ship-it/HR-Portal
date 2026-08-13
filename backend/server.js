@@ -15,8 +15,9 @@ app.use(cors({
         // Allow localhost for development
         if (origin.includes('localhost')) return callback(null, true);
 
-        // Allow any subdomain of aaups.com in production
-        if (origin.includes('aaups.com')) {
+        // Allow the production domain
+        const liveDomain = process.env.FRONTEND_DOMAIN || 'aaups.com';
+        if (origin.includes(liveDomain)) {
             return callback(null, true);
         }
 

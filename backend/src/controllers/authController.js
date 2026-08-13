@@ -208,7 +208,11 @@ async function register(req, res) {
             return { company, user };
         });
 
-        const workspaceUrl = `http://${result.company.subdomain}.localhost:3000`;
+        // Dynamically generate the workspace URL based on the environment
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
+        const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
+        const protocol = domain.includes('localhost') ? 'http' : 'https';
+        const workspaceUrl = `${protocol}://${result.company.subdomain}.${domain}`;
 
         // Send real email instead of just logging token
         try {

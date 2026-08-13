@@ -12,6 +12,7 @@ import { DatePicker } from "antd";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
 import EmployeeDashboardModal from "./employeeDashboardModal";
 import CommonFooter from "@/core/common/commonFooter/footer";
+import { APP_CONFIG } from "../../../environment";
 type Task = {
   id: number;
   title: string;
@@ -27,7 +28,7 @@ const EmployeeDashboard = () => {
   const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
   const [leaveBalances, setLeaveBalances] = useState<any[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
-  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://api.aaups.com');
+  const apiUrl = APP_CONFIG.getBackendUrl();
 
   const fetchData = async () => {
     try {
