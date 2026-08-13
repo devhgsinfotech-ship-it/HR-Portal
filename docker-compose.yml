@@ -58,14 +58,17 @@ services:
       - hr_portal_network
 
   frontend:
-    build: ./frontend
+    image: node:20-alpine
     container_name: hr_portal_frontend
     restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host"
+    environment:
+      - VITE_API_URL=http://localhost:5000
     ports:
-      - "3000:80"
+      - "3000:3000"
     volumes:
-      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf  # ← nginx changes auto-reflect
-      # - ./frontend/dist:/usr/share/nginx/html # Hot-reload my builds without needing to rebuild the docker image
+      - ./frontend:/app
     depends_on:
       - backend
     networks:
