@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { APP_CONFIG } from '../../environment';
 
 /**
  * Reads the company subdomain from the current hostname.
@@ -19,7 +20,7 @@ export function getSubdomain(): string | null {
 
 // Create an Axios instance
 const apiClient = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://api.aaups.com'),
+    baseURL: APP_CONFIG.getBackendUrl(),
     headers: {
         'Content-Type': 'application/json',
     },

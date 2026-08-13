@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import apiClient from '../../../core/utils/apiClient';
+import { APP_CONFIG } from '../../../environment';
 
 interface VerifyEmployeeModalProps {
   employee: any;
@@ -35,7 +36,7 @@ const VerifyEmployeeModal: React.FC<VerifyEmployeeModalProps> = ({ employee, onS
     }
   };
 
-  const backendUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://api.aaups.com');
+  const backendUrl = APP_CONFIG.getBackendUrl();
 
   return (
     <div className="modal fade" id="verify_employee_modal" tabIndex={-1} aria-hidden="true">

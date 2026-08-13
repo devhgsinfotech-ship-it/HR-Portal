@@ -21,6 +21,7 @@ import type {
   HorizontalSubMenu,
 } from "../../data/types";
 import HorizontalSignalSidebar from "../horizontal-sidebar/horizontalsingalMenu";
+import { APP_CONFIG } from "../../../environment";
 
 // Helper to get all routes from a menu item recursively
 const getAllRoutes = (item: HorizontalSubMenu): string[] => {
@@ -71,7 +72,7 @@ const Header = React.memo(() => {
   );
   const user = useSelector((state: RootState) => state.auth.user);
   const Location = useLocation();
-  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://api.aaups.com');
+  const apiUrl = APP_CONFIG.getBackendUrl();
 
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault();

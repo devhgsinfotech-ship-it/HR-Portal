@@ -1,5 +1,5 @@
 
-import { img_path} from '../../../environment';
+import { img_path, APP_CONFIG } from '../../../environment';
 
 interface Image {
   className?: string;
@@ -17,7 +17,7 @@ const ImageWithBasePath = (props: Image) => {
   // Global fix for backend uploaded images passed as assets/img/users/uploads/...
   if (props.src && props.src.includes('uploads/')) {
     const uploadPath = props.src.substring(props.src.indexOf('uploads/'));
-    const backendUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://api.aaups.com');
+    const backendUrl = APP_CONFIG.getBackendUrl();
     fullSrc = `${backendUrl}/${uploadPath}`;
   } else if (props.src && props.src.startsWith('http')) {
     fullSrc = props.src;
