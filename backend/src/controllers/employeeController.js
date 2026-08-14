@@ -362,8 +362,11 @@ async function getMe(req, res) {
 
         // If the logged-in user is an HR or SUPER_ADMIN and does not have an employee profile yet,
         // auto-create one so their profile page is editable and displays correctly.
-        if (!employee) {
-            const user = await prisma.user.findUnique({ where: { id: userId } });
+         if (!employee) {
+            const user = await prisma.user.findUnique({ 
+                where: { id: userId },
+                include: { company: true }
+            });
             if (user && (user.role === 'HR' || user.role === 'SUPER_ADMIN')) {
                 const nameParts = user.name.trim().split(/\s+/);
                 const firstName = nameParts[0] || 'Admin';
@@ -376,6 +379,8 @@ async function getMe(req, res) {
                         employeeCode,
                         firstName,
                         lastName,
+                        phone: user.company?.phone || null,
+                        address: user.company?.address || null,
                         onboardingStatus: 'COMPLETED'
                     },
                     include: {

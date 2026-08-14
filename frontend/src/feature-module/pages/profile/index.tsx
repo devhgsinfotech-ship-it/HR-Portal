@@ -303,9 +303,7 @@ const Profile = () => {
                           <label className="form-label mb-md-0">Country</label>
                         </div>
                         <div className="col-md-8">
-                          <select className="form-select" name="country" value={profileData.country} onChange={handleInputChange}>
-                            {countryChoose.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                          </select>
+                          <input type="text" className="form-control" name="country" value={profileData.country === "Select" ? "" : profileData.country} onChange={handleInputChange} placeholder="e.g. India" />
                         </div>
                       </div>
                     </div>
@@ -315,11 +313,7 @@ const Profile = () => {
                           <label className="form-label mb-md-0">State</label>
                         </div>
                         <div className="col-md-8">
-                          <div>
-                            <select className="form-select" name="state" value={profileData.state} onChange={handleInputChange}>
-                              {stateChoose.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                            </select>
-                          </div>
+                          <input type="text" className="form-control" name="state" value={profileData.state === "Select" ? "" : profileData.state} onChange={handleInputChange} placeholder="e.g. Punjab" />
                         </div>
                       </div>
                     </div>
@@ -329,14 +323,7 @@ const Profile = () => {
                           <label className="form-label mb-md-0">City</label>
                         </div>
                         <div className="col-md-8">
-                          <div>
-                            <select className="form-select" name="city" value={profileData.city} onChange={handleInputChange}>
-                              <option value="Select">Select</option>
-                              <option value="New York">New York</option>
-                              <option value="Los Angeles">Los Angeles</option>
-                              <option value="Chicago">Chicago</option>
-                            </select>
-                          </div>
+                          <input type="text" className="form-control" name="city" value={profileData.city === "Select" ? "" : profileData.city} onChange={handleInputChange} placeholder="e.g. Mohali" />
                         </div>
                       </div>
                     </div>
