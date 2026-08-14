@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../../environment";
 
 type VerifyState = "loading" | "success" | "error" | "no-token";
 
@@ -74,8 +75,11 @@ const EmailVerification = () => {
                   {subdomain && (
                     <div className="alert alert-info mb-3 text-start">
                       <p className="mb-1"><strong>Your workspace is ready:</strong></p>
-                      <a href={`http://${subdomain}.localhost:3000/login`} className="fw-semibold">
-                        {subdomain}.yourhrms.com/login →
+                      <a 
+                        href={`${APP_CONFIG.getBackendUrl().startsWith('https') ? 'https' : 'http'}://${subdomain}.${APP_CONFIG.getFrontendDomain()}/login`} 
+                        className="fw-semibold"
+                      >
+                        {subdomain}.{APP_CONFIG.getFrontendDomain()}/login →
                       </a>
                     </div>
                   )}
