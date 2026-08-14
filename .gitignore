@@ -38,7 +38,7 @@ prisma/*.db
 prisma/migrations/
 
 # Uploads / temp files
-uploads/
+#uploads/
 tmp/
 temp/
 
