@@ -3,6 +3,7 @@ const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const emailService = require('../utils/emailService');
+
 async function checkEmailAvailability(req, res) {
     try {
         const { email } = req.query;
@@ -364,7 +365,7 @@ async function getMe(req, res) {
 
         // If the logged-in user is an HR or SUPER_ADMIN and does not have an employee profile yet,
         // auto-create one so their profile page is editable and displays correctly.
-         if (!employee) {
+        if (!employee) {
             const user = await prisma.user.findUnique({ 
                 where: { id: userId },
                 include: { company: true }
@@ -413,201 +414,6 @@ async function getMe(req, res) {
                         user: { select: { id: true, name: true, email: true, role: true, company: true } },
                         department: true,
                         designation: true,
-                        bankDetails: true,
-                        salaryStructure: true
-                    }
-                });
-            }
-        }
-
-        res.json(employee);
-    } catch (error) {
-        console.error('Error fetching my profile:', error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-}
-
-async function updateMe(req, res) {
-    try {
-        const userId = req.user.id;
-        const { firstName, lastName, phone, password, address, country, state, city, postalCode } = req.body;
-        
-        const existing = await prisma.employee.findUnique({
-            where: { userId },
-            include: { user: true }
-        });
-
-        if (!existing) {
-            return res.status(404).json({ message: 'Employee profile not found' });
-        }
-
-        const dataToUpdate = {};
-        if (firstName) dataToUpdate.firstName = firstName;
-        if (lastName) dataToUpdate.lastName = lastName;
-        if (phone) dataToUpdate.phone = phone;
-        if (address !== undefined) dataToUpdate.address = address;
-        if (country !== undefined) dataToUpdate.country = country;
-        if (state !== undefined) dataToUpdate.state = state;
-        if (city !== undefined) dataToUpdate.city = city;
-        if (postalCode !== undefined) dataToUpdate.postalCode = postalCode;
-
-        if (req.file) {
-            dataToUpdate.profilePhotoUrl = `/uploads/profiles/${req.file.filename}`;
-        }
-
-        const userUpdateData = {};
-        if (firstName || lastName) {
-            userUpdateData.name = `${firstName || existing.firstName} ${lastName || existing.lastName}`.trim();
-        }
-        
-        if (password && password.trim() !== '') {
-            if (password.length < 6) {
-                return res.status(400).json({ message: 'Password must be at least 6 characters long' });
-            }
-            userUpdateData.password = await require('bcrypt').hash(password, 10);
-        }
-
-        if (Object.keys(userUpdateData).length > 0) {
-            await prisma.user.update({
-                where: { id: userId },
-                data: userUpdateData
-            });
-        }
-
-        const updatedEmployee = await prisma.employee.update({
-            where: { id: existing.id },
-            data: dataToUpdate,
-            include: {
-                user: { select: { id: true, name: true, email: true, role: true } },
-                department: true,
-                designation: true
-            }
-        });
-
-        res.json(updatedEmployee);
-    } catch (error) {
-        console.error('Error updating my profile:', error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-}
-
-// ==========================================
-// ONBOARDING WIZARD ENDPOINTS
-// ==========================================
-
-async function onboardingPersonal(req, res) {
-    try {
-        const userId = req.user.id;
-        const { dateOfBirth, gender, address, emergencyContactName, emergencyContactPhone } = req.body;
-        
-        const employee = await prisma.employee.findUnique({ where: { userId } });
-        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
-
-        const updated = await prisma.employee.update({
-            where: { userId },
-            data: {
-                dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-                gender: gender || null,
-                address: address || null,
-                emergencyContactName: emergencyContactName || null,
-                emergencyContactPhone: emergencyContactPhone || null,
-                onboardingStatus: employee.onboardingStatus === 'INVITED' ? 'PROFILE_SUBMITTED' : employee.onboardingStatus
-            }
-        });
-
-        res.json({ message: 'Personal details saved successfully', employee: updated });
-    } catch (error) {
-        console.error('Onboarding Personal Error:', error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-}
-
-async function onboardingBank(req, res) {
-    try {
-        const userId = req.user.id;
-        const { bankName, accountName, accountNumber, ifscCode, branchName } = req.body;
-        
-        const employee = await prisma.employee.findUnique({ where: { userId } });
-        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
-
-        const bankDetails = await prisma.bankDetails.upsert({
-            where: { employeeId: employee.id },
-            update: { bankName, accountName, accountNumber, ifscCode, branchName },
-            create: { employeeId: employee.id, bankName, accountName, accountNumber, ifscCode, branchName }
-        });
-
-        res.json({ message: 'Bank details saved successfully', bankDetails });
-    } catch (error) {
-        console.error('Onboarding Bank Error:', error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-}
-
-async function onboardingDocuments(req, res) {
-    try {
-        const userId = req.user.id;
-        const employee = await prisma.employee.findUnique({ where: { userId } });
-        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
-
-        const aadhaarFile = req.files && req.files['aadhaar'] ? `/uploads/documents/${req.files['aadhaar'][0].filename}` : null;
-        const panFile = req.files && req.files['pan'] ? `/uploads/documents/${req.files['pan'][0].filename}` : null;
-        const resumeFile = req.files && req.files['resume'] ? `/uploads/documents/${req.files['resume'][0].filename}` : null;
-
-        const dataToUpdate = { onboardingStatus: 'DOCS_SUBMITTED' };
-        if (aadhaarFile) dataToUpdate.aadhaarPath = aadhaarFile;
-        if (panFile) dataToUpdate.panPath = panFile;
-        if (resumeFile) dataToUpdate.resumePath = resumeFile;
-
-        const updated = await prisma.employee.update({
-            where: { userId },
-            data: dataToUpdate
-        });
-
-        res.json({ message: 'Documents uploaded successfully. Onboarding complete pending HR review!', employee: updated });
-    } catch (error) {
-        console.error('Onboarding Documents Error:', error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-}
-
-async function approveOnboarding(req, res) {
-    try {
-        const { id } = req.params; // Employee ID
-        
-        const employee = await prisma.employee.findUnique({ where: { id: parseInt(id) } });
-        if (!employee) return res.status(404).json({ message: 'Employee not found' });
-
-        const updated = await prisma.employee.update({
-            where: { id: parseInt(id) },
-            data: {
-                onboardingStatus: 'COMPLETED'
-            }
-        });
-
-        res.json({ message: 'Employee onboarding approved successfully!', employee: updated });
-    } catch (error) {
-        console.error('Approve Onboarding Error:', error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-}
-
-async function resendInvite(req, res) {
-    try {
-        const { id } = req.params;
-        const employee = await prisma.employee.findUnique({
-            where: { id: parseInt(id, 10) },
-            include: {
-                user: {
-                    include: {
-                        company: true
-                    }
-                }
-            }
-        });
-
-        if (!employee) {
-            return res.status(404).json({ message: 'Employee not found' });
-        }
                         bankDetails: true,
                         salaryStructure: true
                     }
