@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { all_routes } from '../../../router/all_routes';
 import ImageWithBasePath from '../../../core/common/imageWithBasePath';
+import { APP_CONFIG } from '../../../environment';
 
 const AcceptInvite = () => {
   const { token } = useParams();
@@ -28,8 +29,8 @@ const AcceptInvite = () => {
 
     setLoading(true);
     try {
-      // Get the backend URL
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      // Get the correct backend URL
+      const apiUrl = APP_CONFIG.getBackendUrl();
       const res = await axios.post(`${apiUrl}/auth/accept-invite`, {
         token,
         password
