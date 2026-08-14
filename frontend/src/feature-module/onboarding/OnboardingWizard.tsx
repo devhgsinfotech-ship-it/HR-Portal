@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { all_routes } from '../../router/all_routes';
 import ImageWithBasePath from '../../core/common/imageWithBasePath';
+import { APP_CONFIG } from '../../environment';
 
 const OnboardingWizard = () => {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ const OnboardingWizard = () => {
     setLoading(true);
     setErrorMsg('');
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = APP_CONFIG.getBackendUrl();
       await axios.put(`${apiUrl}/employees/onboarding/personal`, personal, { headers: getAuthHeaders() });
       setStep(2);
     } catch (err: any) {
@@ -60,7 +61,7 @@ const OnboardingWizard = () => {
     setLoading(true);
     setErrorMsg('');
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = APP_CONFIG.getBackendUrl();
       await axios.post(`${apiUrl}/employees/onboarding/bank`, bank, { headers: getAuthHeaders() });
       setStep(3);
     } catch (err: any) {
@@ -80,7 +81,7 @@ const OnboardingWizard = () => {
       if (docs.pan) formData.append('pan', docs.pan);
       if (docs.resume) formData.append('resume', docs.resume);
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = APP_CONFIG.getBackendUrl();
       const res = await axios.post(`${apiUrl}/employees/onboarding/documents`, formData, {
         headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
       });
