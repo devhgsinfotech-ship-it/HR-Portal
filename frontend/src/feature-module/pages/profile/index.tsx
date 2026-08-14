@@ -6,6 +6,7 @@ import { all_routes } from "../../../router/all_routes";
 import { useDispatch } from "react-redux";
 import { updateUser } from "../../../core/data/redux/authSlice";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 
 type PasswordField =
   | "oldPassword"
@@ -205,7 +206,7 @@ const Profile = () => {
                         <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
                           <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames overflow-hidden">
                             {profileImagePreview ? (
-                              <img src={profileImagePreview.startsWith('blob:') ? profileImagePreview : `http://localhost:5000${profileImagePreview}`} alt="Profile" className="img-fluid" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <img src={profileImagePreview.startsWith('blob:') ? profileImagePreview : `${APP_CONFIG.getBackendUrl()}${profileImagePreview}`} alt="Profile" className="img-fluid" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <i className="ti ti-photo text-gray-3 fs-16" />
                             )}
