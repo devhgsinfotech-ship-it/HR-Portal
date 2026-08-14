@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import apiClient from "../../../core/utils/apiClient";
-import { APP_CONFIG } from "../../../../environment";
+import { APP_CONFIG } from "../../../environment";
 
 type VerifyState = "loading" | "success" | "error" | "no-token";
 
