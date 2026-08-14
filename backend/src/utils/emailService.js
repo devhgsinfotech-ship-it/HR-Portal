@@ -51,7 +51,7 @@ async function sendVerificationEmail(toEmail, token, companyName, workspaceUrl) 
         const verificationLink = `${workspaceUrl}/email-verification?token=${token}`;
 
         const mailOptions = {
-            from: '"SmartHR Support" <noreply@yourhrms.com>',
+            from: `"SmartHR Support" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
             to: toEmail,
             subject: 'Verify your SmartHR Workspace',
             html: `
@@ -103,7 +103,7 @@ async function sendEmployeeInviteEmail(toEmail, token, companyName, employeeName
         const inviteLink = `${workspaceUrl}/invite/${token}`;
 
         const mailOptions = {
-            from: '"SmartHR Support" <noreply@yourhrms.com>',
+            from: `"SmartHR Support" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
             to: toEmail,
             subject: `You have been invited to join ${companyName} on SmartHR`,
             html: `
