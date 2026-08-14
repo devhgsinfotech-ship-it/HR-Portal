@@ -31,6 +31,11 @@ const Register = () => {
   const [workspaceUrl, setWorkspaceUrl] = useState("");
   const [registeredEmail, setRegisteredEmail] = useState("");
 
+  // Resend state
+  const [isResending, setIsResending]   = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+
   const [passwordVisibility, setPasswordVisibility] = useState<PasswordVisibility>({
     password: false,
     confirmPassword: false,
@@ -84,6 +89,29 @@ const Register = () => {
     }
   };
 
+  const handleResend = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (resendCooldown > 0 || isResending) return;
+    setIsResending(true);
+    setResendMessage("");
+    try {
+      await apiClient.post("/auth/resend-verification", { email: registeredEmail });
+      setResendMessage("✅ Verification email resent! Check your inbox.");
+      // 60 second cooldown
+      setResendCooldown(60);
+      const timer = setInterval(() => {
+        setResendCooldown((prev) => {
+          if (prev <= 1) { clearInterval(timer); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err: any) {
+      setResendMessage(err.response?.data?.message || "Failed to resend. Please try again.");
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   // ── Success Screen ────────────────────────────────────────────────
   if (success) {
     return (
@@ -126,10 +154,19 @@ const Register = () => {
                 </a>
                 <p className="text-muted small mb-0">
                   Didn't receive the email?{" "}
-                  <Link to="#" className="hover-a">
-                    Resend
+                  <Link
+                    to="#"
+                    className={`hover-a ${resendCooldown > 0 || isResending ? 'text-muted pe-none' : ''}`}
+                    onClick={handleResend}
+                  >
+                    {isResending ? 'Sending...' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend'}
                   </Link>
                 </p>
+                {resendMessage && (
+                  <div className={`alert mt-2 p-2 small ${resendMessage.startsWith('✅') ? 'alert-success' : 'alert-danger'}`}>
+                    {resendMessage}
+                  </div>
+                )}
               </div>
             </div>
           </div>

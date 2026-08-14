@@ -8,15 +8,25 @@ const nodemailer = require('nodemailer');
 async function getTransporter() {
     // If real SMTP is configured, use it
     if (process.env.SMTP_HOST && process.env.SMTP_USER) {
-        return nodemailer.createTransport({
+        const port = parseInt(process.env.SMTP_PORT || '587', 10);
+        const secure = process.env.SMTP_SECURE === 'true';
+
+        console.log(`[SMTP] Connecting to ${process.env.SMTP_HOST}:${port} secure=${secure} user=${process.env.SMTP_USER}`);
+
+        const transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST,
-            port: process.env.SMTP_PORT || 587,
-            secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+            port,
+            secure,
             auth: {
                 user: process.env.SMTP_USER,
                 pass: process.env.SMTP_PASS,
             },
         });
+
+        // Verify SMTP connection — this will throw a clear error if credentials/port are wrong
+        await transporter.verify();
+        console.log('[SMTP] Connection verified successfully!');
+        return transporter;
     }
 
     // Otherwise, generate a test Ethereal account

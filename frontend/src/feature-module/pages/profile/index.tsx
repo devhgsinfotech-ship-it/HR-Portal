@@ -6,6 +6,7 @@ import { all_routes } from "../../../router/all_routes";
 import { useDispatch } from "react-redux";
 import { updateUser } from "../../../core/data/redux/authSlice";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 
 type PasswordField =
   | "oldPassword"
@@ -205,7 +206,7 @@ const Profile = () => {
                         <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
                           <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames overflow-hidden">
                             {profileImagePreview ? (
-                              <img src={profileImagePreview.startsWith('blob:') ? profileImagePreview : `http://localhost:5000${profileImagePreview}`} alt="Profile" className="img-fluid" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <img src={profileImagePreview.startsWith('blob:') ? profileImagePreview : `${APP_CONFIG.getBackendUrl()}${profileImagePreview}`} alt="Profile" className="img-fluid" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <i className="ti ti-photo text-gray-3 fs-16" />
                             )}
@@ -302,9 +303,7 @@ const Profile = () => {
                           <label className="form-label mb-md-0">Country</label>
                         </div>
                         <div className="col-md-8">
-                          <select className="form-select" name="country" value={profileData.country} onChange={handleInputChange}>
-                            {countryChoose.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                          </select>
+                          <input type="text" className="form-control" name="country" value={profileData.country === "Select" ? "" : profileData.country} onChange={handleInputChange} placeholder="e.g. India" />
                         </div>
                       </div>
                     </div>
@@ -314,11 +313,7 @@ const Profile = () => {
                           <label className="form-label mb-md-0">State</label>
                         </div>
                         <div className="col-md-8">
-                          <div>
-                            <select className="form-select" name="state" value={profileData.state} onChange={handleInputChange}>
-                              {stateChoose.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                            </select>
-                          </div>
+                          <input type="text" className="form-control" name="state" value={profileData.state === "Select" ? "" : profileData.state} onChange={handleInputChange} placeholder="e.g. Punjab" />
                         </div>
                       </div>
                     </div>
@@ -328,14 +323,7 @@ const Profile = () => {
                           <label className="form-label mb-md-0">City</label>
                         </div>
                         <div className="col-md-8">
-                          <div>
-                            <select className="form-select" name="city" value={profileData.city} onChange={handleInputChange}>
-                              <option value="Select">Select</option>
-                              <option value="New York">New York</option>
-                              <option value="Los Angeles">Los Angeles</option>
-                              <option value="Chicago">Chicago</option>
-                            </select>
-                          </div>
+                          <input type="text" className="form-control" name="city" value={profileData.city === "Select" ? "" : profileData.city} onChange={handleInputChange} placeholder="e.g. Mohali" />
                         </div>
                       </div>
                     </div>

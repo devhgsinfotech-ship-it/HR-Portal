@@ -349,7 +349,7 @@ async function deleteEmployee(req, res) {
 async function getMe(req, res) {
     try {
         const userId = req.user.id;
-        const employee = await prisma.employee.findUnique({
+        let employee = await prisma.employee.findUnique({
             where: { userId },
             include: {
                 user: { select: { id: true, name: true, email: true, role: true, company: true } },
@@ -359,9 +359,43 @@ async function getMe(req, res) {
                 salaryStructure: true
             }
         });
-        if (!employee) {
-            return res.status(404).json({ message: 'Employee profile not found' });
+
+        // If the logged-in user is an HR or SUPER_ADMIN and does not have an employee profile yet,
+        // auto-create one so their profile page is editable and displays correctly.
+         if (!employee) {
+            const user = await prisma.user.findUnique({ 
+                where: { id: userId },
+                include: { company: true }
+            });
+            if (user && (user.role === 'HR' || user.role === 'SUPER_ADMIN')) {
+                const nameParts = user.name.trim().split(/\s+/);
+                const firstName = nameParts[0] || 'Admin';
+                const lastName = nameParts.slice(1).join(' ') || 'User';
+                const employeeCode = `HR-${Date.now().toString().slice(-6)}`;
+
+                employee = await prisma.employee.create({
+                    data: {
+                        userId,
+                        employeeCode,
+                        firstName,
+                        lastName,
+                        phone: user.company?.phone || null,
+                        address: user.company?.address || null,
+                        onboardingStatus: 'COMPLETED'
+                    },
+                    include: {
+                        user: { select: { id: true, name: true, email: true, role: true, company: true } },
+                        department: true,
+                        designation: true,
+                        bankDetails: true,
+                        salaryStructure: true
+                    }
+                });
+            } else {
+                return res.status(404).json({ message: 'Employee profile not found' });
+            }
         }
+
         res.json(employee);
     } catch (error) {
         console.error('Error fetching my profile:', error);

@@ -331,4 +331,50 @@ async function acceptInvite(req, res) {
     }
 }
 
-module.exports = { login, register, verifyEmail, acceptInvite };
+async function resendVerification(req, res) {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ message: 'Email is required' });
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { email },
+            include: { company: true }
+        });
+
+        if (!user) {
+            // Return success even if not found to prevent email enumeration
+            return res.json({ message: 'If your email is registered, a new verification link has been sent.' });
+        }
+
+        if (user.accountStatus === 'ACTIVE') {
+            return res.status(400).json({ message: 'This account is already verified. Please log in.' });
+        }
+
+        // Delete existing tokens and create a new one
+        await prisma.emailVerifyToken.deleteMany({ where: { userId: user.id } });
+
+        const crypto = require('crypto');
+        const verifyToken = crypto.randomBytes(32).toString('hex');
+        const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await prisma.emailVerifyToken.create({
+            data: { userId: user.id, token: verifyToken, expiresAt: tokenExpiry }
+        });
+
+        const isProduction = process.env.NODE_ENV === 'production';
+        const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
+        const protocol = domain.includes('localhost') ? 'http' : 'https';
+        const workspaceUrl = `${protocol}://${user.company.subdomain}.${domain}`;
+
+        await emailService.sendVerificationEmail(email, verifyToken, user.company.name, workspaceUrl);
+
+        res.json({ message: 'A new verification email has been sent. Please check your inbox.' });
+    } catch (error) {
+        console.error('Resend Verification Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+module.exports = { login, register, verifyEmail, acceptInvite, resendVerification };
