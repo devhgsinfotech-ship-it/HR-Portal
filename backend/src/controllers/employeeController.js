@@ -394,6 +394,28 @@ async function getMe(req, res) {
             } else {
                 return res.status(404).json({ message: 'Employee profile not found' });
             }
+        } else if (employee && (employee.user?.role === 'HR' || employee.user?.role === 'SUPER_ADMIN')) {
+            // Self-heal: If profile already exists but phone/address are missing, copy them from the company
+            const updates = {};
+            if (!employee.phone && employee.user.company?.phone) {
+                updates.phone = employee.user.company.phone;
+            }
+            if (!employee.address && employee.user.company?.address) {
+                updates.address = employee.user.company.address;
+            }
+            if (Object.keys(updates).length > 0) {
+                employee = await prisma.employee.update({
+                    where: { id: employee.id },
+                    data: updates,
+                    include: {
+                        user: { select: { id: true, name: true, email: true, role: true, company: true } },
+                        department: true,
+                        designation: true,
+                        bankDetails: true,
+                        salaryStructure: true
+                    }
+                });
+            }
         }
 
         res.json(employee);
