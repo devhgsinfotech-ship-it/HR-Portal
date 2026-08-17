@@ -64,6 +64,27 @@ const EmployeeList = () => {
   const [emailStatus, setEmailStatus] = useState<{ available?: boolean, suggestion?: string, checking?: boolean }>({});
   const [isEmailEdited, setIsEmailEdited] = useState(false);
 
+  const calculateSalary = (empState: any, fieldUpdates: any) => {
+    const updated = { ...empState, ...fieldUpdates };
+    const basic = Number(updated.basic || 0);
+    const hra = Number(updated.hra || 0);
+    const conveyance = Number(updated.conveyance || 0);
+    const medical = Number(updated.medicalAllowance || 0);
+    const special = Number(updated.specialAllowance || 0);
+    const pf = Number(updated.pfDeduction || 0);
+    const pt = Number(updated.professionalTax || 0);
+    const other = Number(updated.otherDeductions || 0);
+
+    const grossSalary = basic + hra + conveyance + medical + special;
+    const netSalary = grossSalary - (pf + pt + other);
+
+    return {
+      ...updated,
+      grossSalary,
+      netSalary
+    };
+  };
+
   useEffect(() => {
     if (!newEmp.email) {
       setEmailStatus({});
@@ -807,7 +828,7 @@ const EmployeeList = () => {
             <div className="modal-header">
               <div className="d-flex align-items-center">
                 <h4 className="modal-title me-2">Add New Employee</h4>
-                <span>Employee ID : EMP -0024</span>
+                <span>Employee ID : (Auto-generated)</span>
               </div>
               <button
                 type="button"
@@ -1157,46 +1178,31 @@ const EmployeeList = () => {
                       <div className="col-md-6 mb-3">
                         <label className="form-label">Basic Salary</label>
                         <input type="number" className="form-control" value={newEmp.basic} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const gross = val + newEmp.hra + newEmp.conveyance + newEmp.medicalAllowance + newEmp.specialAllowance;
-                          const net = gross - (newEmp.pfDeduction + newEmp.professionalTax + newEmp.otherDeductions);
-                          setNewEmp({...newEmp, basic: val, grossSalary: gross, netSalary: net});
+                          setNewEmp(calculateSalary(newEmp, { basic: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-6 mb-3">
                         <label className="form-label">HRA</label>
                         <input type="number" className="form-control" value={newEmp.hra} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const gross = newEmp.basic + val + newEmp.conveyance + newEmp.medicalAllowance + newEmp.specialAllowance;
-                          const net = gross - (newEmp.pfDeduction + newEmp.professionalTax + newEmp.otherDeductions);
-                          setNewEmp({...newEmp, hra: val, grossSalary: gross, netSalary: net});
+                          setNewEmp(calculateSalary(newEmp, { hra: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label">Conveyance</label>
                         <input type="number" className="form-control" value={newEmp.conveyance} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const gross = newEmp.basic + newEmp.hra + val + newEmp.medicalAllowance + newEmp.specialAllowance;
-                          const net = gross - (newEmp.pfDeduction + newEmp.professionalTax + newEmp.otherDeductions);
-                          setNewEmp({...newEmp, conveyance: val, grossSalary: gross, netSalary: net});
+                          setNewEmp(calculateSalary(newEmp, { conveyance: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label">Medical Allowance</label>
                         <input type="number" className="form-control" value={newEmp.medicalAllowance} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const gross = newEmp.basic + newEmp.hra + newEmp.conveyance + val + newEmp.specialAllowance;
-                          const net = gross - (newEmp.pfDeduction + newEmp.professionalTax + newEmp.otherDeductions);
-                          setNewEmp({...newEmp, medicalAllowance: val, grossSalary: gross, netSalary: net});
+                          setNewEmp(calculateSalary(newEmp, { medicalAllowance: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label">Special Allowance</label>
                         <input type="number" className="form-control" value={newEmp.specialAllowance} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const gross = newEmp.basic + newEmp.hra + newEmp.conveyance + newEmp.medicalAllowance + val;
-                          const net = gross - (newEmp.pfDeduction + newEmp.professionalTax + newEmp.otherDeductions);
-                          setNewEmp({...newEmp, specialAllowance: val, grossSalary: gross, netSalary: net});
+                          setNewEmp(calculateSalary(newEmp, { specialAllowance: e.target.value }));
                         }} />
                       </div>
 
@@ -1206,25 +1212,19 @@ const EmployeeList = () => {
                       <div className="col-md-4 mb-3">
                         <label className="form-label">PF Deduction</label>
                         <input type="number" className="form-control" value={newEmp.pfDeduction} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const net = newEmp.grossSalary - (val + newEmp.professionalTax + newEmp.otherDeductions);
-                          setNewEmp({...newEmp, pfDeduction: val, netSalary: net});
+                          setNewEmp(calculateSalary(newEmp, { pfDeduction: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label">Professional Tax</label>
                         <input type="number" className="form-control" value={newEmp.professionalTax} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const net = newEmp.grossSalary - (newEmp.pfDeduction + val + newEmp.otherDeductions);
-                          setNewEmp({...newEmp, professionalTax: val, netSalary: net});
+                          setNewEmp(calculateSalary(newEmp, { professionalTax: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label">Other Deductions</label>
                         <input type="number" className="form-control" value={newEmp.otherDeductions} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const net = newEmp.grossSalary - (newEmp.pfDeduction + newEmp.professionalTax + val);
-                          setNewEmp({...newEmp, otherDeductions: val, netSalary: net});
+                          setNewEmp(calculateSalary(newEmp, { otherDeductions: e.target.value }));
                         }} />
                       </div>
 
@@ -1978,7 +1978,7 @@ const EmployeeList = () => {
             <div className="modal-header">
               <div className="d-flex align-items-center">
                 <h4 className="modal-title me-2">Edit Employee</h4>
-                <span>Employee ID : EMP -0024</span>
+                <span>Employee ID : {editEmp.employeeCode}</span>
               </div>
               <button
                 type="button"
@@ -2371,46 +2371,31 @@ const EmployeeList = () => {
                       <div className="col-md-6 mb-3">
                         <label className="form-label">Basic Salary</label>
                         <input type="number" className="form-control" value={editEmp.basic} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const gross = val + editEmp.hra + editEmp.conveyance + editEmp.medicalAllowance + editEmp.specialAllowance;
-                          const net = gross - (editEmp.pfDeduction + editEmp.professionalTax + editEmp.otherDeductions);
-                          setEditEmp({...editEmp, basic: val, grossSalary: gross, netSalary: net});
+                          setEditEmp(calculateSalary(editEmp, { basic: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-6 mb-3">
                         <label className="form-label">HRA</label>
                         <input type="number" className="form-control" value={editEmp.hra} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const gross = editEmp.basic + val + editEmp.conveyance + editEmp.medicalAllowance + editEmp.specialAllowance;
-                          const net = gross - (editEmp.pfDeduction + editEmp.professionalTax + editEmp.otherDeductions);
-                          setEditEmp({...editEmp, hra: val, grossSalary: gross, netSalary: net});
+                          setEditEmp(calculateSalary(editEmp, { hra: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label">Conveyance</label>
                         <input type="number" className="form-control" value={editEmp.conveyance} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const gross = editEmp.basic + editEmp.hra + val + editEmp.medicalAllowance + editEmp.specialAllowance;
-                          const net = gross - (editEmp.pfDeduction + editEmp.professionalTax + editEmp.otherDeductions);
-                          setEditEmp({...editEmp, conveyance: val, grossSalary: gross, netSalary: net});
+                          setEditEmp(calculateSalary(editEmp, { conveyance: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label">Medical Allowance</label>
                         <input type="number" className="form-control" value={editEmp.medicalAllowance} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const gross = editEmp.basic + editEmp.hra + editEmp.conveyance + val + editEmp.specialAllowance;
-                          const net = gross - (editEmp.pfDeduction + editEmp.professionalTax + editEmp.otherDeductions);
-                          setEditEmp({...editEmp, medicalAllowance: val, grossSalary: gross, netSalary: net});
+                          setEditEmp(calculateSalary(editEmp, { medicalAllowance: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label">Special Allowance</label>
                         <input type="number" className="form-control" value={editEmp.specialAllowance} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const gross = editEmp.basic + editEmp.hra + editEmp.conveyance + editEmp.medicalAllowance + val;
-                          const net = gross - (editEmp.pfDeduction + editEmp.professionalTax + editEmp.otherDeductions);
-                          setEditEmp({...editEmp, specialAllowance: val, grossSalary: gross, netSalary: net});
+                          setEditEmp(calculateSalary(editEmp, { specialAllowance: e.target.value }));
                         }} />
                       </div>
 
@@ -2420,25 +2405,19 @@ const EmployeeList = () => {
                       <div className="col-md-4 mb-3">
                         <label className="form-label">PF Deduction</label>
                         <input type="number" className="form-control" value={editEmp.pfDeduction} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const net = editEmp.grossSalary - (val + editEmp.professionalTax + editEmp.otherDeductions);
-                          setEditEmp({...editEmp, pfDeduction: val, netSalary: net});
+                          setEditEmp(calculateSalary(editEmp, { pfDeduction: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label">Professional Tax</label>
                         <input type="number" className="form-control" value={editEmp.professionalTax} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const net = editEmp.grossSalary - (editEmp.pfDeduction + val + editEmp.otherDeductions);
-                          setEditEmp({...editEmp, professionalTax: val, netSalary: net});
+                          setEditEmp(calculateSalary(editEmp, { professionalTax: e.target.value }));
                         }} />
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label">Other Deductions</label>
                         <input type="number" className="form-control" value={editEmp.otherDeductions} onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const net = editEmp.grossSalary - (editEmp.pfDeduction + editEmp.professionalTax + val);
-                          setEditEmp({...editEmp, otherDeductions: val, netSalary: net});
+                          setEditEmp(calculateSalary(editEmp, { otherDeductions: e.target.value }));
                         }} />
                       </div>
 
