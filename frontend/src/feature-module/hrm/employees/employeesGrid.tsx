@@ -1,12 +1,18 @@
 
-import { all_routes } from '../../../router/all_routes'
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect, useMemo } from 'react';
+import { all_routes } from '../../../router/all_routes';
+import { Link } from 'react-router-dom';
 import ImageWithBasePath from '../../../core/common/imageWithBasePath';
 import CommonSelect from '../../../core/common/commonSelect';
 import { DatePicker } from 'antd';
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
+import apiClient from '../../../core/utils/apiClient';
 
 const EmployeesGrid = () => {
+    const [dbEmployees, setDbEmployees] = useState<any[]>([]);
+    const [dbDesignations, setDbDesignations] = useState<any[]>([]);
+    const [selectedDesignation, setSelectedDesignation] = useState<string>('All');
+    const [loading, setLoading] = useState<boolean>(true);
 
     const department = [
         { value: "Select", label: "Select" },
@@ -24,9 +30,55 @@ const EmployeesGrid = () => {
 
     const getModalContainer = () => {
         const modalElement = document.getElementById('modal-datepicker');
-        return modalElement ? modalElement : document.body; // Fallback to document.body if modalElement is null
+        return modalElement ? modalElement : document.body;
     };
 
+    const fetchData = async () => {
+        try {
+            const [empRes, desigRes] = await Promise.all([
+                apiClient.get('/employees'),
+                apiClient.get('/designations')
+            ]);
+            setDbEmployees(empRes.data);
+            setDbDesignations(desigRes.data);
+            setLoading(false);
+        } catch (err) {
+            console.error('Error fetching grid data:', err);
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const stats = useMemo(() => {
+        const total = dbEmployees.length;
+        const active = dbEmployees.filter(emp => emp.onboardingStatus === 'COMPLETED' || emp.user?.accountStatus === 'ACTIVE').length;
+        const inactive = dbEmployees.filter(emp => emp.user?.accountStatus === 'DISABLED').length;
+        
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const newJoiners = dbEmployees.filter(emp => {
+            if (!emp.dateOfJoining) return false;
+            return new Date(emp.dateOfJoining) >= thirtyDaysAgo;
+        }).length;
+
+        return { total, active, inactive, newJoiners };
+    }, [dbEmployees]);
+
+    const filteredEmployees = useMemo(() => {
+        if (selectedDesignation === 'All') return dbEmployees;
+        return dbEmployees.filter(emp => emp.designation?.name === selectedDesignation);
+    }, [dbEmployees, selectedDesignation]);
+
+    const getAvatarUrl = (photoUrl: string | null) => {
+        if (!photoUrl) return 'assets/img/profiles/avatar-02.jpg';
+        if (photoUrl.startsWith('http')) return photoUrl;
+        const apiBase = apiClient.defaults.baseURL || '';
+        const domainBase = apiBase.replace('/api', '');
+        return `${domainBase}${photoUrl}`;
+    };
 
     return (
         <>
@@ -115,7 +167,7 @@ const EmployeesGrid = () => {
                     </div>
                     {/* /Breadcrumb */}
                     <div className="row">
-                        {/* Total Plans */}
+                        {/* Total Employees */}
                         <div className="col-lg-3 col-md-6 d-flex">
                             <div className="card flex-fill">
                                 <div className="card-body d-flex align-items-center justify-content-between">
@@ -129,7 +181,7 @@ const EmployeesGrid = () => {
                                             <p className="fs-12 fw-medium mb-1 text-truncate">
                                                 Total Employee
                                             </p>
-                                            <h4>1007</h4>
+                                            <h4>{stats.total}</h4>
                                         </div>
                                     </div>
                                     <div>
@@ -141,8 +193,7 @@ const EmployeesGrid = () => {
                                 </div>
                             </div>
                         </div>
-                        {/* /Total Plans */}
-                        {/* Total Plans */}
+                        {/* Active Employees */}
                         <div className="col-lg-3 col-md-6 d-flex">
                             <div className="card flex-fill">
                                 <div className="card-body d-flex align-items-center justify-content-between">
@@ -154,7 +205,7 @@ const EmployeesGrid = () => {
                                         </div>
                                         <div className="ms-2 overflow-hidden">
                                             <p className="fs-12 fw-medium mb-1 text-truncate">Active</p>
-                                            <h4>1007</h4>
+                                            <h4>{stats.active}</h4>
                                         </div>
                                     </div>
                                     <div>
@@ -166,8 +217,7 @@ const EmployeesGrid = () => {
                                 </div>
                             </div>
                         </div>
-                        {/* /Total Plans */}
-                        {/* Inactive Plans */}
+                        {/* Inactive Employees */}
                         <div className="col-lg-3 col-md-6 d-flex">
                             <div className="card flex-fill">
                                 <div className="card-body d-flex align-items-center justify-content-between">
@@ -179,7 +229,7 @@ const EmployeesGrid = () => {
                                         </div>
                                         <div className="ms-2 overflow-hidden">
                                             <p className="fs-12 fw-medium mb-1 text-truncate">InActive</p>
-                                            <h4>1007</h4>
+                                            <h4>{stats.inactive}</h4>
                                         </div>
                                     </div>
                                     <div>
@@ -191,8 +241,7 @@ const EmployeesGrid = () => {
                                 </div>
                             </div>
                         </div>
-                        {/* /Inactive Companies */}
-                        {/* No of Plans  */}
+                        {/* New Joiners */}
                         <div className="col-lg-3 col-md-6 d-flex">
                             <div className="card flex-fill">
                                 <div className="card-body d-flex align-items-center justify-content-between">
@@ -206,7 +255,7 @@ const EmployeesGrid = () => {
                                             <p className="fs-12 fw-medium mb-1 text-truncate">
                                                 New Joiners
                                             </p>
-                                            <h4>67</h4>
+                                            <h4>{stats.newJoiners}</h4>
                                         </div>
                                     </div>
                                     <div>
@@ -218,7 +267,6 @@ const EmployeesGrid = () => {
                                 </div>
                             </div>
                         </div>
-                        {/* /No of Plans */}
                     </div>
                     <div className="card">
                         <div className="card-body p-3">
@@ -228,36 +276,33 @@ const EmployeesGrid = () => {
                                     <div className="dropdown me-3">
                                         <Link
                                             to="#"
-                                            className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
+                                            className="dropdown-toggle btn btn-white d-inline-flex align-items-center text-capitalize"
                                             data-bs-toggle="dropdown"
                                         >
-                                            Designation
+                                            <i className="ti ti-filter me-1" />
+                                            {selectedDesignation === 'All' ? 'Designation' : selectedDesignation}
                                         </Link>
-                                        <ul className="dropdown-menu  dropdown-menu-end p-3">
+                                        <ul className="dropdown-menu dropdown-menu-end p-3" style={{ maxHeight: '300px', overflowY: 'auto' }}>
                                             <li>
                                                 <Link
                                                     to="#"
-                                                    className="dropdown-item rounded-1"
+                                                    className={`dropdown-item rounded-1 ${selectedDesignation === 'All' ? 'active' : ''}`}
+                                                    onClick={(e) => { e.preventDefault(); setSelectedDesignation('All'); }}
                                                 >
-                                                    Finance
+                                                    All Designations
                                                 </Link>
                                             </li>
-                                            <li>
-                                                <Link
-                                                    to="#"
-                                                    className="dropdown-item rounded-1"
-                                                >
-                                                    Developer
-                                                </Link>
-                                            </li>
-                                            <li>
-                                                <Link
-                                                    to="#"
-                                                    className="dropdown-item rounded-1"
-                                                >
-                                                    Executive
-                                                </Link>
-                                            </li>
+                                            {dbDesignations.map((desig) => (
+                                                <li key={desig.id}>
+                                                    <Link
+                                                        to="#"
+                                                        className={`dropdown-item rounded-1 ${selectedDesignation === desig.name ? 'active' : ''}`}
+                                                        onClick={(e) => { e.preventDefault(); setSelectedDesignation(desig.name); }}
+                                                    >
+                                                        {desig.name}
+                                                    </Link>
+                                                </li>
+                                            ))}
                                         </ul>
                                     </div>
                                     <div className="dropdown">
@@ -293,1154 +338,117 @@ const EmployeesGrid = () => {
                     </div>
                     {/* Clients Grid */}
                     <div className="row">
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-32.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Anthony Lewis</Link>
-                                        </h6>
-                                        <span className="badge bg-pink-transparent fs-10 fw-medium">
-                                            Software Developer
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">20</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">13</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">7</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-purple"> 65%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-purple"
-                                            role="progressbar"
-                                            style={{ width: "65%" }}
-                                        />
-                                    </div>
+                        {loading ? (
+                            <div className="col-12 text-center p-5">
+                                <div className="spinner-border text-primary" role="status">
+                                    <span className="visually-hidden">Loading...</span>
                                 </div>
                             </div>
-                        </div>
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-09.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
+                        ) : filteredEmployees.length === 0 ? (
+                            <div className="col-12 text-center p-5">
+                                <h6>No employees found matching the filter.</h6>
+                            </div>
+                        ) : (
+                            filteredEmployees.map((emp) => (
+                                <div className="col-xl-3 col-lg-4 col-md-6" key={emp.id}>
+                                    <div className="card">
+                                        <div className="card-body">
+                                            <div className="d-flex justify-content-between align-items-start mb-2">
+                                                <div className="form-check form-check-md">
+                                                    <input className="form-check-input" type="checkbox" />
+                                                </div>
+                                                <div>
+                                                    <Link
+                                                        to={all_routes.employeedetails}
+                                                        className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
+                                                    >
+                                                        <img
+                                                            src={getAvatarUrl(emp.profilePhotoUrl)}
+                                                            className="img-fluid h-auto w-auto rounded-circle"
+                                                            alt="user"
+                                                            style={{ objectFit: 'cover', width: '80px', height: '80px' }}
+                                                            onError={(e) => { e.currentTarget.src = 'assets/img/profiles/avatar-02.jpg'; }}
+                                                        />
+                                                    </Link>
+                                                </div>
+                                                <div className="dropdown">
+                                                    <button
+                                                        className="btn btn-icon btn-sm rounded-circle"
+                                                        type="button"
+                                                        data-bs-toggle="dropdown"
+                                                        aria-expanded="false"
+                                                    >
+                                                        <i className="ti ti-dots-vertical" />
+                                                    </button>
+                                                    <ul className="dropdown-menu dropdown-menu-end p-3">
+                                                        <li>
+                                                            <Link
+                                                                className="dropdown-item rounded-1"
+                                                                to="#"
+                                                                data-bs-toggle="modal" data-inert={true}
+                                                                data-bs-target="#edit_employee"
+                                                            >
+                                                                <i className="ti ti-edit me-1" />
+                                                                Edit
+                                                            </Link>
+                                                        </li>
+                                                        <li>
+                                                            <Link
+                                                                className="dropdown-item rounded-1"
+                                                                to="#"
+                                                                data-bs-toggle="modal" data-inert={true}
+                                                                data-bs-target="#delete_modal"
+                                                            >
+                                                                <i className="ti ti-trash me-1" />
+                                                                Delete
+                                                            </Link>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                            <div className="text-center mb-3">
+                                                <h6 className="mb-1">
+                                                    <Link to={all_routes.employeedetails}>{`${emp.firstName || ''} ${emp.lastName || ''}`.trim()}</Link>
+                                                </h6>
+                                                <span className="badge bg-pink-transparent fs-10 fw-medium">
+                                                    {emp.designation?.name || 'N/A'}
+                                                </span>
+                                            </div>
+                                            <div className="row text-center">
+                                                <div className="col-4">
+                                                    <div className="mb-3">
+                                                        <span className="fs-12">Projects</span>
+                                                        <h6 className="fw-medium">20</h6>
+                                                    </div>
+                                                </div>
+                                                <div className="col-4">
+                                                    <div className="mb-3">
+                                                        <span className="fs-12">Done</span>
+                                                        <h6 className="fw-medium">13</h6>
+                                                    </div>
+                                                </div>
+                                                <div className="col-4">
+                                                    <div className="mb-3">
+                                                        <span className="fs-12">Progress</span>
+                                                        <h6 className="fw-medium">7</h6>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <p className="mb-2 text-center">
+                                                Productivity : <span className="text-purple"> 65%</span>
+                                            </p>
+                                            <div className="progress progress-xs mb-2">
+                                                <div
+                                                    className="progress-bar bg-purple"
+                                                    role="progressbar"
+                                                    style={{ width: "65%" }}
                                                 />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Brian Villalobos</Link>
-                                        </h6>
-                                        <span className="badge badge-purple-transparent fs-10 fw-medium">
-                                            Developer
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">30</h6>
                                             </div>
                                         </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">10</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">20</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-warning"> 30%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-warning"
-                                            role="progressbar"
-                                            style={{ width: "30%" }}
-                                        />
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-01.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Harvey Smith</Link>
-                                        </h6>
-                                        <span className="badge badge-purple-transparent fs-10 fw-medium">
-                                            Developer
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">25</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">7</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">18</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-danger"> 20%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-danger"
-                                            role="progressbar"
-                                            style={{ width: "20%" }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-33.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Stephan Peralt</Link>
-                                        </h6>
-                                        <span className="badge badge-dark-transparent fs-10 fw-medium">
-                                            Software Developer
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">15</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">13</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">2</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-success"> 90%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-success"
-                                            role="progressbar"
-                                            style={{ width: "90%" }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-34.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Doglas Martini</Link>
-                                        </h6>
-                                        <span className="badge badge-secondary-transparent fs-10 fw-medium">
-                                            Full Stack Developer
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">15</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">2</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">13</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-danger"> 10%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-danger"
-                                            role="progressbar"
-                                            style={{ width: "10%" }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-02.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Linda Ray</Link>
-                                        </h6>
-                                        <span className="badge bg-pink-transparent fs-10 fw-medium">
-                                            Software Developer
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">20</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">10</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">10</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-purple"> 50%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-purple"
-                                            role="progressbar"
-                                            style={{ width: "50%" }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-35.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Elliot Murray</Link>
-                                        </h6>
-                                        <span className="badge badge-purple-transparent fs-10 fw-medium">
-                                            Developer
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">40</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">35</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">5</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-success"> 93%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-success"
-                                            role="progressbar"
-                                            style={{ width: "93%" }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-36.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Rebecca Smtih</Link>
-                                        </h6>
-                                        <span className="badge badge-soft-skyblue fs-10 fw-medium">
-                                            Tester
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">30</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">22</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">8</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-pink"> 80%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-pink"
-                                            role="progressbar"
-                                            style={{ width: "80%" }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-37.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Connie Waters</Link>
-                                        </h6>
-                                        <span className="badge bg-pink-transparent fs-10 fw-medium">
-                                            Software Developer
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">25</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">11</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">14</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-warning"> 35%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-warning"
-                                            role="progressbar"
-                                            style={{ width: "35%" }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-38.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Lori Broaddus</Link>
-                                        </h6>
-                                        <span className="badge badge-secondary-transparent fs-10 fw-medium">
-                                            Full Stack Developer
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">40</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">27</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">16</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-pink"> 75%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-pink"
-                                            role="progressbar"
-                                            style={{ width: "75%" }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-30.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Trent Frazier</Link>
-                                        </h6>
-                                        <span className="badge bg-pink-transparent fs-10 fw-medium">
-                                            Software Developer
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">30</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">17</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">13</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-purple"> 60%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-purple"
-                                            role="progressbar"
-                                            style={{ width: "60%" }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-xl-3 col-lg-4 col-md-6">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="form-check form-check-md">
-                                            <input className="form-check-input" type="checkbox" />
-                                        </div>
-                                        <div>
-                                            <Link
-                                                to={all_routes.employeedetails}
-                                                className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-31.jpg"
-                                                    className="img-fluid h-auto w-auto"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
-                                        <div className="dropdown">
-                                            <button
-                                                className="btn btn-icon btn-sm rounded-circle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false"
-                                            >
-                                                <i className="ti ti-dots-vertical" />
-                                            </button>
-                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#edit_employee"
-                                                    >
-                                                        <i className="ti ti-edit me-1" />
-                                                        Edit
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        className="dropdown-item rounded-1"
-                                                        to="#"
-                                                        data-bs-toggle="modal" data-inert={true}
-                                                        data-bs-target="#delete_modal"
-                                                    >
-                                                        <i className="ti ti-trash me-1" />
-                                                        Delete
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="text-center mb-3">
-                                        <h6 className="mb-1">
-                                            <Link to={all_routes.employeedetails}>Norene Valle</Link>
-                                        </h6>
-                                        <span className="badge bg-danger-transparent fs-10 fw-medium">
-                                            Trainee
-                                        </span>
-                                    </div>
-                                    <div className="row text-center">
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Projects</span>
-                                                <h6 className="fw-medium">10</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Done</span>
-                                                <h6 className="fw-medium">1</h6>
-                                            </div>
-                                        </div>
-                                        <div className="col-4">
-                                            <div className="mb-3">
-                                                <span className="fs-12">Progress</span>
-                                                <h6 className="fw-medium">9</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p className="mb-2 text-center">
-                                        Productivity : <span className="text-danger"> 10%</span>
-                                    </p>
-                                    <div className="progress progress-xs mb-2">
-                                        <div
-                                            className="progress-bar bg-danger"
-                                            role="progressbar"
-                                            style={{ width: "10%" }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-md-12">
-                            <div className="text-center mb-4">
-                                <Link to="#" className="btn btn-primary">
-                                    <i className="ti ti-loader-3 me-1" />
-                                    Load More
-                                </Link>
-                            </div>
-                        </div>
+                            ))
+                        )}
                     </div>
                     {/* /Clients Grid */}
                 </div>
@@ -1455,8 +463,7 @@ const EmployeesGrid = () => {
                 </div>
             </div>
             {/* /Page Wrapper */}
-            {/* Add Employee */}
-            <div className="modal fade" id="add_employee">
+<div className="modal fade" id="add_employee">
                 <div className="modal-dialog modal-dialog-centered modal-lg">
                     <div className="modal-content">
                         <div className="modal-header">
