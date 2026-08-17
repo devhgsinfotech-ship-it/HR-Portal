@@ -576,7 +576,7 @@ async function onboardingDocuments(req, res) {
             data: dataToUpdate
         });
 
-        res.json({ message: 'Documents uploaded successfully. Onboarding complete pending HR review!', employee: updated });
+        res.json({ message: 'Fill onboarding form successfully Wait for Approval by Managment.', employee: updated });
     } catch (error) {
         console.error('Onboarding Documents Error:', error);
         res.status(500).json({ message: 'Internal server error' });
