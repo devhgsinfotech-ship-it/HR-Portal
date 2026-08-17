@@ -7,12 +7,16 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 
+// Use persistent upload directory configured in env (falls back to local uploads folder)
+const UPLOAD_BASE = process.env.UPLOAD_PATH 
+    ? path.resolve(process.env.UPLOAD_PATH) 
+    : path.resolve('uploads');
+
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        let dir = 'uploads/profiles';
-        // If it's a document (aadhaar, pan, resume), save to a different folder
+        let dir = path.join(UPLOAD_BASE, 'profiles');
         if (file.fieldname !== 'profileImage') {
-            dir = 'uploads/documents';
+            dir = path.join(UPLOAD_BASE, 'documents');
         }
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         cb(null, dir);
@@ -22,6 +26,7 @@ const storage = multer.diskStorage({
     }
 });
 const upload = multer({ storage });
+
 
 // All employee routes require authentication
 router.use(verifyToken);
