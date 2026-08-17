@@ -33,6 +33,7 @@ enum OnboardingStatus {
   PROFILE_SUBMITTED
   DOCS_SUBMITTED
   HR_REVIEW
+  CORRECTION_REQUESTED
   COMPLETED
 }
 
@@ -184,6 +185,7 @@ model Employee {
   emergencyContactName  String?
   emergencyContactPhone String?
   onboardingStatus    OnboardingStatus @default(INVITED)
+  rejectionReason     String?
   shiftPolicyId       Int?
   shiftPolicy         ShiftPolicy?    @relation(fields: [shiftPolicyId], references: [id], onDelete: SetNull)
   leavePolicyId       Int?

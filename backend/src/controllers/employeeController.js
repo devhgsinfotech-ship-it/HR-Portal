@@ -524,7 +524,7 @@ async function onboardingPersonal(req, res) {
                 address: address || null,
                 emergencyContactName: emergencyContactName || null,
                 emergencyContactPhone: emergencyContactPhone || null,
-                onboardingStatus: employee.onboardingStatus === 'INVITED' ? 'PROFILE_SUBMITTED' : employee.onboardingStatus
+                onboardingStatus: (employee.onboardingStatus === 'INVITED' || employee.onboardingStatus === 'CORRECTION_REQUESTED') ? 'PROFILE_SUBMITTED' : employee.onboardingStatus
             }
         });
 
@@ -566,7 +566,7 @@ async function onboardingDocuments(req, res) {
         const panFile = req.files && req.files['pan'] ? `/uploads/documents/${req.files['pan'][0].filename}` : null;
         const resumeFile = req.files && req.files['resume'] ? `/uploads/documents/${req.files['resume'][0].filename}` : null;
 
-        const dataToUpdate = { onboardingStatus: 'DOCS_SUBMITTED' };
+        const dataToUpdate = { onboardingStatus: 'DOCS_SUBMITTED', rejectionReason: null };
         if (aadhaarFile) dataToUpdate.aadhaarPath = aadhaarFile;
         if (panFile) dataToUpdate.panPath = panFile;
         if (resumeFile) dataToUpdate.resumePath = resumeFile;
@@ -666,6 +666,77 @@ async function resendInvite(req, res) {
     }
 }
 
+async function updateEmployeeDocuments(req, res) {
+    try {
+        const { id } = req.params;
+        const companyId = req.user.companyId;
+
+        const employee = await prisma.employee.findUnique({
+            where: { id: parseInt(id, 10) },
+            include: { user: true }
+        });
+
+        if (!employee || employee.user.companyId !== companyId) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        const aadhaarFile = req.files && req.files['aadhaar'] ? `/uploads/documents/${req.files['aadhaar'][0].filename}` : null;
+        const panFile = req.files && req.files['pan'] ? `/uploads/documents/${req.files['pan'][0].filename}` : null;
+        const resumeFile = req.files && req.files['resume'] ? `/uploads/documents/${req.files['resume'][0].filename}` : null;
+
+        const dataToUpdate = {};
+        if (aadhaarFile) dataToUpdate.aadhaarPath = aadhaarFile;
+        if (panFile) dataToUpdate.panPath = panFile;
+        if (resumeFile) dataToUpdate.resumePath = resumeFile;
+
+        if (Object.keys(dataToUpdate).length === 0) {
+            return res.status(400).json({ message: 'No documents provided for update' });
+        }
+
+        const updated = await prisma.employee.update({
+            where: { id: parseInt(id, 10) },
+            data: dataToUpdate
+        });
+
+        res.json({ message: 'Documents updated successfully', employee: updated });
+    } catch (error) {
+        console.error('Update Employee Documents Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function requestOnboardingCorrection(req, res) {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        if (!reason || reason.trim() === '') {
+            return res.status(400).json({ message: 'Correction reason is required' });
+        }
+
+        const employee = await prisma.employee.findUnique({
+            where: { id: parseInt(id, 10) }
+        });
+
+        if (!employee) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        const updated = await prisma.employee.update({
+            where: { id: parseInt(id, 10) },
+            data: {
+                onboardingStatus: 'CORRECTION_REQUESTED',
+                rejectionReason: reason
+            }
+        });
+
+        res.json({ message: 'Correction request sent successfully!', employee: updated });
+    } catch (error) {
+        console.error('Request Onboarding Correction Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     checkEmailAvailability,
     createEmployee,
@@ -678,5 +749,7 @@ module.exports = {
     onboardingBank,
     onboardingDocuments,
     approveOnboarding,
-    resendInvite
+    resendInvite,
+    updateEmployeeDocuments,
+    requestOnboardingCorrection
 };

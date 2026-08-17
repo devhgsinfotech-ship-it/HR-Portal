@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { all_routes } from '../../router/all_routes';
@@ -36,10 +36,50 @@ const OnboardingWizard = () => {
     resume: null
   });
 
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
     return { Authorization: `Bearer ${token}` };
   };
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const apiUrl = APP_CONFIG.getBackendUrl();
+        const res = await axios.get(`${apiUrl}/employees/me`, { headers: getAuthHeaders() });
+        if (res.data) {
+          const emp = res.data;
+          
+          setPersonal({
+            dateOfBirth: emp.dateOfBirth ? new Date(emp.dateOfBirth).toISOString().split('T')[0] : '',
+            gender: emp.gender || '',
+            address: emp.address || '',
+            emergencyContactName: emp.emergencyContactName || '',
+            emergencyContactPhone: emp.emergencyContactPhone || ''
+          });
+
+          if (emp.bankDetails) {
+            setBank({
+              bankName: emp.bankDetails.bankName || '',
+              accountName: emp.bankDetails.accountName || '',
+              accountNumber: emp.bankDetails.accountNumber || '',
+              ifscCode: emp.bankDetails.ifscCode || '',
+              branchName: emp.bankDetails.branchName || ''
+            });
+          }
+
+          if (emp.onboardingStatus === 'CORRECTION_REQUESTED' && emp.rejectionReason) {
+            setRejectionReason(emp.rejectionReason);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching onboarding profile info:', err);
+      }
+    };
+
+    fetchProfile();
+  }, []);
 
   const handlePersonalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +163,16 @@ const OnboardingWizard = () => {
               <div className={`btn btn-sm rounded-circle ${step >= 2 ? 'btn-primary' : 'btn-light'} position-relative z-1`} style={{ width: '40px', height: '40px', lineHeight: '28px' }}>2</div>
               <div className={`btn btn-sm rounded-circle ${step >= 3 ? 'btn-primary' : 'btn-light'} position-relative z-1`} style={{ width: '40px', height: '40px', lineHeight: '28px' }}>3</div>
             </div>
+
+            {rejectionReason && (
+              <div className="alert alert-danger border-2 border-danger d-flex align-items-start mb-4 p-3 rounded">
+                <i className="ti ti-alert-triangle fs-24 me-3 text-danger mt-1"></i>
+                <div>
+                  <h6 className="alert-heading text-danger fw-semibold mb-1">Correction Requested by Management</h6>
+                  <p className="mb-0 text-dark fs-14 fw-medium">{rejectionReason}</p>
+                </div>
+              </div>
+            )}
 
             {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
 
