@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { all_routes } from '../../router/all_routes';
@@ -36,10 +36,50 @@ const OnboardingWizard = () => {
     resume: null
   });
 
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
     return { Authorization: `Bearer ${token}` };
   };
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const apiUrl = APP_CONFIG.getBackendUrl();
+        const res = await axios.get(`${apiUrl}/employees/me`, { headers: getAuthHeaders() });
+        if (res.data) {
+          const emp = res.data;
+          
+          setPersonal({
+            dateOfBirth: emp.dateOfBirth ? new Date(emp.dateOfBirth).toISOString().split('T')[0] : '',
+            gender: emp.gender || '',
+            address: emp.address || '',
+            emergencyContactName: emp.emergencyContactName || '',
+            emergencyContactPhone: emp.emergencyContactPhone || ''
+          });
+
+          if (emp.bankDetails) {
+            setBank({
+              bankName: emp.bankDetails.bankName || '',
+              accountName: emp.bankDetails.accountName || '',
+              accountNumber: emp.bankDetails.accountNumber || '',
+              ifscCode: emp.bankDetails.ifscCode || '',
+              branchName: emp.bankDetails.branchName || ''
+            });
+          }
+
+          if (emp.onboardingStatus === 'CORRECTION_REQUESTED' && emp.rejectionReason) {
+            setRejectionReason(emp.rejectionReason);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching onboarding profile info:', err);
+      }
+    };
+
+    fetchProfile();
+  }, []);
 
   const handlePersonalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +125,7 @@ const OnboardingWizard = () => {
       const res = await axios.post(`${apiUrl}/employees/onboarding/documents`, formData, {
         headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
       });
-      
+
       // Update local storage user onboarding status
       const userStr = localStorage.getItem('user');
       if (userStr) {
@@ -112,7 +152,7 @@ const OnboardingWizard = () => {
             <h3 className="text-white">Welcome to SmartHR Onboarding</h3>
             <p className="mb-0 text-white-50">Please complete your profile to access your workspace</p>
           </div>
-          
+
           <div className="card-body p-5">
             {/* Stepper Header */}
             <div className="d-flex justify-content-between mb-5 position-relative">
@@ -124,6 +164,16 @@ const OnboardingWizard = () => {
               <div className={`btn btn-sm rounded-circle ${step >= 3 ? 'btn-primary' : 'btn-light'} position-relative z-1`} style={{ width: '40px', height: '40px', lineHeight: '28px' }}>3</div>
             </div>
 
+            {rejectionReason && (
+              <div className="alert alert-danger border-2 border-danger d-flex align-items-start mb-4 p-3 rounded">
+                <i className="ti ti-alert-triangle fs-24 me-3 text-danger mt-1"></i>
+                <div>
+                  <h6 className="alert-heading text-danger fw-semibold mb-1">Correction Requested by Management</h6>
+                  <p className="mb-0 text-dark fs-14 fw-medium">{rejectionReason}</p>
+                </div>
+              </div>
+            )}
+
             {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
 
             {/* STEP 1 */}
@@ -133,13 +183,13 @@ const OnboardingWizard = () => {
                 <div className="row">
                   <div className="col-md-6 mb-3">
                     <label className="form-label">Date of Birth</label>
-                    <input type="date" className="form-control" required 
-                      value={personal.dateOfBirth} onChange={e => setPersonal({...personal, dateOfBirth: e.target.value})} />
+                    <input type="date" className="form-control" required
+                      value={personal.dateOfBirth} onChange={e => setPersonal({ ...personal, dateOfBirth: e.target.value })} />
                   </div>
                   <div className="col-md-6 mb-3">
                     <label className="form-label">Gender</label>
                     <select className="form-select" required
-                      value={personal.gender} onChange={e => setPersonal({...personal, gender: e.target.value})}>
+                      value={personal.gender} onChange={e => setPersonal({ ...personal, gender: e.target.value })}>
                       <option value="">Select Gender</option>
                       <option value="MALE">Male</option>
                       <option value="FEMALE">Female</option>
@@ -149,17 +199,17 @@ const OnboardingWizard = () => {
                   <div className="col-md-12 mb-3">
                     <label className="form-label">Full Address</label>
                     <textarea className="form-control" rows={3} required
-                      value={personal.address} onChange={e => setPersonal({...personal, address: e.target.value})} />
+                      value={personal.address} onChange={e => setPersonal({ ...personal, address: e.target.value })} />
                   </div>
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">Emergency Contact Name</label>
+                    <label className="form-label">Secondary/Others Contact No.</label>
                     <input type="text" className="form-control" required
-                      value={personal.emergencyContactName} onChange={e => setPersonal({...personal, emergencyContactName: e.target.value})} />
+                      value={personal.emergencyContactName} onChange={e => setPersonal({ ...personal, emergencyContactName: e.target.value })} />
                   </div>
                   <div className="col-md-6 mb-3">
                     <label className="form-label">Emergency Contact Phone</label>
                     <input type="text" className="form-control" required
-                      value={personal.emergencyContactPhone} onChange={e => setPersonal({...personal, emergencyContactPhone: e.target.value})} />
+                      value={personal.emergencyContactPhone} onChange={e => setPersonal({ ...personal, emergencyContactPhone: e.target.value })} />
                   </div>
                 </div>
                 <div className="text-end mt-4">
@@ -176,27 +226,27 @@ const OnboardingWizard = () => {
                   <div className="col-md-6 mb-3">
                     <label className="form-label">Bank Name</label>
                     <input type="text" className="form-control" required
-                      value={bank.bankName} onChange={e => setBank({...bank, bankName: e.target.value})} />
+                      value={bank.bankName} onChange={e => setBank({ ...bank, bankName: e.target.value })} />
                   </div>
                   <div className="col-md-6 mb-3">
                     <label className="form-label">Branch Name</label>
                     <input type="text" className="form-control" required
-                      value={bank.branchName} onChange={e => setBank({...bank, branchName: e.target.value})} />
+                      value={bank.branchName} onChange={e => setBank({ ...bank, branchName: e.target.value })} />
                   </div>
                   <div className="col-md-12 mb-3">
                     <label className="form-label">Account Holder Name</label>
                     <input type="text" className="form-control" required
-                      value={bank.accountName} onChange={e => setBank({...bank, accountName: e.target.value})} />
+                      value={bank.accountName} onChange={e => setBank({ ...bank, accountName: e.target.value })} />
                   </div>
                   <div className="col-md-6 mb-3">
                     <label className="form-label">Account Number</label>
                     <input type="text" className="form-control" required
-                      value={bank.accountNumber} onChange={e => setBank({...bank, accountNumber: e.target.value})} />
+                      value={bank.accountNumber} onChange={e => setBank({ ...bank, accountNumber: e.target.value })} />
                   </div>
                   <div className="col-md-6 mb-3">
                     <label className="form-label">IFSC Code</label>
                     <input type="text" className="form-control" required
-                      value={bank.ifscCode} onChange={e => setBank({...bank, ifscCode: e.target.value})} />
+                      value={bank.ifscCode} onChange={e => setBank({ ...bank, ifscCode: e.target.value })} />
                   </div>
                 </div>
                 <div className="d-flex justify-content-between mt-4">
@@ -215,17 +265,17 @@ const OnboardingWizard = () => {
                   <div className="col-md-12 mb-4">
                     <label className="form-label">Aadhaar Card <span className="text-danger">*</span></label>
                     <input type="file" className="form-control" required accept=".pdf,image/*"
-                      onChange={e => setDocs({...docs, aadhaar: e.target.files ? e.target.files[0] : null})} />
+                      onChange={e => setDocs({ ...docs, aadhaar: e.target.files ? e.target.files[0] : null })} />
                   </div>
                   <div className="col-md-12 mb-4">
                     <label className="form-label">PAN Card <span className="text-danger">*</span></label>
                     <input type="file" className="form-control" required accept=".pdf,image/*"
-                      onChange={e => setDocs({...docs, pan: e.target.files ? e.target.files[0] : null})} />
+                      onChange={e => setDocs({ ...docs, pan: e.target.files ? e.target.files[0] : null })} />
                   </div>
                   <div className="col-md-12 mb-4">
                     <label className="form-label">Resume / CV (Optional)</label>
                     <input type="file" className="form-control" accept=".pdf,.doc,.docx"
-                      onChange={e => setDocs({...docs, resume: e.target.files ? e.target.files[0] : null})} />
+                      onChange={e => setDocs({ ...docs, resume: e.target.files ? e.target.files[0] : null })} />
                   </div>
                 </div>
                 <div className="d-flex justify-content-between mt-4">

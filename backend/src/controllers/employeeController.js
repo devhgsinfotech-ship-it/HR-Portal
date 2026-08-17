@@ -4,6 +4,16 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const emailService = require('../utils/emailService');
 
+function getCompanyPrefix(companyName) {
+    if (!companyName) return 'EMP';
+    // Get the first word of the company name
+    const firstWord = companyName.trim().split(/\s+/)[0];
+    // Keep only letters/numbers and convert to uppercase
+    const cleanPrefix = firstWord.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    return cleanPrefix || 'EMP';
+}
+
+
 async function checkEmailAvailability(req, res) {
     try {
         const { email } = req.query;
@@ -94,7 +104,7 @@ async function createEmployee(req, res) {
             const employee = await tx.employee.create({
                 data: {
                     userId: user.id,
-                    employeeCode: `EMP-${Date.now().toString().slice(-6)}`,
+                    employeeCode: `${getCompanyPrefix(company.name)}-${Date.now().toString().slice(-6)}`,
                     firstName,
                     lastName,
                     phone,
@@ -374,7 +384,9 @@ async function getMe(req, res) {
                 const nameParts = user.name.trim().split(/\s+/);
                 const firstName = nameParts[0] || 'Admin';
                 const lastName = nameParts.slice(1).join(' ') || 'User';
-                const employeeCode = `HR-${Date.now().toString().slice(-6)}`;
+                const employeeCode = user.company 
+                    ? `${getCompanyPrefix(user.company.name)}-HR-${Date.now().toString().slice(-6)}`
+                    : `HR-${Date.now().toString().slice(-6)}`;
 
                 employee = await prisma.employee.create({
                     data: {
@@ -512,7 +524,7 @@ async function onboardingPersonal(req, res) {
                 address: address || null,
                 emergencyContactName: emergencyContactName || null,
                 emergencyContactPhone: emergencyContactPhone || null,
-                onboardingStatus: employee.onboardingStatus === 'INVITED' ? 'PROFILE_SUBMITTED' : employee.onboardingStatus
+                onboardingStatus: (employee.onboardingStatus === 'INVITED' || employee.onboardingStatus === 'CORRECTION_REQUESTED') ? 'PROFILE_SUBMITTED' : employee.onboardingStatus
             }
         });
 
@@ -554,7 +566,7 @@ async function onboardingDocuments(req, res) {
         const panFile = req.files && req.files['pan'] ? `/uploads/documents/${req.files['pan'][0].filename}` : null;
         const resumeFile = req.files && req.files['resume'] ? `/uploads/documents/${req.files['resume'][0].filename}` : null;
 
-        const dataToUpdate = { onboardingStatus: 'DOCS_SUBMITTED' };
+        const dataToUpdate = { onboardingStatus: 'DOCS_SUBMITTED', rejectionReason: null };
         if (aadhaarFile) dataToUpdate.aadhaarPath = aadhaarFile;
         if (panFile) dataToUpdate.panPath = panFile;
         if (resumeFile) dataToUpdate.resumePath = resumeFile;
@@ -564,7 +576,7 @@ async function onboardingDocuments(req, res) {
             data: dataToUpdate
         });
 
-        res.json({ message: 'Documents uploaded successfully. Onboarding complete pending HR review!', employee: updated });
+        res.json({ message: 'Fill onboarding form successfully Wait for Approval by Managment.', employee: updated });
     } catch (error) {
         console.error('Onboarding Documents Error:', error);
         res.status(500).json({ message: 'Internal server error' });
@@ -654,6 +666,77 @@ async function resendInvite(req, res) {
     }
 }
 
+async function updateEmployeeDocuments(req, res) {
+    try {
+        const { id } = req.params;
+        const companyId = req.user.companyId;
+
+        const employee = await prisma.employee.findUnique({
+            where: { id: parseInt(id, 10) },
+            include: { user: true }
+        });
+
+        if (!employee || employee.user.companyId !== companyId) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        const aadhaarFile = req.files && req.files['aadhaar'] ? `/uploads/documents/${req.files['aadhaar'][0].filename}` : null;
+        const panFile = req.files && req.files['pan'] ? `/uploads/documents/${req.files['pan'][0].filename}` : null;
+        const resumeFile = req.files && req.files['resume'] ? `/uploads/documents/${req.files['resume'][0].filename}` : null;
+
+        const dataToUpdate = {};
+        if (aadhaarFile) dataToUpdate.aadhaarPath = aadhaarFile;
+        if (panFile) dataToUpdate.panPath = panFile;
+        if (resumeFile) dataToUpdate.resumePath = resumeFile;
+
+        if (Object.keys(dataToUpdate).length === 0) {
+            return res.status(400).json({ message: 'No documents provided for update' });
+        }
+
+        const updated = await prisma.employee.update({
+            where: { id: parseInt(id, 10) },
+            data: dataToUpdate
+        });
+
+        res.json({ message: 'Documents updated successfully', employee: updated });
+    } catch (error) {
+        console.error('Update Employee Documents Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function requestOnboardingCorrection(req, res) {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        if (!reason || reason.trim() === '') {
+            return res.status(400).json({ message: 'Correction reason is required' });
+        }
+
+        const employee = await prisma.employee.findUnique({
+            where: { id: parseInt(id, 10) }
+        });
+
+        if (!employee) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        const updated = await prisma.employee.update({
+            where: { id: parseInt(id, 10) },
+            data: {
+                onboardingStatus: 'CORRECTION_REQUESTED',
+                rejectionReason: reason
+            }
+        });
+
+        res.json({ message: 'Correction request sent successfully!', employee: updated });
+    } catch (error) {
+        console.error('Request Onboarding Correction Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     checkEmailAvailability,
     createEmployee,
@@ -666,5 +749,7 @@ module.exports = {
     onboardingBank,
     onboardingDocuments,
     approveOnboarding,
-    resendInvite
+    resendInvite,
+    updateEmployeeDocuments,
+    requestOnboardingCorrection
 };

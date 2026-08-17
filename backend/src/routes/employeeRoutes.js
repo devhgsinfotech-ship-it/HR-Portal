@@ -42,7 +42,13 @@ router.post('/onboarding/documents', upload.fields([
 
 // HR Approves Onboarding
 router.post('/:id/approve-onboarding', requireRole('SUPER_ADMIN', 'HR'), employeeController.approveOnboarding);
+router.post('/:id/request-correction', requireRole('SUPER_ADMIN', 'HR'), employeeController.requestOnboardingCorrection);
 router.post('/:id/resend-invite', requireRole('SUPER_ADMIN', 'HR'), employeeController.resendInvite);
+router.put('/:id/documents', requireRole('SUPER_ADMIN', 'HR'), upload.fields([
+    { name: 'aadhaar', maxCount: 1 },
+    { name: 'pan', maxCount: 1 },
+    { name: 'resume', maxCount: 1 }
+]), employeeController.updateEmployeeDocuments);
 
 
 // Employees can view employees, but only HR/Admin can modify
