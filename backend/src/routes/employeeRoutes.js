@@ -51,12 +51,13 @@ router.put('/:id/documents', requireRole('SUPER_ADMIN', 'HR'), upload.fields([
 ]), employeeController.updateEmployeeDocuments);
 
 
-// Employees can view employees, but only HR/Admin can modify
-router.get('/', employeeController.getEmployees);
-
 // My Profile endpoints
 router.get('/me', employeeController.getMe);
 router.put('/me', upload.single('profileImage'), employeeController.updateMe);
+
+// Employees can view employees, but only HR/Admin can modify
+router.get('/', employeeController.getEmployees);
+router.get('/:id', employeeController.getEmployeeById);
 
 // HR only routes
 router.use(requireRole('HR', 'SUPER_ADMIN'));

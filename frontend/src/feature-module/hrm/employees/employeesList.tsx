@@ -229,8 +229,8 @@ const EmployeeList = () => {
     {
       title: "Emp ID",
       dataIndex: "EmpId",
-      render: (text: string) => (
-        <Link to={all_routes.employeedetails}>{text}</Link>
+      render: (text: string, record: Employee) => (
+        <Link to={`${all_routes.employeedetails}?id=${record.id}`}>{text}</Link>
       ),
       sorter: (a: Employee, b: Employee) => a.EmpId.length - b.EmpId.length,
     },
@@ -240,11 +240,8 @@ const EmployeeList = () => {
       render: (_text: string, record: Employee) => (
         <div className="d-flex align-items-center">
           <Link
-            to={all_routes.employeedetails}
+            to={`${all_routes.employeedetails}?id=${record.id}`}
             className="avatar avatar-md"
-            data-bs-toggle="modal"
-            data-inert={true}
-            data-bs-target="#view_details"
           >
             {record.Image && (record.Image.startsWith('/') || record.Image.startsWith('http')) ? (
               <img
@@ -264,10 +261,7 @@ const EmployeeList = () => {
           <div className="ms-2">
             <p className="text-dark mb-0">
               <Link
-                to={all_routes.employeedetails}
-                data-bs-toggle="modal"
-                data-inert={true}
-                data-bs-target="#view_details"
+                to={`${all_routes.employeedetails}?id=${record.id}`}
               >
                 {record.Name}
               </Link>

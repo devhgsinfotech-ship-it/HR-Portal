@@ -197,6 +197,24 @@ model Employee {
   panPath             String?
   resumePath          String?
 
+  // Profile & Bio
+  about               String?   @db.Text
+  education           String?   @db.Text
+  experience          String?   @db.Text
+
+  // Personal Information
+  passportNo          String?
+  passportExpiry      DateTime?
+  nationality         String?
+  religion            String?
+  maritalStatus       String?
+  spouseEmployed      String?
+  spouseName          String?
+  numberOfChildren    Int?
+
+  // Emergency Contact
+  emergencyContactRelationship  String?
+
   bankDetails         BankDetails?
 
   salaryStructure     SalaryStructure?

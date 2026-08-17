@@ -359,7 +359,7 @@ const EmployeesGrid = () => {
                                                 </div>
                                                 <div>
                                                     <Link
-                                                        to={all_routes.employeedetails}
+                                                        to={`${all_routes.employeedetails}?id=${emp.id}`}
                                                         className="avatar avatar-xl avatar-rounded online border p-1 border-primary rounded-circle"
                                                     >
                                                         <img
@@ -408,7 +408,7 @@ const EmployeesGrid = () => {
                                             </div>
                                             <div className="text-center mb-3">
                                                 <h6 className="mb-1">
-                                                    <Link to={all_routes.employeedetails}>{`${emp.firstName || ''} ${emp.lastName || ''}`.trim()}</Link>
+                                                    <Link to={`${all_routes.employeedetails}?id=${emp.id}`}>{`${emp.firstName || ''} ${emp.lastName || ''}`.trim()}</Link>
                                                 </h6>
                                                 <span className="badge bg-pink-transparent fs-10 fw-medium">
                                                     {emp.designation?.name || 'N/A'}
