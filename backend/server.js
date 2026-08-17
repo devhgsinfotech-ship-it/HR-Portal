@@ -27,7 +27,12 @@ app.use(cors({
 }));
 
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Serve uploaded files from directory configured in env (persistent upload path)
+const UPLOAD_BASE = process.env.UPLOAD_PATH 
+    ? path.resolve(process.env.UPLOAD_PATH) 
+    : path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(UPLOAD_BASE));
 
 // Routes are added incrementally as each feature is built.
 // Uncomment each line once its route file exists AND (for Prisma-backed
