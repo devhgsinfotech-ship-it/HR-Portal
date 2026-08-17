@@ -99,7 +99,7 @@ const EmployeeList = () => {
         Phone: emp.phone || 'N/A',
         Designation: emp.designation?.name || 'N/A',
         JoiningDate: emp.dateOfJoining ? new Date(emp.dateOfJoining).toLocaleDateString() : 'N/A',
-        Status: emp.onboardingStatus === 'DOCS_SUBMITTED' ? 'Pending Verification' : emp.onboardingStatus === 'COMPLETED' ? 'Active' : emp.onboardingStatus,
+        Status: emp.onboardingStatus === 'DOCS_SUBMITTED' ? 'Pending Verification' : emp.onboardingStatus === 'CORRECTION_REQUESTED' ? 'Needs Correction' : emp.onboardingStatus === 'COMPLETED' ? 'Active' : emp.onboardingStatus,
         onboardingStatus: emp.onboardingStatus,
         aadhaarPath: emp.aadhaarPath,
         panPath: emp.panPath,
@@ -320,6 +320,7 @@ const EmployeeList = () => {
         if (text === "Active" || text === "COMPLETED") badgeClass = "badge-success";
         else if (text === "Pending Verification") badgeClass = "badge-warning";
         else if (text === "INVITED") badgeClass = "badge-info";
+        else if (text === "Needs Correction") badgeClass = "badge-danger";
 
         return (
           <span className={`badge ${badgeClass} d-inline-flex align-items-center badge-xs`}>
@@ -372,7 +373,7 @@ const EmployeeList = () => {
           >
             <i className="ti ti-edit" />
           </Link>
-          {record.onboardingStatus === 'DOCS_SUBMITTED' && (
+          {['DOCS_SUBMITTED', 'CORRECTION_REQUESTED'].includes(record.onboardingStatus || '') && (
             <Link
               to="#"
               className="ms-2 text-warning"
