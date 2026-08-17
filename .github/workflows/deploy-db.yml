@@ -1,0 +1,35 @@
+name: Production Database Sync
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/prisma/schema.prisma'
+      - '.github/workflows/deploy-db.yml'
+
+jobs:
+  db-sync:
+    name: Sync Production Database Schema
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: |
+          cd backend
+          npm install
+
+      - name: Sync Database Schema
+        run: |
+          cd backend
+          npx prisma db push --accept-data-loss
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
