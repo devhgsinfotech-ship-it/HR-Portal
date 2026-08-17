@@ -204,13 +204,50 @@ async function getEmployees(req, res) {
     }
 }
 
+async function getEmployeeById(req, res) {
+    try {
+        const { id } = req.params;
+        const companyId = req.user.companyId;
+        const employee = await prisma.employee.findUnique({
+            where: { id: parseInt(id, 10) },
+            include: {
+                user: true,
+                department: true,
+                designation: true,
+                bankDetails: true,
+                salaryStructure: true,
+                reportingManager: {
+                    include: { user: true }
+                }
+            }
+        });
+        if (!employee || employee.user.companyId !== companyId) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+        res.json(employee);
+    } catch (error) {
+        console.error('Error fetching employee:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 async function updateEmployee(req, res) {
     try {
         const { id } = req.params;
         const companyId = req.user.companyId;
         const { 
             firstName, lastName, phone, departmentId, designationId, dateOfJoining, email, password, role, reportingManagerId,
-            basic, hra, conveyance, medicalAllowance, specialAllowance, pfDeduction, professionalTax, otherDeductions, grossSalary, netSalary 
+            basic, hra, conveyance, medicalAllowance, specialAllowance, pfDeduction, professionalTax, otherDeductions, grossSalary, netSalary,
+            // Profile & Bio
+            about, education, experience,
+            // Personal Information
+            passportNo, passportExpiry, nationality, religion, maritalStatus, spouseEmployed, spouseName, numberOfChildren,
+            // Emergency Contact
+            emergencyContactName, emergencyContactPhone, emergencyContactRelationship,
+            // Bank Details
+            bankAccountName, bankAccountNumber, bankName, ifscCode, branchName,
+            // Additional fields
+            address, gender, dateOfBirth
         } = req.body;
 
         // Ensure the employee belongs to this company
@@ -223,13 +260,32 @@ async function updateEmployee(req, res) {
             return res.status(404).json({ message: 'Employee not found' });
         }
 
-        const dataToUpdate = {
-            firstName,
-            lastName,
-            phone,
-            departmentId: departmentId && departmentId !== 'undefined' ? parseInt(departmentId, 10) : existing.departmentId,
-            designationId: designationId && designationId !== 'undefined' ? parseInt(designationId, 10) : existing.designationId,
-        };
+        const dataToUpdate = {};
+        if (firstName !== undefined) dataToUpdate.firstName = firstName;
+        if (lastName !== undefined) dataToUpdate.lastName = lastName;
+        if (phone !== undefined) dataToUpdate.phone = phone;
+        if (address !== undefined) dataToUpdate.address = address;
+        if (gender !== undefined) dataToUpdate.gender = gender;
+        if (dateOfBirth !== undefined) dataToUpdate.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+        dataToUpdate.departmentId = departmentId && departmentId !== 'undefined' ? parseInt(departmentId, 10) : existing.departmentId;
+        dataToUpdate.designationId = designationId && designationId !== 'undefined' ? parseInt(designationId, 10) : existing.designationId;
+        // Bio fields
+        if (about !== undefined) dataToUpdate.about = about;
+        if (education !== undefined) dataToUpdate.education = education;
+        if (experience !== undefined) dataToUpdate.experience = experience;
+        // Personal info
+        if (passportNo !== undefined) dataToUpdate.passportNo = passportNo;
+        if (passportExpiry !== undefined) dataToUpdate.passportExpiry = passportExpiry ? new Date(passportExpiry) : null;
+        if (nationality !== undefined) dataToUpdate.nationality = nationality;
+        if (religion !== undefined) dataToUpdate.religion = religion;
+        if (maritalStatus !== undefined) dataToUpdate.maritalStatus = maritalStatus;
+        if (spouseEmployed !== undefined) dataToUpdate.spouseEmployed = spouseEmployed;
+        if (spouseName !== undefined) dataToUpdate.spouseName = spouseName;
+        if (numberOfChildren !== undefined) dataToUpdate.numberOfChildren = numberOfChildren ? parseInt(numberOfChildren, 10) : null;
+        // Emergency contact
+        if (emergencyContactName !== undefined) dataToUpdate.emergencyContactName = emergencyContactName;
+        if (emergencyContactPhone !== undefined) dataToUpdate.emergencyContactPhone = emergencyContactPhone;
+        if (emergencyContactRelationship !== undefined) dataToUpdate.emergencyContactRelationship = emergencyContactRelationship;
 
         if (dateOfJoining) {
             dataToUpdate.dateOfJoining = new Date(dateOfJoining);
@@ -325,7 +381,42 @@ async function updateEmployee(req, res) {
             });
         }
 
-        res.json(employee);
+        // Bank details upsert
+        if (bankAccountNumber !== undefined && bankAccountNumber !== '') {
+            await prisma.bankDetails.upsert({
+                where: { employeeId: existing.id },
+                update: {
+                    accountName: bankAccountName || '',
+                    accountNumber: bankAccountNumber,
+                    bankName: bankName || '',
+                    ifscCode: ifscCode || '',
+                    branchName: branchName || null,
+                },
+                create: {
+                    employeeId: existing.id,
+                    accountName: bankAccountName || '',
+                    accountNumber: bankAccountNumber,
+                    bankName: bankName || '',
+                    ifscCode: ifscCode || '',
+                    branchName: branchName || null,
+                }
+            });
+        }
+
+        // Return the full updated employee
+        const updatedFull = await prisma.employee.findUnique({
+            where: { id: parseInt(id, 10) },
+            include: {
+                user: true,
+                department: true,
+                designation: true,
+                bankDetails: true,
+                salaryStructure: true,
+                reportingManager: { include: { user: true } }
+            }
+        });
+
+        res.json(updatedFull);
     } catch (error) {
         console.error('Error updating employee:', error);
         res.status(500).json({ message: 'Internal server error' });
@@ -741,6 +832,7 @@ module.exports = {
     checkEmailAvailability,
     createEmployee,
     getEmployees,
+    getEmployeeById,
     updateEmployee,
     deleteEmployee,
     getMe,

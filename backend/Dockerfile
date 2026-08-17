@@ -9,6 +9,7 @@ WORKDIR /app
 
 # Install dependencies first (better layer caching)
 COPY package*.json ./
+COPY prisma ./prisma/
 RUN npm install
 
 # Copy the rest of the backend source

@@ -1,13 +1,33 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { DatePicker } from "antd";
 import CommonSelect from "../../../core/common/commonSelect";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
+import apiClient from "../../../core/utils/apiClient";
+import dayjs from "dayjs";
+
 type PasswordField = "password" | "confirmPassword";
 
 const EmployeeDetails = () => {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const employeeId = searchParams.get('id');
+
+  const [emp, setEmp] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saveMsg, setSaveMsg] = useState('');
+
+  // Edit state objects
+  const [editBasic, setEditBasic] = useState({ phone: '', address: '', gender: '', dateOfBirth: '' });
+  const [editPersonal, setEditPersonal] = useState({ passportNo: '', passportExpiry: '', nationality: '', religion: '', maritalStatus: '', spouseEmployed: '', spouseName: '', numberOfChildren: '' });
+  const [editEmergency, setEditEmergency] = useState({ emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelationship: '' });
+  const [editBank, setEditBank] = useState({ bankAccountName: '', bankAccountNumber: '', bankName: '', ifscCode: '', branchName: '' });
+  const [editAbout, setEditAbout] = useState('');
+  const [editEducation, setEditEducation] = useState('');
+  const [editExperience, setEditExperience] = useState('');
+
   const [passwordVisibility, setPasswordVisibility] = useState({
     password: false,
     confirmPassword: false,
@@ -22,7 +42,75 @@ const EmployeeDetails = () => {
 
   const getModalContainer = () => {
     const modalElement = document.getElementById("modal-datepicker");
-    return modalElement ? modalElement : document.body; // Fallback to document.body if modalElement is null
+    return modalElement ? modalElement : document.body;
+  };
+
+  const getAvatarUrl = (photoUrl: string | null | undefined) => {
+    if (!photoUrl) return null;
+    if (photoUrl.startsWith('http')) return photoUrl;
+    const apiBase = (apiClient.defaults.baseURL || '').replace('/api', '');
+    return `${apiBase}${photoUrl}`;
+  };
+
+  const fetchEmployee = async () => {
+    if (!employeeId) return;
+    try {
+      const res = await apiClient.get(`/employees/${employeeId}`);
+      const data = res.data;
+      setEmp(data);
+      // Pre-populate edit states
+      setEditBasic({
+        phone: data.phone || '',
+        address: data.address || '',
+        gender: data.gender || '',
+        dateOfBirth: data.dateOfBirth ? dayjs(data.dateOfBirth).format('YYYY-MM-DD') : '',
+      });
+      setEditPersonal({
+        passportNo: data.passportNo || '',
+        passportExpiry: data.passportExpiry ? dayjs(data.passportExpiry).format('YYYY-MM-DD') : '',
+        nationality: data.nationality || '',
+        religion: data.religion || '',
+        maritalStatus: data.maritalStatus || '',
+        spouseEmployed: data.spouseEmployed || '',
+        spouseName: data.spouseName || '',
+        numberOfChildren: data.numberOfChildren != null ? String(data.numberOfChildren) : '',
+      });
+      setEditEmergency({
+        emergencyContactName: data.emergencyContactName || '',
+        emergencyContactPhone: data.emergencyContactPhone || '',
+        emergencyContactRelationship: data.emergencyContactRelationship || '',
+      });
+      setEditBank({
+        bankAccountName: data.bankDetails?.accountName || '',
+        bankAccountNumber: data.bankDetails?.accountNumber || '',
+        bankName: data.bankDetails?.bankName || '',
+        ifscCode: data.bankDetails?.ifscCode || '',
+        branchName: data.bankDetails?.branchName || '',
+      });
+      setEditAbout(data.about || '');
+      setEditEducation(data.education || '');
+      setEditExperience(data.experience || '');
+    } catch (err) {
+      console.error('Failed to fetch employee', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEmployee();
+  }, [employeeId]);
+
+  const saveField = async (fields: Record<string, any>) => {
+    if (!employeeId) return;
+    try {
+      const res = await apiClient.put(`/employees/${employeeId}`, fields);
+      setEmp(res.data);
+      setSaveMsg('Saved successfully!');
+      setTimeout(() => setSaveMsg(''), 3000);
+    } catch (err: any) {
+      setSaveMsg(err.response?.data?.message || 'Error saving changes');
+    }
   };
 
   const departmentChoose = [
@@ -73,6 +161,29 @@ const EmployeeDetails = () => {
     { value: "Maternity Benefit ", label: "Maternity Benefit " },
   ];
 
+  if (loading) {
+    return (
+      <div className="page-wrapper">
+        <div className="content d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
+          <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!emp && !loading) {
+    return (
+      <div className="page-wrapper">
+        <div className="content">
+          <div className="alert alert-danger">Employee not found. Please go back and select an employee.</div>
+        </div>
+      </div>
+    );
+  }
+
+  const fullName = emp ? `${emp.firstName || ''} ${emp.lastName || ''}`.trim() : '';
+  const photoUrl = getAvatarUrl(emp?.profilePhotoUrl);
+
   return (
     <>
       {/* Page Wrapper */}
@@ -107,93 +218,66 @@ const EmployeeDetails = () => {
             </div>
           </div>
           {/* /Breadcrumb */}
+          {saveMsg && (
+            <div className={`alert ${saveMsg.includes('Error') || saveMsg.includes('error') ? 'alert-danger' : 'alert-success'} alert-dismissible fade show`} role="alert">
+              {saveMsg}
+              <button type="button" className="btn-close" onClick={() => setSaveMsg('')} aria-label="Close"></button>
+            </div>
+          )}
           <div className="row">
             <div className="col-xl-4 theiaStickySidebar">
               <div className="card card-bg-1">
                 <div className="card-body p-0">
                   <span className="avatar avatar-xl avatar-rounded border border-2 border-white m-auto d-flex mb-2">
-                    <ImageWithBasePath
-                      src="assets/img/users/user-13.jpg"
-                      className="w-auto h-auto"
-                      alt="user"
-                    />
+                    {photoUrl ? (
+                      <img src={photoUrl} className="w-auto h-auto rounded-circle" alt="user" style={{ objectFit: 'cover', width: '100%', height: '100%' }} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'assets/img/users/user-13.jpg'; }} />
+                    ) : (
+                      <ImageWithBasePath src="assets/img/users/user-13.jpg" className="w-auto h-auto" alt="user" />
+                    )}
                   </span>
                   <div className="text-center px-3 pb-3 border-bottom">
                     <div className="mb-3">
                       <h5 className="d-flex align-items-center justify-content-center mb-1">
-                        Stephan Peralt
+                        {fullName}
                         <i className="ti ti-discount-check-filled text-success ms-1" />
                       </h5>
                       <span className="badge badge-soft-dark fw-medium me-2">
                         <i className="ti ti-point-filled me-1" />
-                        Software Developer
+                        {emp?.designation?.name || 'N/A'}
                       </span>
                       <span className="badge badge-soft-secondary fw-medium">
-                        10+ years of Experience
+                        {emp?.department?.name || 'N/A'}
                       </span>
                     </div>
                     <div>
                       <div className="d-flex align-items-center justify-content-between mb-2">
-                        <span className="d-inline-flex align-items-center">
-                          <i className="ti ti-id me-2" />
-                          Client ID
-                        </span>
-                        <p className="text-dark">CLT-0024</p>
+                        <span className="d-inline-flex align-items-center"><i className="ti ti-id me-2" />Employee ID</span>
+                        <p className="text-dark">{emp?.employeeCode || '—'}</p>
                       </div>
                       <div className="d-flex align-items-center justify-content-between mb-2">
-                        <span className="d-inline-flex align-items-center">
-                          <i className="ti ti-star me-2" />
-                          Team
-                        </span>
-                        <p className="text-dark">UI/UX Design</p>
+                        <span className="d-inline-flex align-items-center"><i className="ti ti-star me-2" />Department</span>
+                        <p className="text-dark">{emp?.department?.name || '—'}</p>
                       </div>
                       <div className="d-flex align-items-center justify-content-between mb-2">
-                        <span className="d-inline-flex align-items-center">
-                          <i className="ti ti-calendar-check me-2" />
-                          Date Of Join
-                        </span>
-                        <p className="text-dark">1st Jan 2023</p>
+                        <span className="d-inline-flex align-items-center"><i className="ti ti-calendar-check me-2" />Date Of Join</span>
+                        <p className="text-dark">{emp?.dateOfJoining ? dayjs(emp.dateOfJoining).format('D MMM YYYY') : '—'}</p>
                       </div>
                       <div className="d-flex align-items-center justify-content-between">
-                        <span className="d-inline-flex align-items-center">
-                          <i className="ti ti-calendar-check me-2" />
-                          Report Office
-                        </span>
+                        <span className="d-inline-flex align-items-center"><i className="ti ti-calendar-check me-2" />Report Office</span>
                         <div className="d-flex align-items-center">
-                          <span className="avatar avatar-sm avatar-rounded me-2">
-                            <ImageWithBasePath
-                              src="assets/img/profiles/avatar-12.jpg"
-                              alt="user"
-                            />
-                          </span>
-                          <p className="text-gray-9 mb-0">Doglas Martini</p>
+                          <p className="text-gray-9 mb-0">{emp?.reportingManager ? `${emp.reportingManager.firstName || ''} ${emp.reportingManager.lastName || ''}`.trim() : '—'}</p>
                         </div>
                       </div>
                       <div className="row gx-2 mt-3">
                         <div className="col-6">
-                          <div>
-                            <Link
-                              to="#"
-                              className="btn btn-dark w-100"
-                              data-bs-toggle="modal"
-                              data-inert={true}
-                              data-bs-target="#edit_employee"
-                            >
-                              <i className="ti ti-edit me-1" />
-                              Edit Info
-                            </Link>
-                          </div>
+                          <Link to="#" className="btn btn-dark w-100" data-bs-toggle="modal" data-inert={true} data-bs-target="#edit_employee">
+                            <i className="ti ti-edit me-1" />Edit Info
+                          </Link>
                         </div>
                         <div className="col-6">
-                          <div>
-                            <Link
-                              to={all_routes.chat}
-                              className="btn btn-primary w-100"
-                            >
-                              <i className="ti ti-message-heart me-1" />
-                              Message
-                            </Link>
-                          </div>
+                          <Link to={all_routes.chat} className="btn btn-primary w-100">
+                            <i className="ti ti-message-heart me-1" />Message
+                          </Link>
                         </div>
                       </div>
                     </div>
@@ -201,134 +285,74 @@ const EmployeeDetails = () => {
                   <div className="p-3 border-bottom">
                     <div className="d-flex align-items-center justify-content-between mb-2">
                       <h6>Basic information</h6>
-                      <Link
-                        to="#"
-                        className="btn btn-icon btn-sm"
-                        data-bs-toggle="modal"
-                        data-inert={true}
-                        data-bs-target="#edit_employee"
-                      >
+                      <Link to="#" className="btn btn-icon btn-sm" data-bs-toggle="modal" data-inert={true} data-bs-target="#edit_employee">
                         <i className="ti ti-edit" />
                       </Link>
                     </div>
                     <div className="d-flex align-items-center justify-content-between mb-2">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-phone me-2" />
-                        Phone
-                      </span>
-                      <p className="text-dark">(163) 2459 315</p>
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-phone me-2" />Phone</span>
+                      <p className="text-dark">{emp?.phone || '—'}</p>
                     </div>
                     <div className="d-flex align-items-center justify-content-between mb-2">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-mail-check me-2" />
-                        Email
-                      </span>
-                      <Link
-                        to="#"
-                        className="text-info d-inline-flex align-items-center"
-                      >
-                        perralt12@example.com
-                        <i className="ti ti-copy text-dark ms-2" />
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-mail-check me-2" />Email</span>
+                      <Link to="#" className="text-info d-inline-flex align-items-center">
+                        {emp?.user?.email || '—'}
                       </Link>
                     </div>
                     <div className="d-flex align-items-center justify-content-between mb-2">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-gender-male me-2" />
-                        Gender
-                      </span>
-                      <p className="text-dark text-end">Male</p>
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-gender-male me-2" />Gender</span>
+                      <p className="text-dark text-end">{emp?.gender || '—'}</p>
                     </div>
                     <div className="d-flex align-items-center justify-content-between mb-2">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-cake me-2" />
-                        Birdthday
-                      </span>
-                      <p className="text-dark text-end">24th July 2000</p>
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-cake me-2" />Birthday</span>
+                      <p className="text-dark text-end">{emp?.dateOfBirth ? dayjs(emp.dateOfBirth).format('D MMM YYYY') : '—'}</p>
                     </div>
                     <div className="d-flex align-items-center justify-content-between">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-map-pin-check me-2" />
-                        Address
-                      </span>
-                      <p className="text-dark text-end">
-                        1861 Bayonne Ave, <br /> Manchester, NJ, 08759
-                      </p>
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-map-pin-check me-2" />Address</span>
+                      <p className="text-dark text-end">{emp?.address || '—'}</p>
                     </div>
                   </div>
                   <div className="p-3 border-bottom">
                     <div className="d-flex align-items-center justify-content-between mb-2">
                       <h6>Personal Information</h6>
-                      <Link
-                        to="#"
-                        className="btn btn-icon btn-sm"
-                        data-bs-toggle="modal"
-                        data-inert={true}
-                        data-bs-target="#edit_personal"
-                      >
+                      <Link to="#" className="btn btn-icon btn-sm" data-bs-toggle="modal" data-inert={true} data-bs-target="#edit_personal">
                         <i className="ti ti-edit" />
                       </Link>
                     </div>
                     <div className="d-flex align-items-center justify-content-between mb-2">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-e-passport me-2" />
-                        Passport No
-                      </span>
-                      <p className="text-dark">QRET4566FGRT</p>
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-e-passport me-2" />Passport No</span>
+                      <p className="text-dark">{emp?.passportNo || '—'}</p>
                     </div>
                     <div className="d-flex align-items-center justify-content-between mb-2">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-calendar-x me-2" />
-                        Passport Exp Date
-                      </span>
-                      <p className="text-dark text-end">15 May 2029</p>
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-calendar-x me-2" />Passport Exp Date</span>
+                      <p className="text-dark text-end">{emp?.passportExpiry ? dayjs(emp.passportExpiry).format('D MMM YYYY') : '—'}</p>
                     </div>
                     <div className="d-flex align-items-center justify-content-between mb-2">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-gender-male me-2" />
-                        Nationality
-                      </span>
-                      <p className="text-dark text-end">Indian</p>
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-gender-male me-2" />Nationality</span>
+                      <p className="text-dark text-end">{emp?.nationality || '—'}</p>
                     </div>
                     <div className="d-flex align-items-center justify-content-between mb-2">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-bookmark-plus me-2" />
-                        Religion
-                      </span>
-                      <p className="text-dark text-end">Christianity</p>
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-bookmark-plus me-2" />Religion</span>
+                      <p className="text-dark text-end">{emp?.religion || '—'}</p>
                     </div>
                     <div className="d-flex align-items-center justify-content-between mb-2">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-hotel-service me-2" />
-                        Marital status
-                      </span>
-                      <p className="text-dark text-end">Yes</p>
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-hotel-service me-2" />Marital status</span>
+                      <p className="text-dark text-end">{emp?.maritalStatus || '—'}</p>
                     </div>
                     <div className="d-flex align-items-center justify-content-between mb-2">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-briefcase-2 me-2" />
-                        Employment of spouse
-                      </span>
-                      <p className="text-dark text-end">No</p>
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-briefcase-2 me-2" />Employment of spouse</span>
+                      <p className="text-dark text-end">{emp?.spouseEmployed || '—'}</p>
                     </div>
                     <div className="d-flex align-items-center justify-content-between">
-                      <span className="d-inline-flex align-items-center">
-                        <i className="ti ti-baby-bottle me-2" />
-                        No. of children
-                      </span>
-                      <p className="text-dark text-end">2</p>
+                      <span className="d-inline-flex align-items-center"><i className="ti ti-baby-bottle me-2" />No. of children</span>
+                      <p className="text-dark text-end">{emp?.numberOfChildren != null ? emp.numberOfChildren : '—'}</p>
                     </div>
                   </div>
                 </div>
               </div>
               <div className="d-flex align-items-center justify-content-between mb-2">
                 <h6>Emergency Contact Number</h6>
-                <Link
-                  to="#"
-                  className="btn btn-icon btn-sm"
-                  data-bs-toggle="modal"
-                  data-inert={true}
-                  data-bs-target="#edit_emergency"
-                >
+                <Link to="#" className="btn btn-icon btn-sm" data-bs-toggle="modal" data-inert={true} data-bs-target="#edit_emergency">
                   <i className="ti ti-edit" />
                 </Link>
               </div>
@@ -337,35 +361,15 @@ const EmployeeDetails = () => {
                   <div className="p-3 border-bottom">
                     <div className="d-flex align-items-center justify-content-between">
                       <div>
-                        <span className="d-inline-flex align-items-center">
-                          Primary
-                        </span>
+                        <span className="d-inline-flex align-items-center">Emergency Contact</span>
                         <h6 className="d-flex align-items-center fw-medium mt-1">
-                          Adrian Peralt{" "}
-                          <span className="d-inline-flex mx-1">
-                            <i className="ti ti-point-filled text-danger" />
-                          </span>
-                          Father
+                          {emp?.emergencyContactName || '—'}
+                          {emp?.emergencyContactRelationship && (
+                            <><span className="d-inline-flex mx-1"><i className="ti ti-point-filled text-danger" /></span>{emp.emergencyContactRelationship}</>
+                          )}
                         </h6>
                       </div>
-                      <p className="text-dark">+1 127 2685 598</p>
-                    </div>
-                  </div>
-                  <div className="p-3 border-bottom">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <div>
-                        <span className="d-inline-flex align-items-center">
-                          Secondry
-                        </span>
-                        <h6 className="d-flex align-items-center fw-medium mt-1">
-                          Karen Wills{" "}
-                          <span className="d-inline-flex mx-1">
-                            <i className="ti ti-point-filled text-danger" />
-                          </span>
-                          Mother
-                        </h6>
-                      </div>
-                      <p className="text-dark">+1 989 7774 787</p>
+                      <p className="text-dark">{emp?.emergencyContactPhone || '—'}</p>
                     </div>
                   </div>
                 </div>
@@ -416,14 +420,8 @@ const EmployeeDetails = () => {
                           aria-labelledby="headingOne"
                           data-bs-parent="#accordionExample"
                         >
-                          <div className="accordion-body mt-2">
-                            As an award winning designer, I deliver exceptional
-                            quality work and bring value to your brand! With 10
-                            years of experience and 350+ projects completed
-                            worldwide with satisfied customers, I developed the
-                            360° brand approach, which helped me to create
-                            numerous brands that are relevant, meaningful and
-                            loved.
+                        <div className="accordion-body mt-2">
+                            {emp?.about ? emp.about : <span className="text-muted">No description added yet.</span>}
                           </div>
                         </div>
                       </div>
@@ -463,36 +461,20 @@ const EmployeeDetails = () => {
                           <div className="accordion-body">
                             <div className="row">
                               <div className="col-md-3">
-                                <span className="d-inline-flex align-items-center">
-                                  Bank Name
-                                </span>
-                                <h6 className="d-flex align-items-center fw-medium mt-1">
-                                  Swiz Intenational Bank
-                                </h6>
+                                <span className="d-inline-flex align-items-center">Bank Name</span>
+                                <h6 className="d-flex align-items-center fw-medium mt-1">{emp?.bankDetails?.bankName || '—'}</h6>
                               </div>
                               <div className="col-md-3">
-                                <span className="d-inline-flex align-items-center">
-                                  Bank account no
-                                </span>
-                                <h6 className="d-flex align-items-center fw-medium mt-1">
-                                  159843014641
-                                </h6>
+                                <span className="d-inline-flex align-items-center">Bank account no</span>
+                                <h6 className="d-flex align-items-center fw-medium mt-1">{emp?.bankDetails?.accountNumber || '—'}</h6>
                               </div>
                               <div className="col-md-3">
-                                <span className="d-inline-flex align-items-center">
-                                  IFSC Code
-                                </span>
-                                <h6 className="d-flex align-items-center fw-medium mt-1">
-                                  ICI24504
-                                </h6>
+                                <span className="d-inline-flex align-items-center">IFSC Code</span>
+                                <h6 className="d-flex align-items-center fw-medium mt-1">{emp?.bankDetails?.ifscCode || '—'}</h6>
                               </div>
                               <div className="col-md-3">
-                                <span className="d-inline-flex align-items-center">
-                                  Branch
-                                </span>
-                                <h6 className="d-flex align-items-center fw-medium mt-1">
-                                  Alabama USA
-                                </h6>
+                                <span className="d-inline-flex align-items-center">Branch</span>
+                                <h6 className="d-flex align-items-center fw-medium mt-1">{emp?.bankDetails?.branchName || '—'}</h6>
                               </div>
                             </div>
                           </div>
@@ -509,7 +491,7 @@ const EmployeeDetails = () => {
                                   className="btn btn-icon btn-sm"
                                   data-bs-toggle="modal"
                                   data-inert={true}
-                                  data-bs-target="#edit_familyinformation"
+                                  data-bs-target="#edit_personal"
                                 >
                                   <i className="ti ti-edit" />
                                 </Link>
@@ -535,36 +517,22 @@ const EmployeeDetails = () => {
                         >
                           <div className="accordion-body">
                             <div className="row">
-                              <div className="col-md-3">
-                                <span className="d-inline-flex align-items-center">
-                                  Name
-                                </span>
+                              <div className="col-md-4">
+                                <span className="d-inline-flex align-items-center">Spouse Name</span>
                                 <h6 className="d-flex align-items-center fw-medium mt-1">
-                                  Hendry Peralt
+                                  {emp?.spouseName || '—'}
                                 </h6>
                               </div>
-                              <div className="col-md-3">
-                                <span className="d-inline-flex align-items-center">
-                                  Relationship
-                                </span>
+                              <div className="col-md-4">
+                                <span className="d-inline-flex align-items-center">Employment of Spouse</span>
                                 <h6 className="d-flex align-items-center fw-medium mt-1">
-                                  Brother
+                                  {emp?.spouseEmployed || '—'}
                                 </h6>
                               </div>
-                              <div className="col-md-3">
-                                <span className="d-inline-flex align-items-center">
-                                  Date of birth
-                                </span>
+                              <div className="col-md-4">
+                                <span className="d-inline-flex align-items-center">No. of Children</span>
                                 <h6 className="d-flex align-items-center fw-medium mt-1">
-                                  25 May 2014
-                                </h6>
-                              </div>
-                              <div className="col-md-3">
-                                <span className="d-inline-flex align-items-center">
-                                  Phone
-                                </span>
-                                <h6 className="d-flex align-items-center fw-medium mt-1">
-                                  +1 265 6956 961
+                                  {emp?.numberOfChildren != null ? emp.numberOfChildren : '—'}
                                 </h6>
                               </div>
                             </div>
@@ -614,45 +582,11 @@ const EmployeeDetails = () => {
                               >
                                 <div className="accordion-body">
                                   <div>
-                                    <div className="mb-3">
-                                      <div className="d-flex align-items-center justify-content-between">
-                                        <div>
-                                          <span className="d-inline-flex align-items-center fw-normal">
-                                            Oxford University
-                                          </span>
-                                          <h6 className="d-flex align-items-center mt-1">
-                                            Computer Science
-                                          </h6>
-                                        </div>
-                                        <p className="text-dark">2020 - 2022</p>
-                                      </div>
-                                    </div>
-                                    <div className="mb-3">
-                                      <div className="d-flex align-items-center justify-content-between">
-                                        <div>
-                                          <span className="d-inline-flex align-items-center fw-normal">
-                                            Cambridge University
-                                          </span>
-                                          <h6 className="d-flex align-items-center mt-1">
-                                            Computer Network &amp; Systems
-                                          </h6>
-                                        </div>
-                                        <p className="text-dark">2016- 2019</p>
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div className="d-flex align-items-center justify-content-between">
-                                        <div>
-                                          <span className="d-inline-flex align-items-center fw-normal">
-                                            Oxford School
-                                          </span>
-                                          <h6 className="d-flex align-items-center mt-1">
-                                            Grade X
-                                          </h6>
-                                        </div>
-                                        <p className="text-dark">2012 - 2016</p>
-                                      </div>
-                                    </div>
+                                    {emp?.education ? (
+                                      <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{emp.education}</pre>
+                                    ) : (
+                                      <span className="text-muted">No education details added yet.</span>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -701,61 +635,15 @@ const EmployeeDetails = () => {
                               >
                                 <div className="accordion-body">
                                   <div>
-                                    <div className="mb-3">
-                                      <div className="d-flex align-items-center justify-content-between">
-                                        <div>
-                                          <h6 className="d-inline-flex align-items-center fw-medium">
-                                            Google
-                                          </h6>
-                                          <span className="d-flex align-items-center badge bg-secondary-transparent mt-1">
-                                            <i className="ti ti-point-filled me-1" />
-                                            UI/UX Developer
-                                          </span>
-                                        </div>
-                                        <p className="text-dark">
-                                          Jan 2013 - Present
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <div className="mb-3">
-                                      <div className="d-flex align-items-center justify-content-between">
-                                        <div>
-                                          <h6 className="d-inline-flex align-items-center fw-medium">
-                                            Salesforce
-                                          </h6>
-                                          <span className="d-flex align-items-center badge bg-secondary-transparent mt-1">
-                                            <i className="ti ti-point-filled me-1" />
-                                            Web Developer
-                                          </span>
-                                        </div>
-                                        <p className="text-dark">
-                                          Dec 2012- Jan 2015
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div className="d-flex align-items-center justify-content-between">
-                                        <div>
-                                          <h6 className="d-inline-flex align-items-center fw-medium">
-                                            HubSpot
-                                          </h6>
-                                          <span className="d-flex align-items-center badge bg-secondary-transparent mt-1">
-                                            <i className="ti ti-point-filled me-1" />
-                                            Software Developer
-                                          </span>
-                                        </div>
-                                        <p className="text-dark">
-                                          Dec 2011- Jan 2012
-                                        </p>
-                                      </div>
-                                    </div>
+                                    {emp?.experience ? (
+                                      <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{emp.experience}</pre>
+                                    ) : (
+                                      <span className="text-muted">No experience details added yet.</span>
+                                    )}
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                      </div>
                       <div className="card">
                         <div className="card-body">
                           <div className="contact-grids-tab p-0 mb-3">
@@ -1147,7 +1035,11 @@ const EmployeeDetails = () => {
             </div>
           </div>
         </div>
-        <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
+                </div>
+
+      </div>
+      </div>
+<div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
           <p className="mb-0">2014 - 2026 © SmartHR.</p>
           <p>
             Designed &amp; Developed By{" "}
@@ -1257,7 +1149,8 @@ const EmployeeDetails = () => {
                           <input
                             type="text"
                             className="form-control"
-                            defaultValue="Anthony"
+                            value={emp?.firstName || ''}
+                            readOnly
                           />
                         </div>
                       </div>
@@ -1265,9 +1158,10 @@ const EmployeeDetails = () => {
                         <div className="mb-3">
                           <label className="form-label">Last Name</label>
                           <input
-                            type="email"
+                            type="text"
                             className="form-control"
-                            defaultValue="Lewis"
+                            value={emp?.lastName || ''}
+                            readOnly
                           />
                         </div>
                       </div>
@@ -1389,8 +1283,27 @@ const EmployeeDetails = () => {
                           <input
                             type="text"
                             className="form-control"
-                            defaultValue="(123) 4567 890"
+                            value={editBasic.phone}
+                            onChange={(e) => setEditBasic(p => ({ ...p, phone: e.target.value }))}
                           />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Gender</label>
+                          <input type="text" className="form-control" value={editBasic.gender} onChange={(e) => setEditBasic(p => ({ ...p, gender: e.target.value }))} />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Date of Birth</label>
+                          <input type="date" className="form-control" value={editBasic.dateOfBirth} onChange={(e) => setEditBasic(p => ({ ...p, dateOfBirth: e.target.value }))} />
+                        </div>
+                      </div>
+                      <div className="col-md-12">
+                        <div className="mb-3">
+                          <label className="form-label">Address</label>
+                          <input type="text" className="form-control" value={editBasic.address} onChange={(e) => setEditBasic(p => ({ ...p, address: e.target.value }))} />
                         </div>
                       </div>
                       <div className="col-md-6">
@@ -1433,9 +1346,8 @@ const EmployeeDetails = () => {
                           <textarea
                             className="form-control"
                             rows={3}
-                            defaultValue={
-                              "As an award winning designer, I deliver exceptional quality work and bring value to your brand! With 10 years of experience and 350+ projects completed worldwide with satisfied customers, I developed the 360° brand approach, which helped me to create numerous brands that are relevant, meaningful and loved.\n\t\t\t\t\t\t\t\t\t\t\t\t\t"
-                            }
+                            value={editAbout}
+                            onChange={(e) => setEditAbout(e.target.value)}
                           />
                         </div>
                       </div>
@@ -1453,6 +1365,7 @@ const EmployeeDetails = () => {
                       type="button"
                       data-bs-dismiss="modal"
                       className="btn btn-primary"
+                      onClick={() => saveField({ ...editBasic, about: editAbout })}
                     >
                       Save{" "}
                     </button>
@@ -2177,12 +2090,7 @@ const EmployeeDetails = () => {
           <div className="modal-content">
             <div className="modal-header">
               <h4 className="modal-title">Edit Personal Info</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
+              <button type="button" className="btn-close custom-btn-close" data-bs-dismiss="modal" aria-label="Close">
                 <i className="ti ti-x" />
               </button>
             </div>
@@ -2191,89 +2099,57 @@ const EmployeeDetails = () => {
                 <div className="row">
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Passport No <span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Passport No <span className="text-danger"> *</span></label>
+                      <input type="text" className="form-control" value={editPersonal.passportNo} onChange={(e) => setEditPersonal(p => ({ ...p, passportNo: e.target.value }))} />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Passport Expiry Date{" "}
-                        <span className="text-danger"> *</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
+                      <label className="form-label">Passport Expiry Date <span className="text-danger"> *</span></label>
+                      <input type="date" className="form-control" value={editPersonal.passportExpiry} onChange={(e) => setEditPersonal(p => ({ ...p, passportExpiry: e.target.value }))} />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Nationality <span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Nationality <span className="text-danger"> *</span></label>
+                      <input type="text" className="form-control" value={editPersonal.nationality} onChange={(e) => setEditPersonal(p => ({ ...p, nationality: e.target.value }))} />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label">Religion</label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Marital status <span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className="select"
-                        options={martialstatus}
-                        defaultValue={martialstatus[0]}
-                      />
+                      <input type="text" className="form-control" value={editPersonal.religion} onChange={(e) => setEditPersonal(p => ({ ...p, religion: e.target.value }))} />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">Employment spouse</label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Marital status <span className="text-danger"> *</span></label>
+                      <input type="text" className="form-control" value={editPersonal.maritalStatus} onChange={(e) => setEditPersonal(p => ({ ...p, maritalStatus: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="mb-3">
+                      <label className="form-label">Employment of Spouse</label>
+                      <input type="text" className="form-control" value={editPersonal.spouseEmployed} onChange={(e) => setEditPersonal(p => ({ ...p, spouseEmployed: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="mb-3">
+                      <label className="form-label">Spouse Name</label>
+                      <input type="text" className="form-control" value={editPersonal.spouseName} onChange={(e) => setEditPersonal(p => ({ ...p, spouseName: e.target.value }))} />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label">No. of children</label>
-                      <input type="text" className="form-control" />
+                      <input type="number" className="form-control" value={editPersonal.numberOfChildren} onChange={(e) => setEditPersonal(p => ({ ...p, numberOfChildren: e.target.value }))} />
                     </div>
                   </div>
                 </div>
               </div>
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-white border me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  data-bs-dismiss="modal"
-                  className="btn btn-primary"
-                >
-                  Save
-                </button>
+                <button type="button" className="btn btn-white border me-2" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" data-bs-dismiss="modal" className="btn btn-primary" onClick={() => saveField({ ...editPersonal })}>Save</button>
               </div>
             </form>
           </div>
@@ -2286,97 +2162,36 @@ const EmployeeDetails = () => {
           <div className="modal-content">
             <div className="modal-header">
               <h4 className="modal-title">Emergency Contact Details</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
+              <button type="button" className="btn-close custom-btn-close" data-bs-dismiss="modal" aria-label="Close">
                 <i className="ti ti-x" />
               </button>
             </div>
             <form>
               <div className="modal-body pb-0">
-                <div className="border-bottom mb-3 ">
-                  <div className="row">
-                    <h5 className="mb-3">Secondary Contact Details</h5>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">
-                          Name <span className="text-danger"> *</span>
-                        </label>
-                        <input type="text" className="form-control" />
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">Relationship </label>
-                        <input type="text" className="form-control" />
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">
-                          Phone No 1 <span className="text-danger"> *</span>
-                        </label>
-                        <input type="text" className="form-control" />
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">Phone No 2 </label>
-                        <input type="text" className="form-control" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
                 <div className="row">
-                  <h5 className="mb-3">Secondary Contact Details</h5>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Name <span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Name <span className="text-danger"> *</span></label>
+                      <input type="text" className="form-control" value={editEmergency.emergencyContactName} onChange={(e) => setEditEmergency(p => ({ ...p, emergencyContactName: e.target.value }))} />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">Relationship </label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Relationship</label>
+                      <input type="text" className="form-control" value={editEmergency.emergencyContactRelationship} onChange={(e) => setEditEmergency(p => ({ ...p, emergencyContactRelationship: e.target.value }))} />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Phone No 1 <span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Phone No 2 </label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Phone No <span className="text-danger"> *</span></label>
+                      <input type="text" className="form-control" value={editEmergency.emergencyContactPhone} onChange={(e) => setEditEmergency(p => ({ ...p, emergencyContactPhone: e.target.value }))} />
                     </div>
                   </div>
                 </div>
               </div>
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-white border me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  data-bs-dismiss="modal"
-                  className="btn btn-primary"
-                >
-                  Save
-                </button>
+                <button type="button" className="btn btn-white border me-2" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" data-bs-dismiss="modal" className="btn btn-primary" onClick={() => saveField({ ...editEmergency })}>Save</button>
               </div>
             </form>
           </div>
@@ -2389,12 +2204,7 @@ const EmployeeDetails = () => {
           <div className="modal-content">
             <div className="modal-header">
               <h4 className="modal-title">Bank Details</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
+              <button type="button" className="btn-close custom-btn-close" data-bs-dismiss="modal" aria-label="Close">
                 <i className="ti ti-x" />
               </button>
             </div>
@@ -2403,47 +2213,39 @@ const EmployeeDetails = () => {
                 <div className="row">
                   <div className="col-md-12">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Bank Details <span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Bank Name <span className="text-danger"> *</span></label>
+                      <input type="text" className="form-control" value={editBank.bankName} onChange={(e) => setEditBank(p => ({ ...p, bankName: e.target.value }))} />
                     </div>
                   </div>
                   <div className="col-md-12">
                     <div className="mb-3">
-                      <label className="form-label">Bank account No </label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Account Holder Name</label>
+                      <input type="text" className="form-control" value={editBank.bankAccountName} onChange={(e) => setEditBank(p => ({ ...p, bankAccountName: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="col-md-12">
+                    <div className="mb-3">
+                      <label className="form-label">Bank Account No</label>
+                      <input type="text" className="form-control" value={editBank.bankAccountNumber} onChange={(e) => setEditBank(p => ({ ...p, bankAccountNumber: e.target.value }))} />
                     </div>
                   </div>
                   <div className="col-md-12">
                     <div className="mb-3">
                       <label className="form-label">IFSC Code</label>
-                      <input type="text" className="form-control" />
+                      <input type="text" className="form-control" value={editBank.ifscCode} onChange={(e) => setEditBank(p => ({ ...p, ifscCode: e.target.value }))} />
                     </div>
                   </div>
                   <div className="col-md-12">
                     <div className="mb-3">
                       <label className="form-label">Branch Address</label>
-                      <input type="text" className="form-control" />
+                      <input type="text" className="form-control" value={editBank.branchName} onChange={(e) => setEditBank(p => ({ ...p, branchName: e.target.value }))} />
                     </div>
                   </div>
                 </div>
               </div>
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-white border me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  data-bs-dismiss="modal"
-                  className="btn btn-primary"
-                >
-                  Save
-                </button>
+                <button type="button" className="btn btn-white border me-2" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" data-bs-dismiss="modal" className="btn btn-primary" onClick={() => saveField({ ...editBank })}>Save</button>
               </div>
             </form>
           </div>
@@ -2539,93 +2341,26 @@ const EmployeeDetails = () => {
           <div className="modal-content">
             <div className="modal-header">
               <h4 className="modal-title">Education Information</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
+              <button type="button" className="btn-close custom-btn-close" data-bs-dismiss="modal" aria-label="Close">
                 <i className="ti ti-x" />
               </button>
             </div>
             <form>
               <div className="modal-body pb-0">
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Institution Name <span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Course <span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Start Date <span className="text-danger"> *</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        End Date <span className="text-danger"> *</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                <div className="mb-3">
+                  <label className="form-label">Education Details <span className="text-muted fs-12">(e.g. University, Degree, Year)</span></label>
+                  <textarea
+                    className="form-control"
+                    rows={6}
+                    placeholder="e.g.\nOxford University - Computer Science (2018-2022)\nHigh School - ABC School (2016-2018)"
+                    value={editEducation}
+                    onChange={(e) => setEditEducation(e.target.value)}
+                  />
                 </div>
               </div>
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-white border me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  data-bs-dismiss="modal"
-                  className="btn btn-primary"
-                >
-                  Save
-                </button>
+                <button type="button" className="btn btn-white border me-2" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" data-bs-dismiss="modal" className="btn btn-primary" onClick={() => saveField({ education: editEducation })}>Save</button>
               </div>
             </form>
           </div>
@@ -2637,109 +2372,27 @@ const EmployeeDetails = () => {
         <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
-              <h4 className="modal-title">Company Information</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
+              <h4 className="modal-title">Experience Information</h4>
+              <button type="button" className="btn-close custom-btn-close" data-bs-dismiss="modal" aria-label="Close">
                 <i className="ti ti-x" />
               </button>
             </div>
             <form>
               <div className="modal-body pb-0">
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Previous Company Name{" "}
-                        <span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Designation <span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Start Date <span className="text-danger"> *</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        End Date <span className="text-danger"> *</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-check-label d-flex align-items-center mt-0">
-                        <input
-                          className="form-check-input mt-0 me-2"
-                          type="checkbox"
-                          defaultChecked
-                        />
-                        <span className="text-dark">
-                          Check if you working present
-                        </span>
-                      </label>
-                    </div>
-                  </div>
+                <div className="mb-3">
+                  <label className="form-label">Work Experience <span className="text-muted fs-12">(e.g. Company, Role, Year)</span></label>
+                  <textarea
+                    className="form-control"
+                    rows={6}
+                    placeholder="e.g.\nGoogle - Software Engineer (2020 - Present)\nInfosys - Developer (2018 - 2020)"
+                    value={editExperience}
+                    onChange={(e) => setEditExperience(e.target.value)}
+                  />
                 </div>
               </div>
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-white border me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  data-bs-dismiss="modal"
-                  className="btn btn-primary"
-                >
-                  Save
-                </button>
+                <button type="button" className="btn btn-white border me-2" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" data-bs-dismiss="modal" className="btn btn-primary" onClick={() => saveField({ experience: editExperience })}>Save</button>
               </div>
             </form>
           </div>
