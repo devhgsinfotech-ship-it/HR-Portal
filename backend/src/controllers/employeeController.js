@@ -4,6 +4,16 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const emailService = require('../utils/emailService');
 
+function getCompanyPrefix(companyName) {
+    if (!companyName) return 'EMP';
+    // Get the first word of the company name
+    const firstWord = companyName.trim().split(/\s+/)[0];
+    // Keep only letters/numbers and convert to uppercase
+    const cleanPrefix = firstWord.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    return cleanPrefix || 'EMP';
+}
+
+
 async function checkEmailAvailability(req, res) {
     try {
         const { email } = req.query;
@@ -94,7 +104,7 @@ async function createEmployee(req, res) {
             const employee = await tx.employee.create({
                 data: {
                     userId: user.id,
-                    employeeCode: `EMP-${Date.now().toString().slice(-6)}`,
+                    employeeCode: `${getCompanyPrefix(company.name)}-${Date.now().toString().slice(-6)}`,
                     firstName,
                     lastName,
                     phone,
@@ -374,7 +384,9 @@ async function getMe(req, res) {
                 const nameParts = user.name.trim().split(/\s+/);
                 const firstName = nameParts[0] || 'Admin';
                 const lastName = nameParts.slice(1).join(' ') || 'User';
-                const employeeCode = `HR-${Date.now().toString().slice(-6)}`;
+                const employeeCode = user.company 
+                    ? `${getCompanyPrefix(user.company.name)}-HR-${Date.now().toString().slice(-6)}`
+                    : `HR-${Date.now().toString().slice(-6)}`;
 
                 employee = await prisma.employee.create({
                     data: {
