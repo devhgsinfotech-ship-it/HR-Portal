@@ -31,21 +31,73 @@ const LeaveSettings = () => {
   const [sourceEmployees, setSourceEmployees] = useState<any[]>([]);
   const [targetEmployees, setTargetEmployees] = useState<any[]>([]);
 
+  // Selection states for custom dual list select
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
+  const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>([]);
+
+  const moveToTarget = () => {
+    if (selectedSourceIds.length === 0) return;
+    const ids = new Set(selectedSourceIds.map(id => parseInt(id, 10)));
+    const toMove = sourceEmployees.filter(emp => ids.has(emp.id));
+    
+    setTargetEmployees([...targetEmployees, ...toMove]);
+    setSourceEmployees(sourceEmployees.filter(emp => !ids.has(emp.id)));
+    setSelectedSourceIds([]);
+  };
+
+  const moveAllToTarget = () => {
+    setTargetEmployees([...targetEmployees, ...sourceEmployees]);
+    setSourceEmployees([]);
+    setSelectedSourceIds([]);
+  };
+
+  const moveToSource = () => {
+    if (selectedTargetIds.length === 0) return;
+    const ids = new Set(selectedTargetIds.map(id => parseInt(id, 10)));
+    const toMove = targetEmployees.filter(emp => ids.has(emp.id));
+    
+    setSourceEmployees([...sourceEmployees, ...toMove]);
+    setTargetEmployees(targetEmployees.filter(emp => !ids.has(emp.id)));
+    setSelectedTargetIds([]);
+  };
+
+  const moveAllToSource = () => {
+    setSourceEmployees([...sourceEmployees, ...targetEmployees]);
+    setTargetEmployees([]);
+    setSelectedTargetIds([]);
+  };
+
   const fetchAllData = async () => {
+    setLoading(true);
+    setErrorMsg('');
+    
+    // Fetch leave types
     try {
-      const [typesRes, empRes, policiesRes] = await Promise.all([
-        apiClient.get('/leaves/types'),
-        apiClient.get('/employees'),
-        apiClient.get('/leaves/policies')
-      ]);
+      const typesRes = await apiClient.get('/leaves/types');
       setDbLeaveTypes(typesRes.data);
-      setDbEmployees(empRes.data);
-      setDbPolicies(policiesRes.data);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error fetching leave settings data:', err);
-      setLoading(false);
+    } catch (err: any) {
+      console.error('Error fetching leave types:', err);
+      setErrorMsg('Failed to load leave types. Make sure your local backend is restarted.');
     }
+
+    // Fetch employees
+    try {
+      const empRes = await apiClient.get('/employees');
+      setDbEmployees(empRes.data);
+    } catch (err: any) {
+      console.error('Error fetching employees:', err);
+    }
+
+    // Fetch policies
+    try {
+      const policiesRes = await apiClient.get('/leaves/policies');
+      setDbPolicies(policiesRes.data);
+    } catch (err: any) {
+      console.error('Error fetching policies:', err);
+      setErrorMsg('Failed to load policies. Did you restart the backend server after the schema migration?');
+    }
+
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -83,6 +135,8 @@ const LeaveSettings = () => {
     }));
     setSourceEmployees(mapped);
     setTargetEmployees([]);
+    setSelectedSourceIds([]);
+    setSelectedTargetIds([]);
     setErrorMsg('');
   };
 
@@ -109,6 +163,8 @@ const LeaveSettings = () => {
 
     setSourceEmployees(source);
     setTargetEmployees(target);
+    setSelectedSourceIds([]);
+    setSelectedTargetIds([]);
     setErrorMsg('');
   };
 
@@ -210,6 +266,14 @@ const LeaveSettings = () => {
             </div>
           </div>
           {/* /Breadcrumb */}
+
+          {errorMsg && (
+            <div className="alert alert-danger alert-dismissible fade show" role="alert">
+              <i className="ti ti-alert-triangle me-2" />
+              {errorMsg}
+              <button type="button" className="btn-close" data-bs-dismiss="alert" aria-label="Close" />
+            </div>
+          )}
 
           {/* Leaves Info */}
           <div className="row">
@@ -475,22 +539,51 @@ const LeaveSettings = () => {
                 </div>
                 <div className="mb-3 leave-duallist">
                   <label className="form-label">Add Employees to Policy</label>
-                  <div className="card p-2 border">
-                    <PickList
-                      dataKey="id"
-                      source={sourceEmployees}
-                      target={targetEmployees}
-                      onChange={(e) => {
-                        setSourceEmployees(e.source);
-                        setTargetEmployees(e.target);
-                      }}
-                      itemTemplate={(item: any) => <span className="fw-medium">{item.Name}</span>}
-                      breakpoint="1280px"
-                      sourceHeader="Available Employees"
-                      targetHeader="Assigned to Policy"
-                      sourceStyle={{ height: '18rem' }}
-                      targetStyle={{ height: '18rem' }}
-                    />
+                  <div className="row align-items-center">
+                    <div className="col-lg-5 col-sm-5">
+                      <p className="fw-semibold mb-1 text-muted">Available Employees</p>
+                      <select
+                        className="form-control form-select"
+                        size={8}
+                        multiple
+                        value={selectedSourceIds}
+                        onChange={(e) => setSelectedSourceIds(Array.from(e.target.selectedOptions, option => option.value))}
+                        style={{ height: '18rem' }}
+                      >
+                        {sourceEmployees.map(emp => (
+                          <option value={emp.id} key={emp.id}>{emp.Name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-lg-2 col-sm-2 d-grid gap-2 text-center my-3 my-lg-0">
+                      <button type="button" className="btn btn-white border w-100" onClick={moveAllToTarget}>
+                        <i className="fa fa-forward" />
+                      </button>
+                      <button type="button" className="btn btn-white border w-100" onClick={moveToTarget}>
+                        <i className="fa fa-chevron-right" />
+                      </button>
+                      <button type="button" className="btn btn-white border w-100" onClick={moveToSource}>
+                        <i className="fa fa-chevron-left" />
+                      </button>
+                      <button type="button" className="btn btn-white border w-100" onClick={moveAllToSource}>
+                        <i className="fa fa-backward" />
+                      </button>
+                    </div>
+                    <div className="col-lg-5 col-sm-5">
+                      <p className="fw-semibold mb-1 text-muted">Assigned to Policy</p>
+                      <select
+                        className="form-control form-select"
+                        size={8}
+                        multiple
+                        value={selectedTargetIds}
+                        onChange={(e) => setSelectedTargetIds(Array.from(e.target.selectedOptions, option => option.value))}
+                        style={{ height: '18rem' }}
+                      >
+                        {targetEmployees.map(emp => (
+                          <option value={emp.id} key={emp.id}>{emp.Name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
                 <div className="text-end">

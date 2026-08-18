@@ -292,9 +292,7 @@ async function getLeaveBalances(req, res) {
                 }
             });
 
-            const total = bal 
-                ? Number(bal.totalDays) 
-                : (policy ? Number(policy.days) : Number(lt.totalDaysPerYear));
+            const total = policy ? Number(policy.days) : Number(lt.totalDaysPerYear);
             const used = bal ? Number(bal.usedDays) : 0;
 
             return {
