@@ -324,35 +324,36 @@ const LeaveEmployee = () => {
           {/* /Breadcrumb */}
           {/* Leaves Info */}
           <div className="row">
-            {(dbBalances.length > 0 ? dbBalances : [
-              { leaveTypeName: 'Annual Leaves', usedDays: 0, remainingDays: 12 },
-              { leaveTypeName: 'Medical Leaves', usedDays: 0, remainingDays: 12 },
-              { leaveTypeName: 'Casual Leaves', usedDays: 0, remainingDays: 12 },
-              { leaveTypeName: 'Other Leaves', usedDays: 0, remainingDays: 30 },
-            ]).map((bal, idx) => (
-              <div className="col-xl-3 col-md-6" key={bal.leaveTypeId || idx}>
-                <div className={`card ${idx % 4 === 0 ? 'bg-black-le' : idx % 4 === 1 ? 'bg-blue-le' : idx % 4 === 2 ? 'bg-purple-le' : 'bg-pink-le'}`}>
-                  <div className="card-body">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <div className="text-start">
-                        <p className="mb-1">{bal.leaveTypeName}</p>
-                        <h4>{String(bal.usedDays).padStart(2, '0')}</h4>
-                      </div>
-                      <div className="d-flex">
-                        <div className="flex-shrink-0 me-2">
-                          <span className="avatar avatar-md d-flex">
-                            <i className="ti ti-calendar-event fs-32" />
-                          </span>
+            {dbBalances.length === 0 ? (
+              <div className="col-12 text-center py-4 text-muted fs-14">
+                No leave balances available.
+              </div>
+            ) : (
+              dbBalances.map((bal, idx) => (
+                <div className="col-xl-3 col-md-6" key={bal.leaveTypeId || idx}>
+                  <div className={`card ${idx % 4 === 0 ? 'bg-black-le' : idx % 4 === 1 ? 'bg-blue-le' : idx % 4 === 2 ? 'bg-purple-le' : 'bg-pink-le'}`}>
+                    <div className="card-body">
+                      <div className="d-flex align-items-center justify-content-between">
+                        <div className="text-start">
+                          <p className="mb-1">{bal.leaveTypeName}</p>
+                          <h4>{String(bal.usedDays).padStart(2, '0')}</h4>
+                        </div>
+                        <div className="d-flex">
+                          <div className="flex-shrink-0 me-2">
+                            <span className="avatar avatar-md d-flex">
+                              <i className="ti ti-calendar-event fs-32" />
+                            </span>
+                          </div>
                         </div>
                       </div>
+                      <span className="badge bg-secondary-transparent">
+                        Remaining Leaves : {String(bal.remainingDays).padStart(2, '0')}
+                      </span>
                     </div>
-                    <span className="badge bg-secondary-transparent">
-                      Remaining Leaves : {String(bal.remainingDays).padStart(2, '0')}
-                    </span>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
           {/* /Leaves Info */}
           {/* Leaves list */}
