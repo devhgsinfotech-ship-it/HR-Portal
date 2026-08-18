@@ -11,7 +11,11 @@ function formatDate(date: Date) {
   return `${day}/${month}/${year}`;
 }
 
-export default function PredefinedDatePicker() {
+interface PredefinedDatePickerProps {
+  onDateRangeChange?: (startDate: Date | null, endDate: Date | null) => void;
+}
+
+export default function PredefinedDatePicker({ onDateRangeChange }: PredefinedDatePickerProps) {
   const now = new Date();
   const startOfToday = new Date(
     now.getFullYear(),
@@ -140,9 +144,14 @@ export default function PredefinedDatePicker() {
   };
 
   const handleApply = (_event: any, picker: any) => {
+    const start = picker.startDate.toDate();
+    const end = picker.endDate.toDate();
     setDisplayValue(
-      `${formatDate(picker.startDate.toDate())} - ${formatDate(picker.endDate.toDate())}`,
+      `${formatDate(start)} - ${formatDate(end)}`,
     );
+    if (onDateRangeChange) {
+      onDateRangeChange(start, end);
+    }
   };
 
   return (

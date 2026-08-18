@@ -46,6 +46,137 @@ const EmployeeList = () => {
   const [loading, setLoading] = useState(false);
 
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
+  const [selectedDesignation, setSelectedDesignation] = useState<string>("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [selectedDateRange, setSelectedDateRange] = useState<{ start: Date | null, end: Date | null }>({ start: null, end: null });
+
+  const stats = useMemo(() => {
+    const total = dbEmployees.length;
+    const active = dbEmployees.filter(emp => emp.onboardingStatus === 'COMPLETED' || emp.Status === 'Active').length;
+    const inactive = dbEmployees.filter(emp => emp.Status !== 'Active').length;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const newJoiners = dbEmployees.filter(emp => {
+      if (!emp.raw?.dateOfJoining) return false;
+      const joinDate = new Date(emp.raw.dateOfJoining);
+      return joinDate >= thirtyDaysAgo;
+    }).length;
+
+    return { total, active, inactive, newJoiners };
+  }, [dbEmployees]);
+
+  const filteredEmployees = useMemo(() => {
+    return dbEmployees.filter(emp => {
+      // 1. Designation Filter
+      if (selectedDesignation && emp.Designation !== selectedDesignation) {
+        return false;
+      }
+      
+      // 2. Status Filter
+      if (selectedStatus) {
+        const isEmpActive = emp.onboardingStatus === 'COMPLETED' || emp.Status === 'Active';
+        if (selectedStatus === 'Active' && !isEmpActive) return false;
+        if (selectedStatus === 'Inactive' && isEmpActive) return false;
+      }
+      
+      // 3. Date Range Filter
+      if (selectedDateRange.start && selectedDateRange.end) {
+        if (!emp.raw?.dateOfJoining) return false;
+        const joinDate = new Date(emp.raw.dateOfJoining);
+        const start = new Date(selectedDateRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(selectedDateRange.end);
+        end.setHours(23, 59, 59, 999);
+        if (joinDate < start || joinDate > end) return false;
+      }
+      
+      return true;
+    });
+  }, [dbEmployees, selectedDesignation, selectedStatus, selectedDateRange]);
+
+  const handleExportExcel = () => {
+    const headers = ["Emp ID", "Name", "Email", "Phone", "Designation", "Joining Date", "Status"];
+    const rows = filteredEmployees.map(emp => [
+      emp.EmpId,
+      emp.Name,
+      emp.Email,
+      emp.Phone,
+      emp.Designation,
+      emp.JoiningDate,
+      emp.Status
+    ]);
+    const csvContent = [headers, ...rows]
+      .map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Employee_List_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportPDF = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const tableHtml = `
+      <html>
+        <head>
+          <title>Employee List</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h2 { text-align: center; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <h2>Employee List</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Emp ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Designation</th>
+                <th>Joining Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredEmployees.map(emp => `
+                <tr>
+                  <td>${emp.EmpId}</td>
+                  <td>${emp.Name}</td>
+                  <td>${emp.Email}</td>
+                  <td>${emp.Phone}</td>
+                  <td>${emp.Designation}</td>
+                  <td>${emp.JoiningDate}</td>
+                  <td>${emp.Status}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+          <script>
+            window.onload = function() {
+              window.print();
+              window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(tableHtml);
+    printWindow.document.close();
+  };
+
   const [verifyEmp, setVerifyEmp] = useState<any>(null);
   
   const [dbDepartments, setDbDepartments] = useState<any[]>([]);
@@ -538,13 +669,13 @@ const EmployeeList = () => {
                   </Link>
                   <ul className="dropdown-menu  dropdown-menu-end p-3">
                     <li>
-                      <Link to="#" className="dropdown-item rounded-1">
+                      <Link to="#" className="dropdown-item rounded-1" onClick={handleExportPDF}>
                         <i className="ti ti-file-type-pdf me-1" />
                         Export as PDF
                       </Link>
                     </li>
                     <li>
-                      <Link to="#" className="dropdown-item rounded-1">
+                      <Link to="#" className="dropdown-item rounded-1" onClick={handleExportExcel}>
                         <i className="ti ti-file-type-xls me-1" />
                         Export as Excel{" "}
                       </Link>
@@ -585,7 +716,7 @@ const EmployeeList = () => {
                       <p className="fs-12 fw-medium mb-1 text-truncate">
                         Total Employee
                       </p>
-                      <h4>1007</h4>
+                      <h4>{stats.total}</h4>
                     </div>
                   </div>
                   <div>
@@ -612,7 +743,7 @@ const EmployeeList = () => {
                       <p className="fs-12 fw-medium mb-1 text-truncate">
                         Active
                       </p>
-                      <h4>1007</h4>
+                      <h4>{stats.active}</h4>
                     </div>
                   </div>
                   <div>
@@ -639,7 +770,7 @@ const EmployeeList = () => {
                       <p className="fs-12 fw-medium mb-1 text-truncate">
                         InActive
                       </p>
-                      <h4>1007</h4>
+                      <h4>{stats.inactive}</h4>
                     </div>
                   </div>
                   <div>
@@ -666,7 +797,7 @@ const EmployeeList = () => {
                       <p className="fs-12 fw-medium mb-1 text-truncate">
                         New Joiners
                       </p>
-                      <h4>67</h4>
+                      <h4>{stats.newJoiners}</h4>
                     </div>
                   </div>
                   <div>
@@ -686,7 +817,7 @@ const EmployeeList = () => {
               <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
                 <div className="me-3">
                   <div className="input-icon position-relative">
-                    <PredefinedDateRanges />
+                    <PredefinedDateRanges onDateRangeChange={(start, end) => setSelectedDateRange({ start, end })} />
                   </div>
                 </div>
                 <div className="dropdown me-3">
@@ -695,29 +826,21 @@ const EmployeeList = () => {
                     className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
                     data-bs-toggle="dropdown"
                   >
-                    Designation
+                    {selectedDesignation || "Designation"}
                   </Link>
                   <ul className="dropdown-menu  dropdown-menu-end p-3">
                     <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Finance
+                      <Link to="#" className="dropdown-item rounded-1" onClick={() => setSelectedDesignation("")}>
+                        All Designations
                       </Link>
                     </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Developer
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Executive
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Manager
-                      </Link>
-                    </li>
+                    {dbDesignations.map(d => (
+                      <li key={d.value}>
+                        <Link to="#" className="dropdown-item rounded-1" onClick={() => setSelectedDesignation(d.label)}>
+                          {d.label}
+                        </Link>
+                      </li>
+                    ))}
                   </ul>
                 </div>
                 <div className="dropdown me-3">
@@ -726,16 +849,21 @@ const EmployeeList = () => {
                     className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
                     data-bs-toggle="dropdown"
                   >
-                    Select Status
+                    {selectedStatus || "Select Status"}
                   </Link>
                   <ul className="dropdown-menu  dropdown-menu-end p-3">
                     <li>
-                      <Link to="#" className="dropdown-item rounded-1">
+                      <Link to="#" className="dropdown-item rounded-1" onClick={() => setSelectedStatus("")}>
+                        All Statuses
+                      </Link>
+                    </li>
+                    <li>
+                      <Link to="#" className="dropdown-item rounded-1" onClick={() => setSelectedStatus("Active")}>
                         Active
                       </Link>
                     </li>
                     <li>
-                      <Link to="#" className="dropdown-item rounded-1">
+                      <Link to="#" className="dropdown-item rounded-1" onClick={() => setSelectedStatus("Inactive")}>
                         Inactive
                       </Link>
                     </li>
@@ -760,7 +888,7 @@ const EmployeeList = () => {
               </div>
             </div>
             <div className="card-body p-0">
-              <Table columns={columns} dataSource={dbEmployees} Selection={false} />
+              <Table columns={columns} dataSource={filteredEmployees} Selection={false} />
             </div>
           </div>
         </div>
