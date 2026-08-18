@@ -9,6 +9,8 @@ router.use(verifyToken);
 // Leave Types
 router.get('/types', leaveController.getLeaveTypes);
 router.post('/types', requireRole('HR', 'SUPER_ADMIN'), leaveController.createLeaveType);
+router.put('/types/:id', requireRole('HR', 'SUPER_ADMIN'), leaveController.updateLeaveType);
+router.delete('/types/:id', requireRole('HR', 'SUPER_ADMIN'), leaveController.deleteLeaveType);
 
 // Leave Requests
 router.get('/requests', leaveController.getLeaveRequests);

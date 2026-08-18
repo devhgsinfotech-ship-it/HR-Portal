@@ -5,27 +5,10 @@ const prisma = require('../config/prisma');
 async function getLeaveTypes(req, res) {
     try {
         const companyId = req.user.companyId;
-        let leaveTypes = await prisma.leaveType.findMany({
+        const leaveTypes = await prisma.leaveType.findMany({
             where: { companyId },
             orderBy: { name: 'asc' }
         });
-
-        // If company has no leave types set up, seed default ones
-        if (leaveTypes.length === 0) {
-            await prisma.leaveType.createMany({
-                data: [
-                    { companyId, name: 'Casual Leave', totalDaysPerYear: 12, isPaid: true },
-                    { companyId, name: 'Sick Leave', totalDaysPerYear: 12, isPaid: true },
-                    { companyId, name: 'Earned Leave', totalDaysPerYear: 15, isPaid: true },
-                    { companyId, name: 'Unpaid Leave', totalDaysPerYear: 30, isPaid: false }
-                ]
-            });
-            leaveTypes = await prisma.leaveType.findMany({
-                where: { companyId },
-                orderBy: { name: 'asc' }
-            });
-        }
-
         res.json(leaveTypes);
     } catch (error) {
         console.error('Error fetching leave types:', error);
@@ -310,11 +293,77 @@ async function getLeaveBalances(req, res) {
     }
 }
 
+// ── UPDATE LEAVE TYPE (HR) ──────────────────────────────────
+async function updateLeaveType(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const { id } = req.params;
+        const { name, totalDaysPerYear, isPaid } = req.body;
+
+        const existing = await prisma.leaveType.findFirst({
+            where: { id: parseInt(id, 10), companyId }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ message: 'Leave type not found' });
+        }
+
+        const updated = await prisma.leaveType.update({
+            where: { id: existing.id },
+            data: {
+                name: name !== undefined ? name : existing.name,
+                totalDaysPerYear: totalDaysPerYear !== undefined ? parseFloat(totalDaysPerYear) : existing.totalDaysPerYear,
+                isPaid: isPaid !== undefined ? Boolean(isPaid) : existing.isPaid
+            }
+        });
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Error updating leave type:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+// ── DELETE LEAVE TYPE (HR) ──────────────────────────────────
+async function deleteLeaveType(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const { id } = req.params;
+
+        const existing = await prisma.leaveType.findFirst({
+            where: { id: parseInt(id, 10), companyId }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ message: 'Leave type not found' });
+        }
+
+        // Check if there are any associated leave requests or balances
+        const requestCount = await prisma.leaveRequest.count({ where: { leaveTypeId: existing.id } });
+        const balanceCount = await prisma.leaveBalance.count({ where: { leaveTypeId: existing.id } });
+
+        if (requestCount > 0 || balanceCount > 0) {
+            return res.status(400).json({ message: 'This leave type is in use by employees and cannot be deleted.' });
+        }
+
+        await prisma.leaveType.delete({
+            where: { id: existing.id }
+        });
+
+        res.json({ message: 'Leave type deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting leave type:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     getLeaveTypes,
     createLeaveType,
     getLeaveRequests,
     applyLeave,
     updateLeaveStatus,
-    getLeaveBalances
+    getLeaveBalances,
+    updateLeaveType,
+    deleteLeaveType
 };
