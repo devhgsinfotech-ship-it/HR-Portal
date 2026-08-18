@@ -362,10 +362,10 @@ const LeaveEmployee = () => {
               <div className="d-flex">
                 <h5 className="me-2">Leave List</h5>
                 <span className="badge bg-primary-transparent me-2">
-                  Total Leaves : 48
+                  Total Leaves : {dbBalances.reduce((acc, bal) => acc + Number(bal.totalDays), 0)}
                 </span>
                 <span className="badge bg-secondary-transparent">
-                  Total Remaining Leaves : 23
+                  Total Remaining Leaves : {dbBalances.reduce((acc, bal) => acc + Number(bal.remainingDays), 0)}
                 </span>
               </div>
               <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
