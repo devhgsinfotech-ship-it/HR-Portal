@@ -188,8 +188,7 @@ model Employee {
   rejectionReason     String?
   shiftPolicyId       Int?
   shiftPolicy         ShiftPolicy?    @relation(fields: [shiftPolicyId], references: [id], onDelete: SetNull)
-  leavePolicyId       Int?
-  leavePolicy         LeavePolicy?    @relation(fields: [leavePolicyId], references: [id], onDelete: SetNull)
+  leavePolicies       LeavePolicy[]
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
@@ -286,6 +285,7 @@ model LeaveType {
 
   leaveRequests LeaveRequest[]
   leaveBalances LeaveBalance[]
+  leavePolicies LeavePolicy[]
 
   @@unique([companyId, name])
   @@map("leave_types")
@@ -683,19 +683,20 @@ model ShiftPolicy {
 }
 
 model LeavePolicy {
-  id             Int      @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   companyId      Int
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leaveTypeId    Int
+  leaveType      LeaveType    @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
   name           String
   description    String?
-  casualLeaves   Int      @default(0)
-  sickLeaves     Int      @default(0)
-  earnedLeaves   Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  days           Decimal      @db.Decimal(5, 1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   employees      Employee[]
 
+  @@unique([companyId, leaveTypeId, name])
   @@map("leave_policies")
 }
 

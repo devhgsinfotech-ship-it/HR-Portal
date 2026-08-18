@@ -1,48 +1,176 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { all_routes } from '../../../../router/all_routes';
 import CommonSelect from '../../../../core/common/commonSelect';
 import ImageWithBasePath from '../../../../core/common/imageWithBasePath';
 import { PickList } from 'primereact/picklist';
-import { SelectWithImage } from '../../../../core/common/selectWithImage';
 import CollapseHeader from '../../../../core/common/collapse-header/collapse-header';
+import apiClient from '../../../../core/utils/apiClient';
 
 const LeaveSettings = () => {
+  const [dbLeaveTypes, setDbLeaveTypes] = useState<any[]>([]);
+  const [dbEmployees, setDbEmployees] = useState<any[]>([]);
+  const [dbPolicies, setDbPolicies] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const leavetype = [
-    { value: "Select", label: "Select" },
-    { value: "Medical Leave", label: "Medical Leave" },
-    { value: "Casual Leave", label: "Casual Leave" },
-    { value: "Annual Leave", label: "Annual Leave" },
-  ];
-  const addemployee = [
-    { value: "Select", label: "Select" },
-    { value: "Sophie", label: "Sophie" },
-    { value: "Cameron", label: "Cameron" },
-    { value: "Doris", label: "Doris" },
-  ];
-  const [source, setSource] = useState<any>([
-    { key: "1", Name: "Bernardo Galaviz" },
-    { key: "2", Name: "Bernardo Galaviz" },
-    { key: "3", Name: "John Doe" },
-    { key: "4", Name: "John Smith" },
-    { key: "5", Name: 'Mike Litorus' },
-  ]);
-  const [target, setTarget] = useState<any>([]);
+  // Selected leave type for Custom Policy list view & settings modal
+  const [selectedType, setSelectedType] = useState<any>(null);
 
-  const onChange = (event: any) => {
-    setSource(event.source);
-    setTarget(event.target);
+  // Default Settings Modal State
+  const [typeDays, setTypeDays] = useState('12');
+  const [typeIsPaid, setTypeIsPaid] = useState(true);
+
+  // Add/Edit Custom Policy State
+  const [policyName, setPolicyName] = useState('');
+  const [policyDays, setPolicyDays] = useState('12');
+  const [policyTypeId, setPolicyTypeId] = useState('');
+  const [editPolicyId, setEditPolicyId] = useState<number | null>(null);
+
+  // PickList State
+  const [sourceEmployees, setSourceEmployees] = useState<any[]>([]);
+  const [targetEmployees, setTargetEmployees] = useState<any[]>([]);
+
+  const fetchAllData = async () => {
+    try {
+      const [typesRes, empRes, policiesRes] = await Promise.all([
+        apiClient.get('/leaves/types'),
+        apiClient.get('/employees'),
+        apiClient.get('/leaves/policies')
+      ]);
+      setDbLeaveTypes(typesRes.data);
+      setDbEmployees(empRes.data);
+      setDbPolicies(policiesRes.data);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching leave settings data:', err);
+      setLoading(false);
+    }
   };
-  const itemTemplate = (item: any) => {
-    return (
-      <span className="font-bold">{item.Name}</span>
-    );
+
+  useEffect(() => {
+    fetchAllData();
+  }, []);
+
+  const handleUpdateTypeSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedType) return;
+    try {
+      await apiClient.put(`/leaves/types/${selectedType.id}`, {
+        name: selectedType.name,
+        totalDaysPerYear: parseFloat(typeDays),
+        isPaid: typeIsPaid
+      });
+      
+      const closeBtn = document.querySelector('#leave_type_settings_modal .btn-close') as HTMLButtonElement;
+      if (closeBtn) closeBtn.click();
+      
+      fetchAllData();
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || 'Error updating type settings');
+    }
+  };
+
+  const initAddPolicyModal = () => {
+    setEditPolicyId(null);
+    setPolicyName('');
+    setPolicyDays('12');
+    setPolicyTypeId(dbLeaveTypes[0]?.id || '');
+    // Reset PickList source and target
+    const mapped = dbEmployees.map(emp => ({
+      id: emp.id,
+      Name: `${emp.firstName || ''} ${emp.lastName || ''}`.trim()
+    }));
+    setSourceEmployees(mapped);
+    setTargetEmployees([]);
+    setErrorMsg('');
+  };
+
+  const initEditPolicyModal = (policy: any) => {
+    setEditPolicyId(policy.id);
+    setPolicyName(policy.name);
+    setPolicyDays(String(policy.days));
+    setPolicyTypeId(String(policy.leaveTypeId));
+    
+    // Set target employees (assigned)
+    const target = policy.employees.map((emp: any) => ({
+      id: emp.id,
+      Name: `${emp.firstName || ''} ${emp.lastName || ''}`.trim()
+    }));
+    
+    // Set source employees (not assigned)
+    const assignedIds = new Set(target.map((t: any) => t.id));
+    const source = dbEmployees
+      .filter(emp => !assignedIds.has(emp.id))
+      .map(emp => ({
+        id: emp.id,
+        Name: `${emp.firstName || ''} ${emp.lastName || ''}`.trim()
+      }));
+
+    setSourceEmployees(source);
+    setTargetEmployees(target);
+    setErrorMsg('');
+  };
+
+  const handleSavePolicy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = {
+      name: policyName,
+      leaveTypeId: parseInt(policyTypeId, 10),
+      days: parseFloat(policyDays),
+      employeeIds: targetEmployees.map(t => t.id)
+    };
+
+    try {
+      if (editPolicyId) {
+        await apiClient.put(`/leaves/policies/${editPolicyId}`, payload);
+      } else {
+        await apiClient.post('/leaves/policies', payload);
+      }
+
+      // Close modal
+      const closeBtn = document.querySelector('#custom_policy_modal .btn-close') as HTMLButtonElement;
+      if (closeBtn) closeBtn.click();
+      
+      // Close custom policy list modal if open
+      const closeListBtn = document.querySelector('#custom_policy_list_modal .btn-close') as HTMLButtonElement;
+      if (closeListBtn) closeListBtn.click();
+
+      fetchAllData();
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || 'Error saving policy');
+    }
+  };
+
+  const handleDeletePolicy = async (policyId: number) => {
+    if (!window.confirm('Are you sure you want to delete this custom policy?')) return;
+    try {
+      await apiClient.delete(`/leaves/policies/${policyId}`);
+      
+      const closeListBtn = document.querySelector('#custom_policy_list_modal .btn-close') as HTMLButtonElement;
+      if (closeListBtn) closeListBtn.click();
+
+      fetchAllData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error deleting policy');
+    }
+  };
+
+  const handleToggleTypeStatus = async (type: any, checked: boolean) => {
+    try {
+      await apiClient.put(`/leaves/types/${type.id}`, {
+        name: type.name,
+        totalDaysPerYear: type.totalDaysPerYear,
+        isPaid: checked
+      });
+      fetchAllData();
+    } catch (err) {
+      console.error('Error toggling status:', err);
+    }
   };
 
   return (
     <>
-      {/* Page Wrapper */}
       <div className="page-wrapper">
         <div className="content">
           {/* Breadcrumb */}
@@ -68,8 +196,9 @@ const LeaveSettings = () => {
                 <button
                   type="button"
                   data-bs-toggle="modal"
-                  data-bs-target="#new_custom_policy"
+                  data-bs-target="#custom_policy_modal"
                   className="btn btn-primary d-flex align-items-center"
+                  onClick={initAddPolicyModal}
                 >
                   <i className="ti ti-circle-plus me-2" />
                   Add Custom Policy
@@ -81,3069 +210,300 @@ const LeaveSettings = () => {
             </div>
           </div>
           {/* /Breadcrumb */}
+
           {/* Leaves Info */}
           <div className="row">
-            <div className="col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body d-flex align-items-center justify-content-between">
-                  <div className="d-flex align-items-center">
-                    <div className="form-check form-check-md form-switch me-1">
-                      <label className="form-check-label">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          role="switch"
-                          defaultChecked
-                        />
-                      </label>
-                    </div>
-                    <h6 className="d-flex align-items-center">Annual Leave</h6>
-                  </div>
-                  <div className="d-flex align-items-center">
-                    <Link
-                      to="#"
-                      className="text-decoration-underline me-2"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#add_custom_policy"
-                    >
-                      Custom Policy
-                    </Link>
-                    <Link
-                      to="#"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#annual_leave_settings"
-                    >
-                      {" "}
-                      <i className="ti ti-settings" />{" "}
-                    </Link>
-                  </div>
-                </div>
+            {loading ? (
+              <div className="col-12 text-center py-5">
+                <div className="spinner-border text-primary" role="status" />
               </div>
-            </div>
-            <div className="col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body d-flex align-items-center justify-content-between">
-                  <div className="d-flex align-items-center">
-                    <div className="form-check form-check-md form-switch me-1">
-                      <label className="form-check-label">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          role="switch"
-                        />
-                      </label>
-                    </div>
-                    <h6 className="d-flex align-items-center">Sick Leave</h6>
-                  </div>
-                  <div className="d-flex align-items-center">
-                    <Link
-                      to="#"
-                      className="text-decoration-underline me-2"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#add_custom_policy"
-                    >
-                      Custom Policy
-                    </Link>
-                    <Link
-                      to="#"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#sick_leave_settings"
-                    >
-                      {" "}
-                      <i className="ti ti-settings" />{" "}
-                    </Link>
-                  </div>
-                </div>
+            ) : dbLeaveTypes.length === 0 ? (
+              <div className="col-12 text-center py-5">
+                <h5>No leave types configured. Configure them in <Link to="/app-settings/leave-type">Leave Type Settings</Link>.</h5>
               </div>
-            </div>
-            <div className="col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body d-flex align-items-center justify-content-between">
-                  <div className="d-flex align-items-center">
-                    <div className="form-check form-check-md form-switch me-1">
-                      <label className="form-check-label">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          role="switch"
-                          defaultChecked
-                        />
-                      </label>
+            ) : (
+              dbLeaveTypes.map((type) => {
+                const typePolicies = dbPolicies.filter(p => p.leaveTypeId === type.id);
+                return (
+                  <div className="col-xl-4 col-md-6" key={type.id}>
+                    <div className="card">
+                      <div className="card-body d-flex align-items-center justify-content-between">
+                        <div className="d-flex align-items-center">
+                          <div className="form-check form-check-md form-switch me-1">
+                            <label className="form-check-label">
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                role="switch"
+                                checked={type.isPaid}
+                                onChange={(e) => handleToggleTypeStatus(type, e.target.checked)}
+                              />
+                            </label>
+                          </div>
+                          <h6 className="d-flex align-items-center mb-0">{type.name}</h6>
+                        </div>
+                        <div className="d-flex align-items-center">
+                          <Link
+                            to="#"
+                            className="text-decoration-underline me-2"
+                            data-bs-toggle="modal"
+                            data-bs-target="#custom_policy_list_modal"
+                            onClick={() => setSelectedType(type)}
+                          >
+                            Custom Policy ({typePolicies.length})
+                          </Link>
+                          <Link
+                            to="#"
+                            data-bs-toggle="modal"
+                            data-bs-target="#leave_type_settings_modal"
+                            onClick={() => {
+                              setSelectedType(type);
+                              setTypeDays(String(type.totalDaysPerYear));
+                              setTypeIsPaid(type.isPaid);
+                            }}
+                          >
+                            <i className="ti ti-settings" />
+                          </Link>
+                        </div>
+                      </div>
                     </div>
-                    <h6 className="d-flex align-items-center">Hospitalisation</h6>
                   </div>
-                  <div className="d-flex align-items-center">
-                    <Link
-                      to="#"
-                      className="text-decoration-underline me-2"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#add_custom_policy"
-                    >
-                      Custom Policy
-                    </Link>
-                    <Link
-                      to="#"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#hospitalisation_settings"
-                    >
-                      <i className="ti ti-settings" />{" "}
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body d-flex align-items-center justify-content-between">
-                  <div className="d-flex align-items-center">
-                    <div className="form-check form-check-md form-switch me-1">
-                      <label className="form-check-label">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          role="switch"
-                          defaultChecked
-                        />
-                      </label>
-                    </div>
-                    <h6 className="d-flex align-items-center">Maternity</h6>
-                  </div>
-                  <div className="d-flex align-items-center">
-                    <Link
-                      to="#"
-                      className="text-decoration-underline me-2"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#add_custom_policy"
-                    >
-                      Custom Policy
-                    </Link>
-                    <Link
-                      to="#"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#maternity_settings"
-                    >
-                      {" "}
-                      <i className="ti ti-settings" />{" "}
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body d-flex align-items-center justify-content-between">
-                  <div className="d-flex align-items-center">
-                    <div className="form-check form-check-md form-switch me-1">
-                      <label className="form-check-label">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          role="switch"
-                        />
-                      </label>
-                    </div>
-                    <h6 className="d-flex align-items-center">Paternity</h6>
-                  </div>
-                  <div className="d-flex align-items-center">
-                    <Link
-                      to="#"
-                      className="text-decoration-underline me-2"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#add_custom_policy"
-                    >
-                      Custom Policy
-                    </Link>
-                    <Link
-                      to="#"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#paternity_settings"
-                    >
-                      {" "}
-                      <i className="ti ti-settings" />{" "}
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body d-flex align-items-center justify-content-between">
-                  <div className="d-flex align-items-center">
-                    <div className="form-check form-check-md form-switch me-1">
-                      <label className="form-check-label">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          role="switch"
-                        />
-                      </label>
-                    </div>
-                    <h6 className="d-flex align-items-center">LOP</h6>
-                  </div>
-                  <div className="d-flex align-items-center">
-                    <Link
-                      to="#"
-                      className="text-decoration-underline me-2"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#add_custom_policy"
-                    >
-                      Custom Policy
-                    </Link>
-                    <Link
-                      to="#"
-                      data-bs-toggle="modal" data-inert={true}
-                      data-bs-target="#lop_settings"
-                    >
-                      {" "}
-                      <i className="ti ti-settings" />{" "}
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
+                );
+              })
+            )}
           </div>
-          {/* /Leaves Info */}
-        </div>
-        <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-          <p className="mb-0">2014 - 2026 © SmartHR.</p>
-          <p>
-            Designed &amp; Developed By{" "}
-            <Link to="#" className="text-primary">
-              Dreams
-            </Link>
-          </p>
         </div>
       </div>
-      {/* /Page Wrapper */}
-      {/* New Custom Policy */}
-      <div className="modal fade" id="new_custom_policy">
+
+      {/* Leave Type Settings Modal */}
+      <div className="modal fade" id="leave_type_settings_modal" role="dialog">
         <div className="modal-dialog modal-dialog-centered modal-md">
           <div className="modal-content">
             <div className="modal-header">
-              <h4 className="modal-title">New Custom Policy</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
+              <h4 className="modal-title">{selectedType?.name} Settings</h4>
+              <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close">
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form >
-              <div className="modal-body pb-0">
-                <div className="row">
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label">Leave Type</label>
-                      <CommonSelect
-                        className='select'
-                        options={leavetype}
-                        defaultValue={leavetype[0]}
+            <form onSubmit={handleUpdateTypeSettings}>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label">No of Days</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    required
+                    value={typeDays}
+                    onChange={(e) => setTypeDays(e.target.value)}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Paid Status</label>
+                  <div className="d-flex gap-3">
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="typeIsPaid"
+                        id="typePaid"
+                        checked={typeIsPaid}
+                        onChange={() => setTypeIsPaid(true)}
                       />
+                      <label className="form-check-label" htmlFor="typePaid">Paid</label>
                     </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Policy Name</label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">No of Days</label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label">Add Employee</label>
-                      <SelectWithImage />
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="typeIsPaid"
+                        id="typeUnpaid"
+                        checked={!typeIsPaid}
+                        onChange={() => setTypeIsPaid(false)}
+                      />
+                      <label className="form-check-label" htmlFor="typeUnpaid">Unpaid</label>
                     </div>
                   </div>
                 </div>
               </div>
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-light me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                  Add Leaves
-                </button>
+                <button type="button" className="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Changes</button>
               </div>
             </form>
           </div>
         </div>
       </div>
-      {/* /New Custom Policy */}
-      {/* Annual Leave */}
-      <div className="modal fade" id="annual_leave_settings">
-        <div className="modal-dialog modal-dialog-centered modal-md">
+
+      {/* Custom Policy List Modal */}
+      <div className="modal fade" id="custom_policy_list_modal" role="dialog">
+        <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
-              <h4 className="modal-title">Annual Leave Settings</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
+              <h4 className="modal-title">{selectedType?.name} Custom Policies</h4>
+              <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close">
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form >
-              <div className="contact-grids-tab">
-                <ul className="nav nav-underline" id="myTab" role="tablist">
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link active"
-                      id="settings-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#settings-info"
-                      type="button"
-                      role="tab"
-                      aria-selected="true"
-                    >
-                      Settings
-                    </button>
-                  </li>
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link"
-                      id="viwe-custom-policy-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#policy"
-                      type="button"
-                      role="tab"
-                      aria-selected="false"
-                    >
-                      View Custom Policy
-                    </button>
-                  </li>
-                </ul>
-              </div>
-              <div className="tab-content" id="myTabContent">
-                <div
-                  className="tab-pane fade show active"
-                  id="settings-info"
-                  role="tabpanel"
-                  aria-labelledby="settings-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">No of Days</label>
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">Carry Forward</label>
-                          <div className="d-flex align-items-center">
-                            <div className="form-check me-2">
-                              <input
-                                className="form-check-input"
-                                type="radio"
-                                name="flexRadio"
-                                id="flexRadio"
-                                defaultChecked
-                              />
-                              <label className="form-label" htmlFor="flexRadio">
-                                Yes
-                              </label>
+            <div className="modal-body">
+              {dbPolicies.filter(p => p.leaveTypeId === selectedType?.id).length === 0 ? (
+                <div className="text-center py-4 text-muted">
+                  No custom policies set for this leave type.
+                </div>
+              ) : (
+                <div className="row">
+                  {dbPolicies.filter(p => p.leaveTypeId === selectedType?.id).map((policy) => (
+                    <div className="col-md-12 mb-3" key={policy.id}>
+                      <div className="card border mb-0">
+                        <div className="card-body pb-1">
+                          <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                            <div>
+                              <p className="mb-1 text-muted fs-12">Policy Name</p>
+                              <span className="text-dark fw-semibold">{policy.name}</span>
                             </div>
-                            <div className="form-check">
-                              <input
-                                className="form-check-input"
-                                type="radio"
-                                name="flexRadio"
-                                id="flexRadioOne"
-                              />
-                              <label className="form-label" htmlFor="flexRadioOne">
-                                No
-                              </label>
+                            <div>
+                              <p className="mb-1 text-muted fs-12">Quota</p>
+                              <span className="text-dark fw-semibold">{Number(policy.days)} days</span>
                             </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">Maximum No of Days</label>
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">Earned leave</label>
-                          <div className="d-flex align-items-center">
-                            <div className="form-check me-2">
-                              <input
-                                className="form-check-input"
-                                type="radio"
-                                name="flexRadioOne"
-                                id="flexRadioTwo"
-                                defaultChecked
-                              />
-                              <label className="form-label" htmlFor="flexRadioTwo">
-                                Yes
-                              </label>
+                            <div>
+                              <p className="mb-1 text-muted fs-12">Employees ({policy.employees.length})</p>
+                              <div className="avatar-list-stacked avatar-group-sm">
+                                {policy.employees.slice(0, 5).map((emp: any) => (
+                                  <span className="avatar border-0 rounded-circle" key={emp.id} title={`${emp.firstName} ${emp.lastName}`}>
+                                    {emp.profilePhotoUrl ? (
+                                      <img
+                                        src={`${apiClient.defaults.baseURL}${emp.profilePhotoUrl}`}
+                                        className="rounded-circle"
+                                        alt="img"
+                                        style={{ objectFit: 'cover', width: '30px', height: '30px' }}
+                                        onError={(e) => {
+                                          e.currentTarget.onerror = null;
+                                          e.currentTarget.src = '/assets/img/users/user-13.jpg';
+                                        }}
+                                      />
+                                    ) : (
+                                      <ImageWithBasePath
+                                        src="assets/img/users/user-13.jpg"
+                                        className="rounded-circle"
+                                        alt="img"
+                                      />
+                                    )}
+                                  </span>
+                                ))}
+                                {policy.employees.length > 5 && (
+                                  <span className="avatar group-counts bg-primary rounded-circle border-0 fs-10 text-white">
+                                    +{policy.employees.length - 5}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div className="form-check">
-                              <input
-                                className="form-check-input"
-                                type="radio"
-                                name="flexRadioOne"
-                                id="flexRadioThree"
-                              />
-                              <label
-                                className="form-label"
-                                htmlFor="flexRadioThree"
+                            <div className="action-icon d-inline-flex">
+                              <Link
+                                to="#"
+                                className="me-2"
+                                data-bs-toggle="modal"
+                                data-bs-target="#custom_policy_modal"
+                                onClick={() => initEditPolicyModal(policy)}
                               >
-                                No
-                              </label>
+                                <i className="ti ti-edit fs-16 text-primary" />
+                              </Link>
+                              <Link to="#" onClick={() => handleDeletePolicy(policy.id)}>
+                                <i className="ti ti-trash fs-16 text-danger" />
+                              </Link>
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
+                  ))}
                 </div>
-                <div
-                  className="tab-pane fade"
-                  id="policy"
-                  role="tabpanel"
-                  aria-labelledby="viwe-custom-policy-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-13.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-32.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-58.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar group-counts bg-primary rounded-circle border-0 fs-10">
-                                  +1
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body pb-1">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-32.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link to="#" className="">
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-58.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-13.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      {/* /Annual Leave */}
-      {/* Sick Leave */}
-      <div className="modal fade" id="sick_leave_settings">
-        <div className="modal-dialog modal-dialog-centered modal-md">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title">Sick Leave Settings</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
+              )}
             </div>
-            <form >
-              <div className="contact-grids-tab">
-                <ul className="nav nav-underline" id="myTab6" role="tablist">
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link active"
-                      id="settings-one-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#settings-one-info"
-                      type="button"
-                      role="tab"
-                      aria-selected="true"
-                    >
-                      Settings
-                    </button>
-                  </li>
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link"
-                      id="viwe-custom-policy-one-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#policy-one"
-                      type="button"
-                      role="tab"
-                      aria-selected="false"
-                    >
-                      View Custom Policy
-                    </button>
-                  </li>
-                </ul>
-              </div>
-              <div className="tab-content" id="myTabContent6">
-                <div
-                  className="tab-pane fade show active"
-                  id="settings-one-info"
-                  role="tabpanel"
-                  aria-labelledby="settings-one-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">Days</label>
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
-                </div>
-                <div
-                  className="tab-pane fade"
-                  id="policy-one"
-                  role="tabpanel"
-                  aria-labelledby="viwe-custom-policy-one-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-13.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-32.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-58.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar group-counts bg-primary rounded-circle border-0 fs-10">
-                                  +1
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-32.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link to="#" className="">
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-58.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-13.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </form>
           </div>
         </div>
       </div>
-      {/* /Sick Leave */}
-      {/* Hospitalisation Leave */}
-      <div className="modal fade" id="hospitalisation_settings">
-        <div className="modal-dialog modal-dialog-centered modal-md">
+
+      {/* Add / Edit Custom Policy Modal */}
+      <div id="custom_policy_modal" className="modal fade" role="dialog">
+        <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
-              <h4 className="modal-title">Hospitalisation Settings</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
+              <h5 className="modal-title">{editPolicyId ? 'Edit Custom Policy' : 'Add Custom Policy'}</h5>
+              <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close">
                 <i className="ti ti-x" />
-              </button>
-            </div>
-            <form >
-              <div className="contact-grids-tab">
-                <ul className="nav nav-underline" id="myTab2" role="tablist">
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link active"
-                      id="settings-two-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#settings-two-info"
-                      type="button"
-                      role="tab"
-                      aria-selected="true"
-                    >
-                      Settings
-                    </button>
-                  </li>
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link"
-                      id="viwe-custom-policy-two-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#policy-two"
-                      type="button"
-                      role="tab"
-                      aria-selected="false"
-                    >
-                      View Custom Policy
-                    </button>
-                  </li>
-                </ul>
-              </div>
-              <div className="tab-content" id="myTabContent2">
-                <div
-                  className="tab-pane fade show active"
-                  id="settings-two-info"
-                  role="tabpanel"
-                  aria-labelledby="settings-two-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">Days</label>
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
-                </div>
-                <div
-                  className="tab-pane fade"
-                  id="policy-two"
-                  role="tabpanel"
-                  aria-labelledby="viwe-custom-policy-two-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-13.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-32.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-58.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar group-counts bg-primary rounded-circle border-0 fs-10">
-                                  +1
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-32.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link to="#" className="">
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-58.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      {/* /Hospitalisation Leave */}
-      {/* Maternity Leave */}
-      <div className="modal fade" id="maternity_settings">
-        <div className="modal-dialog modal-dialog-centered modal-md">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title">Maternity Settings</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <form >
-              <div className="contact-grids-tab">
-                <ul className="nav nav-underline" id="myTab3" role="tablist">
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link active"
-                      id="settings-three-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#settings-three-info"
-                      type="button"
-                      role="tab"
-                      aria-selected="true"
-                    >
-                      Settings
-                    </button>
-                  </li>
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link"
-                      id="viwe-custom-policy-three-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#policy-three"
-                      type="button"
-                      role="tab"
-                      aria-selected="false"
-                    >
-                      View Custom Policy
-                    </button>
-                  </li>
-                </ul>
-              </div>
-              <div className="tab-content" id="myTabContent3">
-                <div
-                  className="tab-pane fade show active"
-                  id="settings-three-info"
-                  role="tabpanel"
-                  aria-labelledby="settings-three-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">
-                            Days{" "}
-                            <span className="text-gray">
-                              (Assigned to Female only)
-                            </span>{" "}
-                          </label>
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
-                </div>
-                <div
-                  className="tab-pane fade"
-                  id="policy-three"
-                  role="tabpanel"
-                  aria-labelledby="viwe-custom-policy-three-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-13.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-32.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-58.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar group-counts bg-primary rounded-circle border-0 fs-10">
-                                  +1
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-32.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link to="#" className="">
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-58.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      {/* /Maternity Leave */}
-      {/* Paternity Leave */}
-      <div className="modal fade" id="paternity_settings">
-        <div className="modal-dialog modal-dialog-centered modal-md">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title">Paternity Settings</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <form >
-              <div className="contact-grids-tab">
-                <ul className="nav nav-underline" id="myTab4" role="tablist">
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link active"
-                      id="settings-four-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#settings-four-info"
-                      type="button"
-                      role="tab"
-                      aria-selected="true"
-                    >
-                      Settings
-                    </button>
-                  </li>
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link"
-                      id="viwe-custom-policy-four-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#policy-four"
-                      type="button"
-                      role="tab"
-                      aria-selected="false"
-                    >
-                      View Custom Policy
-                    </button>
-                  </li>
-                </ul>
-              </div>
-              <div className="tab-content" id="myTabContent4">
-                <div
-                  className="tab-pane fade show active"
-                  id="settings-four-info"
-                  role="tabpanel"
-                  aria-labelledby="settings-four-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">
-                            Days{" "}
-                            <span className="text-gray">
-                              (Assigned to Male only)
-                            </span>{" "}
-                          </label>
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
-                </div>
-                <div
-                  className="tab-pane fade"
-                  id="policy-four"
-                  role="tabpanel"
-                  aria-labelledby="viwe-custom-policy-four-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-13.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-32.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-58.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar group-counts bg-primary rounded-circle border-0 fs-10">
-                                  +1
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-58.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-13.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      {/* /Paternity Leave */}
-      {/* LOP Leave */}
-      <div className="modal fade" id="lop_settings">
-        <div className="modal-dialog modal-dialog-centered modal-md">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title">LOP Settings</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <form>
-              <div className="contact-grids-tab">
-                <ul className="nav nav-underline" id="myTab5" role="tablist">
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link active"
-                      id="settings-five-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#settings-five-info"
-                      type="button"
-                      role="tab"
-                      aria-selected="true"
-                    >
-                      Settings
-                    </button>
-                  </li>
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link"
-                      id="viwe-custom-policy-five-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#policy-five"
-                      type="button"
-                      role="tab"
-                      aria-selected="false"
-                    >
-                      View Custom Policy
-                    </button>
-                  </li>
-                </ul>
-              </div>
-              <div className="tab-content" id="myTabContent5">
-                <div
-                  className="tab-pane fade show active"
-                  id="settings-five-info"
-                  role="tabpanel"
-                  aria-labelledby="settings-five-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">No of Days</label>
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">Carry Forward</label>
-                          <div className="d-flex align-items-center">
-                            <div className="form-check me-2">
-                              <input
-                                className="form-check-input"
-                                type="radio"
-                                name="flexRadio"
-                                id="flexRadio4"
-                                defaultChecked
-                              />
-                              <label className="form-label" htmlFor="flexRadio4">
-                                Yes
-                              </label>
-                            </div>
-                            <div className="form-check">
-                              <input
-                                className="form-check-input"
-                                type="radio"
-                                name="flexRadio"
-                                id="flexRadio5"
-                              />
-                              <label className="form-label" htmlFor="flexRadio5">
-                                No
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">Maximum No of Days</label>
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">Earned leave</label>
-                          <div className="d-flex align-items-center">
-                            <div className="form-check me-2">
-                              <input
-                                className="form-check-input"
-                                type="radio"
-                                name="flexRadioOne"
-                                id="flexRadio6"
-                                defaultChecked
-                              />
-                              <label className="form-label" htmlFor="flexRadio6">
-                                Yes
-                              </label>
-                            </div>
-                            <div className="form-check">
-                              <input
-                                className="form-check-input"
-                                type="radio"
-                                name="flexRadioOne"
-                                id="flexRadio7"
-                              />
-                              <label className="form-label" htmlFor="flexRadio7">
-                                No
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
-                </div>
-                <div
-                  className="tab-pane fade"
-                  id="policy-five"
-                  role="tabpanel"
-                  aria-labelledby="viwe-custom-policy-five-tab"
-                  tabIndex={0}
-                >
-                  <div className="modal-body pb-0 ">
-                    <div className="row">
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-13.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-32.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-58.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar group-counts bg-primary rounded-circle border-0 fs-10">
-                                  +1
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-11.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-32.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link to="#" className="">
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="card border mb-3">
-                          <div className="card-body pb-1">
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <div className="text-start">
-                                <p className="mb-1">Policy Name</p>
-                                <span className="text-dark fw-normal mb-0">
-                                  2 Days Leave
-                                </span>
-                              </div>
-                              <div>
-                                <p className="mb-1">No Of Days</p>
-                                <span className="text-dark fw-normal mb-0">2</span>
-                              </div>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-09.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                                <span className="avatar border-0">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-13.jpg"
-                                    className="rounded-circle"
-                                    alt="img"
-                                  />
-                                </span>
-                              </div>
-                              <div className="action-icon d-inline-flex">
-                                <Link to="#" className="me-2 edit-leave-btn">
-                                  <i className="ti ti-edit" />
-                                </Link>
-                                <Link
-                                  to="#"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                                >
-                                  <i className="ti ti-trash" />
-                                </Link>
-                              </div>
-                            </div>
-                            <div className="card border edit-leave-details">
-                              <div className="card-body">
-                                <h6 className="border-bottom mb-3 pb-3">
-                                  Edit Policy
-                                </h6>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        Policy Name{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <div className="mb-3">
-                                      <label className="form-label">
-                                        No of Days{" "}
-                                        <span className="text-danger"> *</span>
-                                      </label>
-                                      <input type="text" className="form-control" />
-                                    </div>
-                                  </div>
-                                  <div className="col-me-12">
-                                    <label className="form-label">
-                                      Add Employee
-                                    </label>
-                                    <CommonSelect
-                                      className='select'
-                                      options={addemployee}
-                                      defaultValue={addemployee[0]}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light border me-2"
-                      data-bs-dismiss="modal"
-                    >
-                      Cancel
-                    </button>
-                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                      Save Changes{" "}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      {/* /LOP Leave */}
-      {/* Add Custom Policy Modal */}
-      <div id="add_custom_policy" className="modal custom-modal fade" role="dialog">
-        <div
-          className="modal-dialog modal-dialog-centered modal-lg"
-          role="document"
-        >
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">Add Custom Policy</h5>
-              <button
-                type="button"
-                className="btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <span aria-hidden="true">×</span>
               </button>
             </div>
             <div className="modal-body">
-              <form>
-                <div className="input-block mb-3">
-                  <label className="form-label">
-                    Policy Name <span className="text-danger">*</span>
-                  </label>
-                  <input type="text" className="form-control" />
-                </div>
-                <div className="input-block mb-3">
-                  <label className="form-label">
-                    Days <span className="text-danger">*</span>
-                  </label>
-                  <input type="text" className="form-control" />
-                </div>
-                <div className="input-block mb-3 leave-duallist">
-                  <label className="form-label">Add employee</label>
-                  <div className="card">
-                    <PickList dataKey="id" source={source} target={target} onChange={onChange} itemTemplate={itemTemplate} breakpoint="1280px"
-                      sourceHeader="Available" targetHeader="Selected" sourceStyle={{ height: '24rem' }} targetStyle={{ height: '24rem' }} />
+              <form onSubmit={handleSavePolicy}>
+                {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label">Policy Name <span className="text-danger">*</span></label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      placeholder="e.g. Standard Developer Leave"
+                      value={policyName}
+                      onChange={(e) => setPolicyName(e.target.value)}
+                    />
                   </div>
-                </div>
-                <div className="submit-section">
-                  <button className="btn btn-primary submit-btn">Submit</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* /Add Custom Policy Modal */}
-      {/* Edit Custom Policy Modal */}
-      <div
-        id="edit_custom_policy"
-        className="modal custom-modal fade"
-        role="dialog"
-      >
-        <div
-          className="modal-dialog modal-dialog-centered modal-lg"
-          role="document"
-        >
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">Edit Custom Policy</h5>
-              <button
-                type="button"
-                className="btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <span aria-hidden="true">×</span>
-              </button>
-            </div>
-            <div className="modal-body">
-              <form>
-                <div className="input-block mb-3">
-                  <label className="form-label">
-                    Policy Name <span className="text-danger">*</span>
-                  </label>
-                  <input type="text" className="form-control" defaultValue="LOP" />
-                </div>
-                <div className="input-block mb-3">
-                  <label className="form-label">
-                    Days <span className="text-danger">*</span>
-                  </label>
-                  <input type="text" className="form-control" defaultValue={4} />
-                </div>
-                <div className="input-block mb-3 leave-duallist">
-                  <label className="form-label">Add employee</label>
-                  <div className="row">
-                    <div className="col-lg-5 col-sm-5">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label">Days <span className="text-danger">*</span></label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      required
+                      value={policyDays}
+                      onChange={(e) => setPolicyDays(e.target.value)}
+                    />
+                  </div>
+                  {!editPolicyId && (
+                    <div className="col-md-12 mb-3">
+                      <label className="form-label">Leave Type <span className="text-danger">*</span></label>
                       <select
-                        name="edit_customleave_from"
-                        id="edit_customleave_select"
-                        className="form-control form-select"
-                        size={5}
-                        multiple
+                        className="form-select"
+                        value={policyTypeId}
+                        onChange={(e) => setPolicyTypeId(e.target.value)}
+                        required
                       >
-                        <option value={1}>Bernardo Galaviz </option>
-                        <option value={2}>Jeffrey Warden</option>
-                        <option value={2}>John Doe</option>
-                        <option value={2}>John Smith</option>
-                        <option value={3}>Mike Litorus</option>
+                        {dbLeaveTypes.map(type => (
+                          <option value={type.id} key={type.id}>{type.name}</option>
+                        ))}
                       </select>
                     </div>
-                    <div className="multiselect-controls col-lg-2 col-sm-2 d-grid gap-2">
-                      <button
-                        type="button"
-                        id="edit_customleave_select_rightAll"
-                        className="btn w-100 btn-white"
-                      >
-                        <i className="fa fa-forward" />
-                      </button>
-                      <button
-                        type="button"
-                        id="edit_customleave_select_rightSelected"
-                        className="btn w-100 btn-white"
-                      >
-                        <i className="fa fa-chevron-right" />
-                      </button>
-                      <button
-                        type="button"
-                        id="edit_customleave_select_leftSelected"
-                        className="btn w-100 btn-white"
-                      >
-                        <i className="fa fa-chevron-left" />
-                      </button>
-                      <button
-                        type="button"
-                        id="edit_customleave_select_leftAll"
-                        className="btn w-100 btn-white"
-                      >
-                        <i className="fa fa-backward" />
-                      </button>
-                    </div>
-                    <div className="col-lg-5 col-sm-5">
-                      <select
-                        name="customleave_to"
-                        id="edit_customleave_select_to"
-                        className="form-control form-select"
-                        size={8}
-                        multiple
-                      />
-                    </div>
+                  )}
+                </div>
+                <div className="mb-3 leave-duallist">
+                  <label className="form-label">Add Employees to Policy</label>
+                  <div className="card p-2 border">
+                    <PickList
+                      dataKey="id"
+                      source={sourceEmployees}
+                      target={targetEmployees}
+                      onChange={(e) => {
+                        setSourceEmployees(e.source);
+                        setTargetEmployees(e.target);
+                      }}
+                      itemTemplate={(item: any) => <span className="fw-medium">{item.Name}</span>}
+                      breakpoint="1280px"
+                      sourceHeader="Available Employees"
+                      targetHeader="Assigned to Policy"
+                      sourceStyle={{ height: '18rem' }}
+                      targetStyle={{ height: '18rem' }}
+                    />
                   </div>
                 </div>
-                <div className="submit-section">
-                  <button className="btn btn-primary submit-btn">Submit</button>
+                <div className="text-end">
+                  <button type="button" className="btn btn-light me-2" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" className="btn btn-primary">Save Policy</button>
                 </div>
               </form>
             </div>
           </div>
         </div>
       </div>
-      {/* /Edit Custom Policy Modal */}
     </>
+  );
+};
 
-
-
-
-  )
-}
-
-export default LeaveSettings
+export default LeaveSettings;

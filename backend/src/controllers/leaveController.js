@@ -230,12 +230,21 @@ async function updateLeaveStatus(req, res) {
                     }
                 });
             } else {
+                const policy = await prisma.leavePolicy.findFirst({
+                    where: {
+                        leaveTypeId: existingRequest.leaveTypeId,
+                        employees: {
+                            some: { id: existingRequest.employeeId }
+                        }
+                    }
+                });
+
                 await prisma.leaveBalance.create({
                     data: {
                         employeeId: existingRequest.employeeId,
                         leaveTypeId: existingRequest.leaveTypeId,
                         year: currentYear,
-                        totalDays: existingRequest.leaveType.totalDaysPerYear,
+                        totalDays: policy ? policy.days : existingRequest.leaveType.totalDaysPerYear,
                         usedDays: existingRequest.totalDays
                     }
                 });
@@ -273,7 +282,19 @@ async function getLeaveBalances(req, res) {
                 }
             });
 
-            const total = bal ? Number(bal.totalDays) : Number(lt.totalDaysPerYear);
+            // Find if there is an active custom policy override for this employee
+            const policy = await prisma.leavePolicy.findFirst({
+                where: {
+                    leaveTypeId: lt.id,
+                    employees: {
+                        some: { id: employee.id }
+                    }
+                }
+            });
+
+            const total = bal 
+                ? Number(bal.totalDays) 
+                : (policy ? Number(policy.days) : Number(lt.totalDaysPerYear));
             const used = bal ? Number(bal.usedDays) : 0;
 
             return {
@@ -357,6 +378,137 @@ async function deleteLeaveType(req, res) {
     }
 }
 
+// ── GET LEAVE POLICIES (HR) ─────────────────────────────────
+async function getLeavePolicies(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const policies = await prisma.leavePolicy.findMany({
+            where: { companyId },
+            include: {
+                leaveType: true,
+                employees: {
+                    include: {
+                        user: true
+                    }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(policies);
+    } catch (error) {
+        console.error('Error fetching policies:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+// ── CREATE LEAVE POLICY (HR) ────────────────────────────────
+async function createLeavePolicy(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const { name, leaveTypeId, days, description, employeeIds } = req.body;
+
+        if (!name || !leaveTypeId || days === undefined) {
+            return res.status(400).json({ message: 'Name, leaveTypeId, and days are required' });
+        }
+
+        const policy = await prisma.leavePolicy.create({
+            data: {
+                companyId,
+                leaveTypeId: parseInt(leaveTypeId, 10),
+                name,
+                description,
+                days: parseFloat(days),
+                employees: employeeIds && Array.isArray(employeeIds)
+                    ? { connect: employeeIds.map((id) => ({ id: parseInt(id, 10) })) }
+                    : undefined
+            },
+            include: {
+                leaveType: true,
+                employees: true
+            }
+        });
+
+        res.status(201).json(policy);
+    } catch (error) {
+        console.error('Error creating policy:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+// ── UPDATE LEAVE POLICY (HR) ────────────────────────────────
+async function updateLeavePolicy(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const { id } = req.params;
+        const { name, days, description, employeeIds } = req.body;
+
+        const existing = await prisma.leavePolicy.findFirst({
+            where: { id: parseInt(id, 10), companyId }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ message: 'Leave policy not found' });
+        }
+
+        // Fetch currently linked employees to disconnect them
+        const policyWithEmployees = await prisma.leavePolicy.findUnique({
+            where: { id: existing.id },
+            include: { employees: true }
+        });
+
+        const currentEmployeeIds = policyWithEmployees?.employees.map(e => e.id) || [];
+
+        const updated = await prisma.leavePolicy.update({
+            where: { id: existing.id },
+            data: {
+                name: name !== undefined ? name : existing.name,
+                days: days !== undefined ? parseFloat(days) : existing.days,
+                description: description !== undefined ? description : existing.description,
+                employees: employeeIds && Array.isArray(employeeIds)
+                    ? {
+                        disconnect: currentEmployeeIds.map(id => ({ id })),
+                        connect: employeeIds.map((id) => ({ id: parseInt(id, 10) }))
+                      }
+                    : undefined
+            },
+            include: {
+                leaveType: true,
+                employees: true
+            }
+        });
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Error updating policy:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+// ── DELETE LEAVE POLICY (HR) ────────────────────────────────
+async function deleteLeavePolicy(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const { id } = req.params;
+
+        const existing = await prisma.leavePolicy.findFirst({
+            where: { id: parseInt(id, 10), companyId }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ message: 'Leave policy not found' });
+        }
+
+        await prisma.leavePolicy.delete({
+            where: { id: existing.id }
+        });
+
+        res.json({ message: 'Leave policy deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting policy:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     getLeaveTypes,
     createLeaveType,
@@ -365,5 +517,9 @@ module.exports = {
     updateLeaveStatus,
     getLeaveBalances,
     updateLeaveType,
-    deleteLeaveType
+    deleteLeaveType,
+    getLeavePolicies,
+    createLeavePolicy,
+    updateLeavePolicy,
+    deleteLeavePolicy
 };
