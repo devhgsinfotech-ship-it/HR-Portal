@@ -29,8 +29,8 @@ app.use(cors({
 app.use(express.json());
 
 // Serve uploaded files from directory configured in env (persistent upload path)
-const UPLOAD_BASE = process.env.UPLOAD_PATH 
-    ? path.resolve(process.env.UPLOAD_PATH) 
+const UPLOAD_BASE = process.env.UPLOAD_PATH
+    ? path.resolve(process.env.UPLOAD_PATH)
     : path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(UPLOAD_BASE));
 
