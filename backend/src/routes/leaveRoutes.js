@@ -9,6 +9,8 @@ router.use(verifyToken);
 // Leave Types
 router.get('/types', leaveController.getLeaveTypes);
 router.post('/types', requireRole('HR', 'SUPER_ADMIN'), leaveController.createLeaveType);
+router.put('/types/:id', requireRole('HR', 'SUPER_ADMIN'), leaveController.updateLeaveType);
+router.delete('/types/:id', requireRole('HR', 'SUPER_ADMIN'), leaveController.deleteLeaveType);
 
 // Leave Requests
 router.get('/requests', leaveController.getLeaveRequests);
@@ -17,5 +19,11 @@ router.put('/requests/:id/status', requireRole('HR', 'MANAGER', 'SUPER_ADMIN'), 
 
 // Leave Balances
 router.get('/balances', leaveController.getLeaveBalances);
+
+// Leave Policies
+router.get('/policies', leaveController.getLeavePolicies);
+router.post('/policies', requireRole('HR', 'SUPER_ADMIN'), leaveController.createLeavePolicy);
+router.put('/policies/:id', requireRole('HR', 'SUPER_ADMIN'), leaveController.updateLeavePolicy);
+router.delete('/policies/:id', requireRole('HR', 'SUPER_ADMIN'), leaveController.deleteLeavePolicy);
 
 module.exports = router;

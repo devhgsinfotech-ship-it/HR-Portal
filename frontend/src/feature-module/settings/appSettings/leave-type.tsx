@@ -1,11 +1,104 @@
-
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
-
+import apiClient from "../../../core/utils/apiClient";
 
 const LeaveType = () => {
     const routes = all_routes;
+    const [dbLeaveTypes, setDbLeaveTypes] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [errorMsg, setErrorMsg] = useState('');
+
+    // Add Leave Type Form State
+    const [newTypeName, setNewTypeName] = useState('');
+    const [newTypeDays, setNewTypeDays] = useState('12');
+    const [newTypeIsPaid, setNewTypeIsPaid] = useState(true);
+
+    // Edit Leave Type Form State
+    const [editTypeId, setEditTypeId] = useState<number | null>(null);
+    const [editTypeName, setEditTypeName] = useState('');
+    const [editTypeDays, setEditTypeDays] = useState('');
+    const [editTypeIsPaid, setEditTypeIsPaid] = useState(true);
+
+    // Delete State
+    const [deleteTypeId, setDeleteTypeId] = useState<number | null>(null);
+
+    const fetchLeaveTypes = async () => {
+        try {
+            const res = await apiClient.get('/leaves/types');
+            setDbLeaveTypes(res.data);
+            setLoading(false);
+        } catch (error) {
+            console.error('Error fetching leave types:', error);
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLeaveTypes();
+    }, []);
+
+    const handleAddLeaveType = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await apiClient.post('/leaves/types', {
+                name: newTypeName,
+                totalDaysPerYear: parseFloat(newTypeDays),
+                isPaid: newTypeIsPaid
+            });
+            // Reset
+            setNewTypeName('');
+            setNewTypeDays('12');
+            setNewTypeIsPaid(true);
+            setErrorMsg('');
+            
+            // Close modal
+            const closeBtn = document.querySelector('#add_leaves .btn-close') as HTMLButtonElement;
+            if (closeBtn) closeBtn.click();
+            
+            fetchLeaveTypes();
+        } catch (err: any) {
+            setErrorMsg(err.response?.data?.message || 'Error adding leave type');
+        }
+    };
+
+    const handleEditLeaveType = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editTypeId) return;
+        try {
+            await apiClient.put(`/leaves/types/${editTypeId}`, {
+                name: editTypeName,
+                totalDaysPerYear: parseFloat(editTypeDays),
+                isPaid: editTypeIsPaid
+            });
+            setErrorMsg('');
+            
+            // Close modal
+            const closeBtn = document.querySelector('#edit_leaves .btn-close') as HTMLButtonElement;
+            if (closeBtn) closeBtn.click();
+            
+            fetchLeaveTypes();
+        } catch (err: any) {
+            setErrorMsg(err.response?.data?.message || 'Error updating leave type');
+        }
+    };
+
+    const handleDeleteLeaveType = async () => {
+        if (!deleteTypeId) return;
+        try {
+            await apiClient.delete(`/leaves/types/${deleteTypeId}`);
+            
+            // Close modal
+            const closeBtn = document.querySelector('#delete_modal .btn-light') as HTMLButtonElement;
+            if (closeBtn) closeBtn.click();
+            
+            fetchLeaveTypes();
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Error deleting leave type');
+        }
+    };
+
     return (
         <div>
             <>
@@ -140,15 +233,6 @@ const LeaveType = () => {
                                                     <table className="table">
                                                         <thead className="thead-light">
                                                             <tr>
-                                                                <th className="no-sort">
-                                                                    <div className="form-check form-check-md">
-                                                                        <input
-                                                                            className="form-check-input"
-                                                                            type="checkbox"
-                                                                            id="select-all"
-                                                                        />
-                                                                    </div>
-                                                                </th>
                                                                 <th>Leave Type</th>
                                                                 <th>Leave Days</th>
                                                                 <th>Status</th>
@@ -156,154 +240,58 @@ const LeaveType = () => {
                                                             </tr>
                                                         </thead>
                                                         <tbody>
-                                                            <tr>
-                                                                <td>
-                                                                    <div className="form-check form-check-md">
-                                                                        <input
-                                                                            className="form-check-input"
-                                                                            type="checkbox"
-                                                                        />
-                                                                    </div>
-                                                                </td>
-                                                                <td className="text-dark">Annual Leave</td>
-                                                                <td>12</td>
-                                                                <td>
-                                                                    <span className="badge badge-success">
-                                                                        <i className="ti ti-point-filled" />
-                                                                        Active
-                                                                    </span>
-                                                                </td>
-                                                                <td>
-                                                                    <div className="action-icon d-inline-flex">
-                                                                        <Link
-                                                                            to="#"
-                                                                            className="me-2"
-                                                                            data-bs-toggle="modal"
-                                                                            data-bs-target="#edit_leaves"
-                                                                        >
-                                                                            <i className="ti ti-edit" />
-                                                                        </Link>
-                                                                        <Link
-                                                                            to="#"
-                                                                            data-bs-toggle="modal"
-                                                                            data-bs-target="#delete_modal"
-                                                                        >
-                                                                            <i className="ti ti-trash" />
-                                                                        </Link>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                            <tr>
-                                                                <td>
-                                                                    <div className="form-check form-check-md">
-                                                                        <input
-                                                                            className="form-check-input"
-                                                                            type="checkbox"
-                                                                        />
-                                                                    </div>
-                                                                </td>
-                                                                <td className="text-dark">Medical Leave</td>
-                                                                <td>12</td>
-                                                                <td>
-                                                                    <span className="badge badge-success">
-                                                                        <i className="ti ti-point-filled" />
-                                                                        Active
-                                                                    </span>
-                                                                </td>
-                                                                <td>
-                                                                    <div className="action-icon d-inline-flex">
-                                                                        <Link
-                                                                            to="#"
-                                                                            className="me-2"
-                                                                            data-bs-toggle="modal"
-                                                                            data-bs-target="#edit_leaves"
-                                                                        >
-                                                                            <i className="ti ti-edit" />
-                                                                        </Link>
-                                                                        <Link
-                                                                            to="#"
-                                                                            data-bs-toggle="modal"
-                                                                            data-bs-target="#delete_modal"
-                                                                        >
-                                                                            <i className="ti ti-trash" />
-                                                                        </Link>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                            <tr>
-                                                                <td>
-                                                                    <div className="form-check form-check-md">
-                                                                        <input
-                                                                            className="form-check-input"
-                                                                            type="checkbox"
-                                                                        />
-                                                                    </div>
-                                                                </td>
-                                                                <td className="text-dark">Casual Leave</td>
-                                                                <td>12</td>
-                                                                <td>
-                                                                    <span className="badge badge-success">
-                                                                        <i className="ti ti-point-filled" />
-                                                                        Active
-                                                                    </span>
-                                                                </td>
-                                                                <td>
-                                                                    <div className="action-icon d-inline-flex">
-                                                                        <Link
-                                                                            to="#"
-                                                                            className="me-2"
-                                                                            data-bs-toggle="modal"
-                                                                            data-bs-target="#edit_leaves"
-                                                                        >
-                                                                            <i className="ti ti-edit" />
-                                                                        </Link>
-                                                                        <Link
-                                                                            to="#"
-                                                                            data-bs-toggle="modal"
-                                                                            data-bs-target="#delete_modal"
-                                                                        >
-                                                                            <i className="ti ti-trash" />
-                                                                        </Link>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                            <tr>
-                                                                <td>
-                                                                    <div className="form-check form-check-md">
-                                                                        <input
-                                                                            className="form-check-input"
-                                                                            type="checkbox"
-                                                                        />
-                                                                    </div>
-                                                                </td>
-                                                                <td className="text-dark">Other Leave</td>
-                                                                <td>12</td>
-                                                                <td>
-                                                                    <span className="badge badge-success">
-                                                                        <i className="ti ti-point-filled" />
-                                                                        Active
-                                                                    </span>
-                                                                </td>
-                                                                <td>
-                                                                    <div className="action-icon d-inline-flex">
-                                                                        <Link
-                                                                            to="#"
-                                                                            className="me-2"
-                                                                            data-bs-toggle="modal"
-                                                                            data-bs-target="#edit_leaves"
-                                                                        >
-                                                                            <i className="ti ti-edit" />
-                                                                        </Link>
-                                                                        <Link
-                                                                            to="#"
-                                                                            data-bs-toggle="modal"
-                                                                            data-bs-target="#delete_modal"
-                                                                        >
-                                                                            <i className="ti ti-trash" />
-                                                                        </Link>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
+                                                            {loading ? (
+                                                                <tr>
+                                                                    <td colSpan={4} className="text-center py-4">
+                                                                        <div className="spinner-border spinner-border-sm text-primary" role="status" />
+                                                                    </td>
+                                                                </tr>
+                                                            ) : dbLeaveTypes.length === 0 ? (
+                                                                <tr>
+                                                                    <td colSpan={4} className="text-center py-4 text-muted">
+                                                                        No custom leave types created yet. Click Add Leave Type to create one.
+                                                                    </td>
+                                                                </tr>
+                                                            ) : (
+                                                                dbLeaveTypes.map((type) => (
+                                                                    <tr key={type.id}>
+                                                                        <td className="text-dark fw-medium">{type.name}</td>
+                                                                        <td>{Number(type.totalDaysPerYear)} days</td>
+                                                                        <td>
+                                                                            <span className={`badge ${type.isPaid ? 'badge-success' : 'badge-danger'}`}>
+                                                                                <i className="ti ti-point-filled" />
+                                                                                {type.isPaid ? 'Paid' : 'Unpaid'}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td>
+                                                                            <div className="action-icon d-inline-flex">
+                                                                                <Link
+                                                                                    to="#"
+                                                                                    className="me-2"
+                                                                                    data-bs-toggle="modal"
+                                                                                    data-bs-target="#edit_leaves"
+                                                                                    onClick={() => {
+                                                                                        setEditTypeId(type.id);
+                                                                                        setEditTypeName(type.name);
+                                                                                        setEditTypeDays(String(type.totalDaysPerYear));
+                                                                                        setEditTypeIsPaid(type.isPaid);
+                                                                                    }}
+                                                                                >
+                                                                                    <i className="ti ti-edit" />
+                                                                                </Link>
+                                                                                <Link
+                                                                                    to="#"
+                                                                                    data-bs-toggle="modal"
+                                                                                    data-bs-target="#delete_modal"
+                                                                                    onClick={() => setDeleteTypeId(type.id)}
+                                                                                >
+                                                                                    <i className="ti ti-trash" />
+                                                                                </Link>
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))
+                                                            )}
                                                         </tbody>
                                                     </table>
                                                 </div>
@@ -343,15 +331,23 @@ const LeaveType = () => {
                                     <i className="ti ti-x" />
                                 </button>
                             </div>
-                            <form>
+                            <form onSubmit={handleAddLeaveType}>
                                 <div className="modal-body pb-0">
+                                    {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
                                     <div className="row">
                                         <div className="col-md-12">
                                             <div className="mb-3">
                                                 <label className="form-label">
                                                     Leave Type <span className="text-danger">*</span>
                                                 </label>
-                                                <input type="text" className="form-control" />
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    required
+                                                    placeholder="e.g. Casual Leave"
+                                                    value={newTypeName}
+                                                    onChange={(e) => setNewTypeName(e.target.value)}
+                                                />
                                             </div>
                                         </div>
                                         <div className="col-md-12">
@@ -359,7 +355,46 @@ const LeaveType = () => {
                                                 <label className="form-label">
                                                     Number of days <span className="text-danger">*</span>
                                                 </label>
-                                                <input type="text" className="form-control" />
+                                                <input
+                                                    type="number"
+                                                    className="form-control"
+                                                    required
+                                                    value={newTypeDays}
+                                                    onChange={(e) => setNewTypeDays(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="col-md-12">
+                                            <div className="mb-3">
+                                                <label className="form-label">Type</label>
+                                                <div className="d-flex gap-3">
+                                                    <div className="form-check">
+                                                        <input
+                                                            className="form-check-input"
+                                                            type="radio"
+                                                            name="newTypeIsPaid"
+                                                            id="newPaid"
+                                                            checked={newTypeIsPaid}
+                                                            onChange={() => setNewTypeIsPaid(true)}
+                                                        />
+                                                        <label className="form-check-label" htmlFor="newPaid">
+                                                            Paid Leave
+                                                        </label>
+                                                    </div>
+                                                    <div className="form-check">
+                                                        <input
+                                                            className="form-check-input"
+                                                            type="radio"
+                                                            name="newTypeIsPaid"
+                                                            id="newUnpaid"
+                                                            checked={!newTypeIsPaid}
+                                                            onChange={() => setNewTypeIsPaid(false)}
+                                                        />
+                                                        <label className="form-check-label" htmlFor="newUnpaid">
+                                                            Unpaid Leave
+                                                        </label>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -372,7 +407,7 @@ const LeaveType = () => {
                                     >
                                         Cancel
                                     </button>
-                                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                                    <button type="submit" className="btn btn-primary">
                                         Add Leave
                                     </button>
                                 </div>
@@ -396,8 +431,9 @@ const LeaveType = () => {
                                     <i className="ti ti-x" />
                                 </button>
                             </div>
-                            <form>
+                            <form onSubmit={handleEditLeaveType}>
                                 <div className="modal-body pb-0">
+                                    {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
                                     <div className="row">
                                         <div className="col-md-12">
                                             <div className="mb-3">
@@ -407,7 +443,9 @@ const LeaveType = () => {
                                                 <input
                                                     type="text"
                                                     className="form-control"
-                                                    defaultValue="Casual Leave"
+                                                    required
+                                                    value={editTypeName}
+                                                    onChange={(e) => setEditTypeName(e.target.value)}
                                                 />
                                             </div>
                                         </div>
@@ -417,10 +455,45 @@ const LeaveType = () => {
                                                     Number of days <span className="text-danger">*</span>
                                                 </label>
                                                 <input
-                                                    type="text"
+                                                    type="number"
                                                     className="form-control"
-                                                    defaultValue={12}
+                                                    required
+                                                    value={editTypeDays}
+                                                    onChange={(e) => setEditTypeDays(e.target.value)}
                                                 />
+                                            </div>
+                                        </div>
+                                        <div className="col-md-12">
+                                            <div className="mb-3">
+                                                <label className="form-label">Type</label>
+                                                <div className="d-flex gap-3">
+                                                    <div className="form-check">
+                                                        <input
+                                                            className="form-check-input"
+                                                            type="radio"
+                                                            name="editTypeIsPaid"
+                                                            id="editPaid"
+                                                            checked={editTypeIsPaid}
+                                                            onChange={() => setEditTypeIsPaid(true)}
+                                                        />
+                                                        <label className="form-check-label" htmlFor="editPaid">
+                                                            Paid Leave
+                                                        </label>
+                                                    </div>
+                                                    <div className="form-check">
+                                                        <input
+                                                            className="form-check-input"
+                                                            type="radio"
+                                                            name="editTypeIsPaid"
+                                                            id="editUnpaid"
+                                                            checked={!editTypeIsPaid}
+                                                            onChange={() => setEditTypeIsPaid(false)}
+                                                        />
+                                                        <label className="form-check-label" htmlFor="editUnpaid">
+                                                            Unpaid Leave
+                                                        </label>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -433,7 +506,7 @@ const LeaveType = () => {
                                     >
                                         Cancel
                                     </button>
-                                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                                    <button type="submit" className="btn btn-primary">
                                         Save Changes
                                     </button>
                                 </div>
@@ -446,26 +519,30 @@ const LeaveType = () => {
                 <div className="modal fade" id="delete_modal">
                     <div className="modal-dialog modal-dialog-centered">
                         <div className="modal-content">
-                            <div className="modal-body text-center">
+                            <div className="modal-body text-center p-4">
                                 <span className="avatar avatar-xl bg-transparent-danger text-danger mb-3">
                                     <i className="ti ti-trash-x fs-36" />
                                 </span>
                                 <h4 className="mb-1">Confirm Delete</h4>
                                 <p className="mb-3">
-                                    You want to delete all the marked items, this cant be undone once
-                                    you delete.
+                                    Are you sure you want to delete this leave type? This action cannot be undone.
                                 </p>
                                 <div className="d-flex justify-content-center">
-                                    <Link
-                                        to="#"
+                                    <button
+                                        type="button"
                                         className="btn btn-light me-3"
                                         data-bs-dismiss="modal"
                                     >
                                         Cancel
-                                    </Link>
-                                    <Link to={routes.leaveType} className="btn btn-danger" data-bs-dismiss="modal">
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-danger"
+                                        data-bs-dismiss="modal"
+                                        onClick={handleDeleteLeaveType}
+                                    >
                                         Yes, Delete
-                                    </Link>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -473,10 +550,8 @@ const LeaveType = () => {
                 </div>
                 {/* /Delete Modal */}
             </>
-
         </div>
-    )
-}
-
+    );
+};
 
 export default LeaveType;
