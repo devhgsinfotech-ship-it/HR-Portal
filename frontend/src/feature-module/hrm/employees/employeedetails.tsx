@@ -18,6 +18,7 @@ const EmployeeDetails = () => {
   const [emp, setEmp] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saveMsg, setSaveMsg] = useState('');
+  const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
 
   // Edit state objects
   const [editBasic, setEditBasic] = useState({ phone: '', address: '', gender: '', dateOfBirth: '' });
@@ -48,8 +49,8 @@ const EmployeeDetails = () => {
   const getAvatarUrl = (photoUrl: string | null | undefined) => {
     if (!photoUrl) return null;
     if (photoUrl.startsWith('http')) return photoUrl;
-    const apiBase = (apiClient.defaults.baseURL || '').replace('/api', '');
-    return `${apiBase}${photoUrl}`;
+    const apiBase = apiClient.defaults.baseURL || '';
+    return `${apiBase}${photoUrl.startsWith('/') ? '' : '/'}${photoUrl}`;
   };
 
   const fetchEmployee = async () => {
@@ -101,10 +102,23 @@ const EmployeeDetails = () => {
     fetchEmployee();
   }, [employeeId]);
 
-  const saveField = async (fields: Record<string, any>) => {
+  const saveField = async (fields: Record<string, any>, fileToUpload?: File | null) => {
     if (!employeeId) return;
     try {
-      const res = await apiClient.put(`/employees/${employeeId}`, fields);
+      let res;
+      if (fileToUpload) {
+        const formData = new FormData();
+        Object.entries(fields).forEach(([k, v]) => {
+          if (v !== null && v !== undefined) formData.append(k, String(v));
+        });
+        formData.append('profileImage', fileToUpload);
+        res = await apiClient.put(`/employees/${employeeId}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        setEditPhotoFile(null);
+      } else {
+        res = await apiClient.put(`/employees/${employeeId}`, fields);
+      }
       setEmp(res.data);
       setSaveMsg('Saved successfully!');
       setTimeout(() => setSaveMsg(''), 3000);
@@ -230,7 +244,16 @@ const EmployeeDetails = () => {
                 <div className="card-body p-0">
                   <span className="avatar avatar-xl avatar-rounded border border-2 border-white m-auto d-flex mb-2">
                     {photoUrl ? (
-                      <img src={photoUrl} className="w-auto h-auto rounded-circle" alt="user" style={{ objectFit: 'cover', width: '100%', height: '100%' }} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'assets/img/users/user-13.jpg'; }} />
+                      <img
+                        src={photoUrl}
+                        className="w-auto h-auto rounded-circle"
+                        alt="user"
+                        style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = '/assets/img/users/user-13.jpg';
+                        }}
+                      />
                     ) : (
                       <ImageWithBasePath src="assets/img/users/user-13.jpg" className="w-auto h-auto" alt="user" />
                     )}
@@ -1112,11 +1135,17 @@ const EmployeeDetails = () => {
                       <div className="col-md-12">
                         <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
                           <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                            <ImageWithBasePath
-                              src="assets/img/users/user-13.jpg"
-                              alt="user"
-                              className="rounded-circle"
-                            />
+                            {editPhotoFile ? (
+                              <img src={URL.createObjectURL(editPhotoFile)} alt="user" className="rounded-circle" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ) : photoUrl ? (
+                              <img src={photoUrl} alt="user" className="rounded-circle" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/assets/img/users/user-13.jpg'; }} />
+                            ) : (
+                              <ImageWithBasePath
+                                src="assets/img/users/user-13.jpg"
+                                alt="user"
+                                className="rounded-circle"
+                              />
+                            )}
                           </div>
                           <div className="profile-upload">
                             <div className="mb-2">
@@ -1131,12 +1160,19 @@ const EmployeeDetails = () => {
                                 <input
                                   type="file"
                                   className="form-control image-sign"
-                                  multiple
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    if (e.target.files && e.target.files.length > 0) {
+                                      setEditPhotoFile(e.target.files[0]);
+                                    }
+                                  }}
                                 />
                               </div>
-                              <Link to="#" className="btn btn-light btn-sm">
-                                Cancel
-                              </Link>
+                              {editPhotoFile && (
+                                <button type="button" className="btn btn-light btn-sm" onClick={() => setEditPhotoFile(null)}>
+                                  Cancel
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1365,7 +1401,7 @@ const EmployeeDetails = () => {
                       type="button"
                       data-bs-dismiss="modal"
                       className="btn btn-primary"
-                      onClick={() => saveField({ ...editBasic, about: editAbout })}
+                      onClick={() => saveField({ ...editBasic, about: editAbout }, editPhotoFile)}
                     >
                       Save{" "}
                     </button>
