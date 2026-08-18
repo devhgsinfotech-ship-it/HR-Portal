@@ -3,7 +3,7 @@ node_modules/
 **/node_modules/
 
 # Build outputs
-# /dist/ (Commented out so Hostinger can access the build)
+/dist/ (Commented out so Hostinger can access the build)
 /build/
 /.next/
 /out/
