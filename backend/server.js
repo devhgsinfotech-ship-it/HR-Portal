@@ -29,8 +29,8 @@ app.use(cors({
 app.use(express.json());
 
 // Serve uploaded files from directory configured in env (persistent upload path)
-const UPLOAD_BASE = process.env.UPLOAD_PATH 
-    ? path.resolve(process.env.UPLOAD_PATH) 
+const UPLOAD_BASE = process.env.UPLOAD_PATH
+    ? path.resolve(process.env.UPLOAD_PATH)
     : path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(UPLOAD_BASE));
 
@@ -69,18 +69,4 @@ app.get('/health', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    
-    // Asynchronously push Prisma schema to database in the background
-    // to prevent blocking server startup and causing Hostinger Gateway/Connection timeouts (408/504)
-    const { exec } = require('child_process');
-    console.log('Starting Prisma schema sync in background...');
-    exec('npx prisma db push --accept-data-loss', (error, stdout, stderr) => {
-        if (error) {
-            console.error('Warning: Prisma schema sync failed in background:', error.message);
-            return;
-        }
-        console.log('Prisma schema sync completed successfully in background.');
-    });
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
