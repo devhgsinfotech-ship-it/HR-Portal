@@ -1,17 +1,6 @@
 // backend/server.js
 
 require('dotenv').config();
-const { execSync } = require('child_process');
-
-// Auto-run database push on Hostinger/deployments when server starts
-try {
-    console.log('Running Prisma schema sync...');
-    execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
-    console.log('Prisma schema sync completed successfully.');
-} catch (error) {
-    console.error('Warning: Failed to run Prisma schema sync:', error.message);
-}
-
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
