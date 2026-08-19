@@ -507,6 +507,75 @@ async function deleteLeavePolicy(req, res) {
     }
 }
 
+async function getLeaveAdminSummary(req, res) {
+    try {
+        const companyId = parseInt(req.user.companyId, 10);
+
+        // 1. Total active employees in the company
+        const totalEmployees = await prisma.employee.count({
+            where: { user: { companyId } }
+        });
+
+        // 2. Count of employees present today
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        const presentToday = await prisma.attendanceRecord.count({
+            where: {
+                employee: { user: { companyId } },
+                date: { gte: todayStart, lte: todayEnd }
+            }
+        });
+
+        // 3. Count of pending requests
+        const pendingCount = await prisma.leaveRequest.count({
+            where: {
+                status: 'PENDING',
+                employee: { user: { companyId } }
+            }
+        });
+
+        // 4. Count of approved leaves active today
+        const activeLeavesToday = await prisma.leaveRequest.findMany({
+            where: {
+                status: 'APPROVED',
+                employee: { user: { companyId } },
+                startDate: { lte: todayEnd },
+                endDate: { gte: todayStart }
+            },
+            include: {
+                leaveType: true
+            }
+        });
+
+        let plannedToday = 0;
+        let unplannedToday = 0;
+
+        activeLeavesToday.forEach(request => {
+            const typeName = (request.leaveType?.name || '').toLowerCase();
+            if (typeName.includes('sick') || typeName.includes('unplanned') || typeName.includes('emergency')) {
+                unplannedToday++;
+            } else {
+                plannedToday++;
+            }
+        });
+
+        res.json({
+            totalEmployees,
+            presentToday,
+            pendingCount,
+            plannedToday,
+            unplannedToday
+        });
+
+    } catch (error) {
+        console.error('Error fetching admin leave summary:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     getLeaveTypes,
     createLeaveType,
@@ -519,5 +588,6 @@ module.exports = {
     getLeavePolicies,
     createLeavePolicy,
     updateLeavePolicy,
-    deleteLeavePolicy
+    deleteLeavePolicy,
+    getLeaveAdminSummary
 };
