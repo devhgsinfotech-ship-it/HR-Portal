@@ -45,6 +45,7 @@ const employeeRoutes = require('./src/routes/employeeRoutes');
 const leaveRoutes = require('./src/routes/leaveRoutes');
 const attendanceRoutes = require('./src/routes/attendanceRoutes');
 const holidayRoutes = require('./src/routes/holidayRoutes'); // Added Holiday Routes
+const hrDashboardRoutes = require('./src/routes/hrDashboardRoutes');
 
 // Initialize Cron Jobs
 require('./src/cron/attendanceJobs');
@@ -56,6 +57,7 @@ app.use('/employees', employeeRoutes);
 app.use('/leaves', leaveRoutes);
 app.use('/attendance', attendanceRoutes);
 app.use('/holidays', holidayRoutes);
+app.use('/dashboard', hrDashboardRoutes);
 
 const prisma = require('./src/config/prisma');
 app.get('/health', async (req, res) => {
