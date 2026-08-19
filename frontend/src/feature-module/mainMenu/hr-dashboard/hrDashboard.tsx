@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from 'react'
 import PredefinedDatePicker from '@/core/common/datePicker'
 import ImageWithBasePath from '@/core/common/imageWithBasePath'
 import { all_routes } from '@/router/all_routes'
@@ -12,8 +13,115 @@ import PayrollChart from './charts/payrollChart'
 import CommonFooter from '@/core/common/commonFooter/footer'
 import TrainingChart from './charts/trainingChart'
 import ImagePointChart from './charts/topEmployeeChart'
+import apiClient from '../../../core/utils/apiClient'
+
+// ── Types ─────────────────────────────────────────────────────
+interface LateArrival {
+    id: number
+    name: string
+    department: string
+    photo: string | null
+    checkIn: string
+    delayMinutes: number
+}
+
+interface LeaveTypeStat {
+    name: string
+    count: number
+}
+
+interface PendingLeave {
+    id: number
+    employeeName: string
+    designation: string
+    photo: string | null
+    leaveType: string
+    startDate: string
+    endDate: string
+    totalDays: number
+    reason: string
+}
+
+interface DashData {
+    totalEmployees: number
+    newJoinees: number
+    fullTimeCount: number
+    contractCount: number
+    probationCount: number
+    onTimeCount: number
+    lateCount: number
+    absentCount: number
+    lateArrivalsList: LateArrival[]
+    leaveTypeStats: LeaveTypeStat[]
+    pendingLeaves: PendingLeave[]
+}
+
+const defaultDash: DashData = {
+    totalEmployees: 0,
+    newJoinees: 0,
+    fullTimeCount: 0,
+    contractCount: 0,
+    probationCount: 0,
+    onTimeCount: 0,
+    lateCount: 0,
+    absentCount: 0,
+    lateArrivalsList: [],
+    leaveTypeStats: [],
+    pendingLeaves: []
+}
 
 const HrDashboard = () => {
+    const [dashData, setDashData] = useState<DashData>(defaultDash)
+    const [loading, setLoading] = useState(true)
+    const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({
+        start: null,
+        end: null
+    })
+
+    const fetchDashboard = useCallback(async (start?: Date | null, end?: Date | null) => {
+        try {
+            setLoading(true)
+            const params: Record<string, string> = {}
+            if (start) params.startDate = start.toISOString().split('T')[0]
+            if (end) params.endDate = end.toISOString().split('T')[0]
+            const res = await apiClient.get('/dashboard/hr-summary', { params })
+            setDashData(res.data)
+        } catch (err) {
+            console.error('Error fetching HR dashboard data:', err)
+        } finally {
+            setLoading(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        fetchDashboard()
+    }, [fetchDashboard])
+
+    const handleDateChange = (start: Date | null, end: Date | null) => {
+        setDateRange({ start, end })
+        fetchDashboard(start, end)
+    }
+
+    const handleLeaveAction = async (id: number, status: 'APPROVED' | 'REJECTED') => {
+        try {
+            await apiClient.put(`/leaves/requests/${id}/status`, { status })
+            fetchDashboard(dateRange.start, dateRange.end)
+        } catch (err: any) {
+            alert(err?.response?.data?.message || 'Error updating leave status')
+        }
+    }
+
+    const formatDateRange = (start: string, end: string) => {
+        const s = new Date(start)
+        const e = new Date(end)
+        const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
+        if (s.toDateString() === e.toDateString()) return s.toLocaleDateString('en-US', opts)
+        return `${s.toLocaleDateString('en-US', opts)} - ${e.toLocaleDateString('en-US', opts)}`
+    }
+
+    const getPhotoSrc = (photo: string | null) =>
+        photo ? `${apiClient.defaults.baseURL}${photo}` : 'assets/img/users/user-13.jpg'
+
     return (
         <>
             {/* Page Wrapper */}
@@ -38,44 +146,9 @@ const HrDashboard = () => {
                             </nav>
                         </div>
                         <div className="d-flex my-xl-auto right-content align-items-center flex-wrap gap-3 mb-2">
-                            <div className="avatar-list-stacked avatar-group-md">
-                                <Link to="#" className="avatar avatar-rounded">
-                                    <ImageWithBasePath
-                                        className="border border-white"
-                                        src="assets/img/users/user-31.jpg"
-                                        alt="user"
-                                    />
-                                </Link>
-                                <Link to="#" className="avatar avatar-rounded">
-                                    <ImageWithBasePath
-                                        className="border border-white"
-                                        src="assets/img/users/user-32.jpg"
-                                        alt="user"
-                                    />
-                                </Link>
-                                <Link to="#" className="avatar avatar-rounded">
-                                    <ImageWithBasePath
-                                        className="border border-white"
-                                        src="assets/img/users/user-29.jpg"
-                                        alt="user"
-                                    />
-                                </Link>
-                                <Link to="#" className="avatar avatar-rounded">
-                                    <ImageWithBasePath
-                                        className="border border-white"
-                                        src="assets/img/users/user-56.jpg"
-                                        alt="user"
-                                    />
-                                </Link>
-                                <Link
-                                    className="avatar bg-dark avatar-rounded fs-20 text-fixed-white"
-                                    to="#"
-                                >
-                                    +
-                                </Link>
-                            </div>
+                            {/* Date Range Picker — triggers API re-fetch */}
                             <div className="me-3 input-icon position-relative">
-                                <PredefinedDatePicker />
+                                <PredefinedDatePicker onDateRangeChange={handleDateChange} />
                             </div>
                             <div className="dropdown">
                                 <Link
@@ -88,18 +161,12 @@ const HrDashboard = () => {
                                 </Link>
                                 <ul className="dropdown-menu  dropdown-menu-end p-3">
                                     <li>
-                                        <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                        >
+                                        <Link to="#" className="dropdown-item rounded-1">
                                             Monthly Report
                                         </Link>
                                     </li>
                                     <li>
-                                        <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                        >
+                                        <Link to="#" className="dropdown-item rounded-1">
                                             Yearly Report{" "}
                                         </Link>
                                     </li>
@@ -140,6 +207,7 @@ const HrDashboard = () => {
                         </div>
                     </div>
                     {/* /Breadcrumb */}
+
                     {/* start row */}
                     <div className="row">
                         <div className="col-xl-5 d-flex flex-column">
@@ -157,7 +225,9 @@ const HrDashboard = () => {
                                     <div className="row">
                                         <div className="col-4">
                                             <div className="text-center">
-                                                <h3 className="main-title mb-1">1054</h3>
+                                                <h3 className="main-title mb-1">
+                                                    {loading ? '—' : dashData.fullTimeCount}
+                                                </h3>
                                                 <p className="d-inline-flex align-items-center mb-0">
                                                     <span className="chart-line bg-primary me-1" />
                                                     Full-Time
@@ -166,7 +236,9 @@ const HrDashboard = () => {
                                         </div>
                                         <div className="col-4">
                                             <div className="text-center">
-                                                <h3 className="main-title mb-1">568</h3>
+                                                <h3 className="main-title mb-1">
+                                                    {loading ? '—' : dashData.contractCount}
+                                                </h3>
                                                 <p className="d-inline-flex align-items-center mb-0">
                                                     <span className="chart-line bg-secondary me-1" />
                                                     Contract
@@ -175,10 +247,12 @@ const HrDashboard = () => {
                                         </div>
                                         <div className="col-4">
                                             <div className="text-center">
-                                                <h3 className="main-title mb-1">80</h3>
+                                                <h3 className="main-title mb-1">
+                                                    {loading ? '—' : dashData.probationCount}
+                                                </h3>
                                                 <p className="d-inline-flex align-items-center mb-0">
                                                     <span className="chart-line bg-light me-1" />
-                                                    Probation
+                                                    Part-Time/Intern
                                                 </p>
                                             </div>
                                         </div>
@@ -189,42 +263,6 @@ const HrDashboard = () => {
                                 <div className="card-body pb-sm-2">
                                     <div className="border rounded border-start border-start-primary d-flex align-items-center justify-content-between p-2 gap-2 flex-wrap mb-3">
                                         <h2 className="card-title mb-0">Leave Type Distribution</h2>
-                                        <div className="dropdown">
-                                            <Link
-                                                to="#"
-                                                className="border btn btn-white btn-md d-inline-flex align-items-center"
-                                                data-bs-toggle="dropdown"
-                                            >
-                                                <i className="ti ti-calendar-due me-1" />
-                                                Monthly
-                                            </Link>
-                                            <ul className="dropdown-menu mt-2 p-3">
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Monthly
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Weekly
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Today
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
                                     </div>
                                     <div className="row">
                                         <div className="col-sm-5">
@@ -232,33 +270,23 @@ const HrDashboard = () => {
                                         </div>
                                         <div className="col-sm-7">
                                             <div>
-                                                <div className="d-flex align-items-center justify-content-between mb-2">
-                                                    <p className="d-inline-flex align-items-center text-dark mb-0">
-                                                        <i className="ti ti-circle-filled text-primary-900 fs-7 me-1" />
-                                                        Sick Leave
-                                                    </p>
-                                                    <span className="badge fw-normal bg-light text-dark border rounded-pill fs-13">
-                                                        45
-                                                    </span>
-                                                </div>
-                                                <div className="d-flex align-items-center justify-content-between mb-2">
-                                                    <p className="d-inline-flex align-items-center text-dark mb-0">
-                                                        <i className="ti ti-circle-filled text-primary-800 fs-7 me-1" />
-                                                        Casual Leave
-                                                    </p>
-                                                    <span className="badge fw-normal bg-light text-dark border rounded-pill fs-13">
-                                                        68
-                                                    </span>
-                                                </div>
-                                                <div className="d-flex align-items-center justify-content-between mb-2">
-                                                    <p className="d-inline-flex align-items-center text-dark mb-0">
-                                                        <i className="ti ti-circle-filled text-primary-700 fs-7 me-1" />
-                                                        Unpaid
-                                                    </p>
-                                                    <span className="badge fw-normal bg-light text-dark border rounded-pill fs-13">
-                                                        12
-                                                    </span>
-                                                </div>
+                                                {loading ? (
+                                                    <p className="text-muted fs-13">Loading...</p>
+                                                ) : dashData.leaveTypeStats.length === 0 ? (
+                                                    <p className="text-muted fs-13">No approved leaves in this period.</p>
+                                                ) : (
+                                                    dashData.leaveTypeStats.map((lt, i) => (
+                                                        <div key={i} className="d-flex align-items-center justify-content-between mb-2">
+                                                            <p className="d-inline-flex align-items-center text-dark mb-0">
+                                                                <i className="ti ti-circle-filled text-primary-900 fs-7 me-1" />
+                                                                {lt.name}
+                                                            </p>
+                                                            <span className="badge fw-normal bg-light text-dark border rounded-pill fs-13">
+                                                                {lt.count}
+                                                            </span>
+                                                        </div>
+                                                    ))
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -273,44 +301,9 @@ const HrDashboard = () => {
                                 <div className="card-body">
                                     <div className="border rounded border-start border-start-primary d-flex align-items-center justify-content-between p-2 gap-2 flex-wrap mb-3">
                                         <h2 className="card-title mb-0">Overview Statistics</h2>
-                                        <div className="dropdown">
-                                            <Link
-                                                to="#"
-                                                className="border btn btn-white btn-md d-inline-flex align-items-center"
-                                                data-bs-toggle="dropdown"
-                                            >
-                                                <i className="ti ti-calendar-due me-1" />
-                                                Monthly
-                                            </Link>
-                                            <ul className="dropdown-menu mt-2 p-3">
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Monthly
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Weekly
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Today
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
                                     </div>
                                     <div className="row g-3">
+                                        {/* Total Employees */}
                                         <div className="col-md-6 d-flex">
                                             <div className="card shadow-none mb-0 flex-fill">
                                                 <div className="card-body">
@@ -326,22 +319,22 @@ const HrDashboard = () => {
                                                     </div>
                                                     <div className="d-flex align-items-center justify-content-between">
                                                         <div>
-                                                            <h3 className="main-title mb-1">1,848</h3>
+                                                            <h3 className="main-title mb-1">
+                                                                {loading ? '—' : dashData.totalEmployees.toLocaleString()}
+                                                            </h3>
                                                             <p className="fs-13 mb-0">Headcount Overview</p>
                                                         </div>
                                                         <div className="d-inline-flex align-items-center bg-light border rounded-pill text-dark p-1 ps-2">
-                                                            +18%
+                                                            <Link to={all_routes.employeeList} className="text-dark fs-12">View</Link>
                                                             <span className="bg-success btn-icon btn-sm rounded-circle d-flex align-items-center justify-content-center ms-1">
                                                                 <i className="ti ti-arrow-up-right fs-20" />
                                                             </span>
                                                         </div>
                                                     </div>
                                                 </div>{" "}
-                                                {/* end card */}
                                             </div>{" "}
-                                            {/* end card body */}
                                         </div>{" "}
-                                        {/* end col */}
+                                        {/* New Joinees */}
                                         <div className="col-md-6 d-flex">
                                             <div className="card shadow-none mb-0 flex-fill">
                                                 <div className="card-body">
@@ -357,22 +350,22 @@ const HrDashboard = () => {
                                                     </div>
                                                     <div className="d-flex align-items-center justify-content-between">
                                                         <div>
-                                                            <h3 className="main-title mb-1">1,248</h3>
-                                                            <p className="fs-13 mb-0">All Department</p>
+                                                            <h3 className="main-title mb-1">
+                                                                {loading ? '—' : dashData.newJoinees}
+                                                            </h3>
+                                                            <p className="fs-13 mb-0">In Selected Period</p>
                                                         </div>
                                                         <div className="d-inline-flex align-items-center bg-light border rounded-pill text-dark p-1 ps-2">
-                                                            +22%
+                                                            <Link to={all_routes.employeeList} className="text-dark fs-12">View</Link>
                                                             <span className="bg-success btn-icon btn-sm rounded-circle d-flex align-items-center justify-content-center ms-1">
                                                                 <i className="ti ti-arrow-up-right fs-20" />
                                                             </span>
                                                         </div>
                                                     </div>
                                                 </div>{" "}
-                                                {/* end card */}
                                             </div>{" "}
-                                            {/* end card body */}
                                         </div>{" "}
-                                        {/* end col */}
+                                        {/* Late Arrivals */}
                                         <div className="col-md-6 d-flex">
                                             <div className="card shadow-none mb-0 flex-fill">
                                                 <div className="card-body">
@@ -388,111 +381,75 @@ const HrDashboard = () => {
                                                     </div>
                                                     <div className="d-flex align-items-center justify-content-between">
                                                         <div>
-                                                            <h3 className="main-title mb-1">12</h3>
+                                                            <h3 className="main-title mb-1">
+                                                                {loading ? '—' : dashData.lateCount}
+                                                            </h3>
                                                             <p className="fs-13 mb-0">Delayed Logins Today</p>
                                                         </div>
                                                         <div className="d-inline-flex align-items-center bg-light border rounded-pill text-dark p-1 ps-2">
-                                                            -16%
+                                                            <Link to={all_routes.attendanceemployee} className="text-dark fs-12">View</Link>
                                                             <span className="bg-danger btn-icon btn-sm rounded-circle d-flex align-items-center justify-content-center ms-1">
                                                                 <i className="ti ti-arrow-down-right fs-20" />
                                                             </span>
                                                         </div>
                                                     </div>
                                                 </div>{" "}
-                                                {/* end card */}
                                             </div>{" "}
-                                            {/* end card body */}
                                         </div>{" "}
-                                        {/* end col */}
+                                        {/* Absent */}
                                         <div className="col-md-6 d-flex">
                                             <div className="card shadow-none mb-0 flex-fill">
                                                 <div className="card-body">
                                                     <div className="d-flex align-items-center mb-3">
                                                         <div className="avatar avatar-lg bg-purple rounded-circle flex-shrink-0">
-                                                            <i className="ti ti-report-money text-white fs-24" />
+                                                            <i className="ti ti-user-off text-white fs-24" />
                                                         </div>
                                                         <div className="ms-2">
                                                             <p className="fw-semibold text-truncate mb-0">
-                                                                Total Payroll Cost
+                                                                Absent Today
                                                             </p>
                                                         </div>
                                                     </div>
                                                     <div className="d-flex align-items-center justify-content-between">
                                                         <div>
-                                                            <h3 className="main-title mb-1">$2.4M</h3>
-                                                            <p className="fs-13 mb-0">Payroll Outflow</p>
+                                                            <h3 className="main-title mb-1">
+                                                                {loading ? '—' : dashData.absentCount}
+                                                            </h3>
+                                                            <p className="fs-13 mb-0">No Check-In Recorded</p>
                                                         </div>
                                                         <div className="d-inline-flex align-items-center bg-light border rounded-pill text-dark p-1 ps-2">
-                                                            +16%
-                                                            <span className="bg-success btn-icon btn-sm rounded-circle d-flex align-items-center justify-content-center ms-1">
-                                                                <i className="ti ti-arrow-up-right fs-20" />
+                                                            <Link to={all_routes.attendanceemployee} className="text-dark fs-12">View</Link>
+                                                            <span className="bg-warning btn-icon btn-sm rounded-circle d-flex align-items-center justify-content-center ms-1">
+                                                                <i className="ti ti-minus fs-20" />
                                                             </span>
                                                         </div>
                                                     </div>
                                                 </div>{" "}
-                                                {/* end card */}
                                             </div>{" "}
-                                            {/* end card body */}
                                         </div>{" "}
-                                        {/* end col */}
                                     </div>
                                 </div>{" "}
-                                {/* end card body */}
                             </div>{" "}
-                            {/* end card */}
                         </div>{" "}
-                        {/* end col */}
                     </div>
                     {/* end row */}
-                    {/* start row */}
+
+                    {/* start row — Attendance Trend + Top Employee Distribution */}
                     <div className="row">
                         <div className="col-xl-8 d-flex">
                             <div className="card flex-fill">
                                 <div className="card-body pb-0">
                                     <div className="border rounded border-start border-start-primary d-flex align-items-center justify-content-between p-2 gap-2 flex-wrap mb-3">
                                         <h2 className="card-title mb-0">Attendance Trend</h2>
-                                        <div className="dropdown">
-                                            <Link
-                                                to="#"
-                                                className="border btn btn-white btn-md d-inline-flex align-items-center"
-                                                data-bs-toggle="dropdown"
-                                            >
-                                                <i className="ti ti-calendar-due me-1" />
-                                                Weekly
-                                            </Link>
-                                            <ul className="dropdown-menu mt-2 p-3">
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Monthly
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Weekly
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Today
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
+                                        <Link to={all_routes.attendanceemployee} className="btn btn-md btn-light">
+                                            View All
+                                        </Link>
                                     </div>
                                     <div className="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
                                         <div className="d-flex align-items-center flex-wrap gap-3">
                                             <div className="d-flex align-items-center pe-3 border-end">
                                                 <h3 className="mb-0">
-                                                    82
+                                                    {loading ? '—' : dashData.onTimeCount}
                                                     <span className="ms-2 fw-normal fs-14 text-default">
                                                         On-Time
                                                     </span>
@@ -500,7 +457,7 @@ const HrDashboard = () => {
                                             </div>
                                             <div className="d-flex align-items-center pe-3 border-end">
                                                 <h3 className="mb-0">
-                                                    11
+                                                    {loading ? '—' : dashData.lateCount}
                                                     <span className="ms-2 fw-normal fs-14 text-default">
                                                         Late
                                                     </span>
@@ -508,7 +465,7 @@ const HrDashboard = () => {
                                             </div>
                                             <div className="d-flex align-items-center">
                                                 <h3 className="mb-0">
-                                                    6
+                                                    {loading ? '—' : dashData.absentCount}
                                                     <span className="ms-2 fw-normal fs-14 text-default">
                                                         Absent
                                                     </span>
@@ -536,25 +493,28 @@ const HrDashboard = () => {
                                         </div>
                                         <div className="flex-shrink-0">
                                             <div className="border p-3 rounded text-center mb-3">
-                                                <p className="mb-1">Max Working Hours</p>
-                                                <h3 className="main-title mb-0">8.4 hrs</h3>
+                                                <p className="mb-1">On-Time Today</p>
+                                                <h3 className="main-title mb-0">
+                                                    {loading ? '—' : dashData.onTimeCount}
+                                                </h3>
                                             </div>
                                             <div className="border p-3 rounded text-center mb-3">
-                                                <p className="mb-1">Missed Punches</p>
-                                                <h3 className="main-title mb-0">12</h3>
+                                                <p className="mb-1">Late Today</p>
+                                                <h3 className="main-title mb-0">
+                                                    {loading ? '—' : dashData.lateCount}
+                                                </h3>
                                             </div>
                                             <div className="border p-3 rounded text-center mb-3">
-                                                <p className="mb-1">Weekly Avg</p>
-                                                <h3 className="main-title mb-0">97.2%</h3>
+                                                <p className="mb-1">Absent Today</p>
+                                                <h3 className="main-title mb-0">
+                                                    {loading ? '—' : dashData.absentCount}
+                                                </h3>
                                             </div>
                                         </div>
                                     </div>
                                 </div>{" "}
-                                {/* end card body */}
                             </div>{" "}
-                            {/* end card */}
                         </div>{" "}
-                        {/* end col */}
                         <div className="col-xl-4 d-flex">
                             <div className="card flex-fill">
                                 <div className="card-body pb-0">
@@ -566,582 +526,137 @@ const HrDashboard = () => {
                                     </div>
                                     <EmployeeDistributionChart />
                                 </div>{" "}
-                                {/* end card body */}
                             </div>{" "}
-                            {/* end card */}
                         </div>{" "}
-                        {/* end col */}
                     </div>
                     {/* end row */}
-                    {/* start row */}
+
+                    {/* start row — Late Arrivals + Recruitment Statistics + Upcoming Interviews */}
                     <div className="row">
                         <div className="col-xxl-4 col-xl-6 d-flex">
                             <div className="card flex-fill">
                                 <div className="card-body">
                                     <div className="border rounded border-start border-start-primary d-flex align-items-center justify-content-between p-2 gap-2 flex-wrap mb-3">
                                         <h2 className="card-title mb-0">Late Arrivals Today</h2>
-                                        <div className="dropdown">
-                                            <Link
-                                                to="#"
-                                                className="border btn btn-white btn-md d-inline-flex align-items-center"
-                                                data-bs-toggle="dropdown"
+                                        <Link to={all_routes.attendanceemployee} className="btn btn-md btn-light">
+                                            View All
+                                        </Link>
+                                    </div>
+                                    {loading ? (
+                                        <p className="text-muted text-center py-3">Loading...</p>
+                                    ) : dashData.lateArrivalsList.length === 0 ? (
+                                        <div className="text-center py-4 text-muted">
+                                            <i className="ti ti-circle-check text-success fs-32 mb-2 d-block" />
+                                            No late arrivals today!
+                                        </div>
+                                    ) : (
+                                        dashData.lateArrivalsList.map((emp, i) => (
+                                            <div
+                                                key={emp.id}
+                                                className={`p-2 bg-light rounded border-bottom d-flex align-items-center justify-content-between ${i === dashData.lateArrivalsList.length - 1 ? 'mb-0' : 'mb-2'}`}
                                             >
-                                                <i className="ti ti-calendar-due me-1" />
-                                                Today
-                                            </Link>
-                                            <ul className="dropdown-menu mt-2 p-3">
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Monthly
+                                                <div className="d-flex align-items-center">
+                                                    <Link to="#" className="avatar flex-shrink-0">
+                                                        <img
+                                                            src={getPhotoSrc(emp.photo)}
+                                                            className="rounded-circle"
+                                                            alt="user"
+                                                            style={{ width: 40, height: 40, objectFit: 'cover' }}
+                                                            onError={(e) => {
+                                                                e.currentTarget.src = 'assets/img/users/user-13.jpg'
+                                                            }}
+                                                        />
                                                     </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Weekly
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Today
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div className="p-2 bg-light rounded border-bottom d-flex align-items-center justify-content-between mb-2">
-                                        <div className="d-flex align-items-center">
-                                            <Link
-                                                to="#"
-                                                className="avatar flex-shrink-0"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-26.jpg"
-                                                    className="rounded-circle"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                            <div className="ms-2">
-                                                <p className="fs-14 fw-medium text-truncate mb-1">
-                                                    <Link to="#">Jessica Brown</Link>
-                                                </p>
-                                                <p className="fs-13">Customer Support</p>
+                                                    <div className="ms-2">
+                                                        <p className="fs-14 fw-medium text-truncate mb-1">
+                                                            <Link to="#">{emp.name}</Link>
+                                                        </p>
+                                                        <p className="fs-13">{emp.department}</p>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <p className="fs-13 text-dark mb-1">{emp.checkIn}</p>
+                                                    <span className="badge badge-danger-transparent rounded-pill">
+                                                        +{emp.delayMinutes} Min
+                                                    </span>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div>
-                                            <p className="fs-13 text-dark mb-1">10:15 AM</p>
-                                            <span className="badge badge-danger-transparent rounded-pill">
-                                                +45 Min
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="p-2 bg-light rounded border-bottom d-flex align-items-center justify-content-between mb-2">
-                                        <div className="d-flex align-items-center">
-                                            <Link
-                                                to="#"
-                                                className="avatar flex-shrink-0"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-31.jpg"
-                                                    className="rounded-circle"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                            <div className="ms-2">
-                                                <p className="fs-14 fw-medium text-truncate mb-1">
-                                                    <Link to="#">Amanda Lewis</Link>
-                                                </p>
-                                                <p className="fs-13">HR Admin</p>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <p className="fs-13 text-dark mb-1">10:25 AM</p>
-                                            <span className="badge badge-danger-transparent rounded-pill">
-                                                +55 Min
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="p-2 bg-light rounded border-bottom d-flex align-items-center justify-content-between mb-2">
-                                        <div className="d-flex align-items-center">
-                                            <Link
-                                                to="#"
-                                                className="avatar flex-shrink-0"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-27.jpg"
-                                                    className="rounded-circle"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                            <div className="ms-2">
-                                                <p className="fs-14 fw-medium text-truncate mb-1">
-                                                    <Link to="#">James Clark</Link>
-                                                </p>
-                                                <p className="fs-13">Sales</p>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <p className="fs-13 text-dark mb-1">10:00 AM</p>
-                                            <span className="badge badge-danger-transparent rounded-pill">
-                                                +30 Min
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="p-2 bg-light rounded border-bottom d-flex align-items-center justify-content-between mb-2">
-                                        <div className="d-flex align-items-center">
-                                            <Link
-                                                to="#"
-                                                className="avatar flex-shrink-0"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-56.jpg"
-                                                    className="rounded-circle"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                            <div className="ms-2">
-                                                <p className="fs-14 fw-medium text-truncate mb-1">
-                                                    <Link to="#">Amanda Davis</Link>
-                                                </p>
-                                                <p className="fs-13">Administration</p>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <p className="fs-13 text-dark mb-1">09:40 AM</p>
-                                            <span className="badge badge-danger-transparent rounded-pill">
-                                                +20 Min
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="p-2 bg-light rounded border-bottom d-flex align-items-center justify-content-between mb-0">
-                                        <div className="d-flex align-items-center">
-                                            <Link
-                                                to="#"
-                                                className="avatar flex-shrink-0"
-                                            >
-                                                <ImageWithBasePath
-                                                    src="assets/img/users/user-29.jpg"
-                                                    className="rounded-circle"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                            <div className="ms-2">
-                                                <p className="fs-14 fw-medium text-truncate mb-1">
-                                                    <Link to="#">Lisa Anderson</Link>
-                                                </p>
-                                                <p className="fs-13">Finance</p>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <p className="fs-13 text-dark mb-1">09:35 AM</p>
-                                            <span className="badge badge-danger-transparent rounded-pill">
-                                                +05 Min
-                                            </span>
-                                        </div>
-                                    </div>
+                                        ))
+                                    )}
                                 </div>{" "}
-                                {/* end card body */}
                             </div>{" "}
-                            {/* end card */}
                         </div>{" "}
-                        {/* end col */}
                         <div className="col-xxl-4 col-xl-6 d-flex flex-column">
                             <div className="card flex-fill">
                                 <div className="card-body">
                                     <div className="border rounded border-start border-start-primary d-flex align-items-center justify-content-between p-2 gap-2 flex-wrap mb-3">
                                         <h2 className="card-title mb-0">Recruitment Statistics</h2>
-                                        <div className="dropdown">
-                                            <Link
-                                                to="#"
-                                                className="border btn btn-white btn-md d-inline-flex align-items-center"
-                                                data-bs-toggle="dropdown"
-                                            >
-                                                <i className="ti ti-calendar-due me-1" />
-                                                Weekly
-                                            </Link>
-                                            <ul className="dropdown-menu mt-2 p-3">
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Monthly
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Weekly
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Today
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
                                     </div>
                                     <div className="mb-4">
                                         <div className="row g-3">
                                             <div className="col-6 col-sm-4">
                                                 <div className="text-center">
                                                     <p className="mb-1">Applicants</p>
-                                                    <h2 className="mb-0">487</h2>
+                                                    <h2 className="mb-0">—</h2>
                                                 </div>
                                             </div>
                                             <div className="col-6 col-sm-4">
                                                 <div className="text-center">
                                                     <p className="mb-1">Hired</p>
-                                                    <h2 className="mb-0">24</h2>
+                                                    <h2 className="mb-0">—</h2>
                                                 </div>
                                             </div>
                                             <div className="col-6 col-sm-4">
                                                 <div className="text-center">
                                                     <p className="mb-1">Avg Time</p>
-                                                    <h2 className="mb-0">28 days</h2>
+                                                    <h2 className="mb-0">—</h2>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="progress-stacked bg-white statistic-progress mb-4">
-                                        <div
-                                            className="progress overflow-hidden"
-                                            role="progressbar"
-                                            aria-label="Segment one"
-                                            aria-valuenow={15}
-                                            aria-valuemin={0}
-                                            aria-valuemax={100}
-                                            style={{ width: "42%" }}
-                                        >
-                                            <div className="progress-bar bg-primary" />
-                                        </div>
-                                        <div
-                                            className="progress overflow-hidden"
-                                            role="progressbar"
-                                            aria-label="Segment two"
-                                            aria-valuenow={30}
-                                            aria-valuemin={0}
-                                            aria-valuemax={100}
-                                            style={{ width: "20%" }}
-                                        >
-                                            <div className="progress-bar bg-secondary" />
-                                        </div>
-                                        <div
-                                            className="progress overflow-hidden"
-                                            role="progressbar"
-                                            aria-label="Segment three"
-                                            aria-valuenow={20}
-                                            aria-valuemin={0}
-                                            aria-valuemax={100}
-                                            style={{ width: "18%" }}
-                                        >
-                                            <div className="progress-bar bg-pink" />
-                                        </div>
-                                        <div
-                                            className="progress overflow-hidden"
-                                            role="progressbar"
-                                            aria-label="Segment four"
-                                            aria-valuenow={20}
-                                            aria-valuemin={0}
-                                            aria-valuemax={100}
-                                            style={{ width: "20%" }}
-                                        >
-                                            <div className="progress-bar bg-success" />
-                                        </div>
-                                    </div>
-                                    <div className="row g-3">
-                                        <div className="col-sm-6">
-                                            <div>
-                                                <p className="d-inline-flex align-items-center text-dark fw-semibold mb-1">
-                                                    <span className="chart-line bg-primary me-2" />
-                                                    Applications
-                                                </p>
-                                                <p className="mb-0">
-                                                    <span className="text-dark fw-medium">40%</span> - 57
-                                                    Employees
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="col-sm-6">
-                                            <div>
-                                                <p className="d-inline-flex align-items-center text-dark fw-semibold mb-1">
-                                                    <span className="chart-line bg-secondary me-2" />
-                                                    Screening
-                                                </p>
-                                                <p className="mb-0">
-                                                    <span className="text-dark fw-medium">20%</span> - 36
-                                                    Employees
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="col-sm-6">
-                                            <div>
-                                                <p className="d-inline-flex align-items-center text-dark fw-semibold mb-1">
-                                                    <span className="chart-line bg-pink me-2" />
-                                                    Interview
-                                                </p>
-                                                <p className="mb-0">
-                                                    <span className="text-dark fw-medium">23%</span> - 64
-                                                    Employees
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="col-sm-6">
-                                            <div>
-                                                <p className="d-inline-flex align-items-center text-dark fw-semibold mb-1">
-                                                    <span className="chart-line bg-success me-2" />
-                                                    Hired
-                                                </p>
-                                                <p className="mb-0">
-                                                    <span className="text-dark fw-medium">17%</span> - 18
-                                                    Employees
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    <p className="text-muted fs-13 text-center">Recruitment module coming soon</p>
                                 </div>{" "}
-                                {/* end card body */}
                             </div>{" "}
-                            {/* end card */}
                             <div className="card bg-secondary shadow-none z-1">
                                 <div className="card-body d-flex align-items-center justify-content-between flex-wrap gap-2">
                                     <div>
                                         <p className="text-white mb-1">Employees in Training</p>
-                                        <h2 className="text-white mb-0">80</h2>
+                                        <h2 className="text-white mb-0">—</h2>
                                     </div>
                                     <div className="d-inline-flex align-items-center gap-2">
-                                        <div className="avatar-list-stacked avatar-group-md">
-                                            <Link to="#" className="avatar avatar-rounded">
-                                                <ImageWithBasePath
-                                                    className="border border-white"
-                                                    src="assets/img/users/user-39.jpg"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                            <Link to="#" className="avatar avatar-rounded">
-                                                <ImageWithBasePath
-                                                    className="border border-white"
-                                                    src="assets/img/users/user-41.jpg"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                            <Link to="#" className="avatar avatar-rounded">
-                                                <ImageWithBasePath
-                                                    className="border border-white"
-                                                    src="assets/img/users/user-44.jpg"
-                                                    alt="user"
-                                                />
-                                            </Link>
-                                        </div>
                                         <div className="chartjs-wrapper-demo position-relative">
                                             <TrainingChart />
                                         </div>
                                     </div>
                                 </div>{" "}
-                                {/* end card body */}
                                 <ImageWithBasePath
                                     src="assets/img/bg/emp-bg.png"
                                     alt="bg"
                                     className="img-fluid position-absolute top-0 start-1 z-n1"
                                 />
                             </div>{" "}
-                            {/* end card */}
                         </div>{" "}
-                        {/* end col */}
                         <div className="col-xxl-4 col-xl-12 d-flex">
                             <div className="card flex-fill">
                                 <div className="card-body">
                                     <div className="border rounded border-start border-start-primary d-flex align-items-center justify-content-between p-2 gap-2 flex-wrap mb-3">
                                         <h2 className="card-title mb-0">Upcoming Interview</h2>
-                                        <div className="dropdown">
-                                            <Link
-                                                to="#"
-                                                className="border btn btn-white btn-md d-inline-flex align-items-center"
-                                                data-bs-toggle="dropdown"
-                                            >
-                                                <i className="ti ti-calendar-due me-1" />
-                                                Today
-                                            </Link>
-                                            <ul className="dropdown-menu mt-2 p-3">
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Monthly
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Weekly
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Today
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
                                     </div>
-                                    <div className="p-3 rounded border border-start border-start-4 border-start-primary mb-3">
-                                        <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-3">
-                                            <div>
-                                                <p className="text-dark fw-semibold mb-1">
-                                                    UI/UX Design Interview
-                                                </p>
-                                                <p className="fs-13 mb-0">12:00 PM - 01:50 PM</p>
-                                            </div>
-                                            <div className="avatar-list-stacked avatar-group-md">
-                                                <Link to="#" className="avatar avatar-rounded">
-                                                    <ImageWithBasePath
-                                                        className="border border-white"
-                                                        src="assets/img/users/user-31.jpg"
-                                                        alt="user"
-                                                    />
-                                                </Link>
-                                                <Link to="#" className="avatar avatar-rounded">
-                                                    <ImageWithBasePath
-                                                        className="border border-white"
-                                                        src="assets/img/users/user-32.jpg"
-                                                        alt="user"
-                                                    />
-                                                </Link>
-                                                <Link to="#" className="avatar avatar-rounded">
-                                                    <ImageWithBasePath
-                                                        className="border border-white"
-                                                        src="assets/img/users/user-29.jpg"
-                                                        alt="user"
-                                                    />
-                                                </Link>
-                                                <Link to="#" className="avatar avatar-rounded">
-                                                    <ImageWithBasePath
-                                                        className="border border-white"
-                                                        src="assets/img/users/user-56.jpg"
-                                                        alt="user"
-                                                    />
-                                                </Link>
-                                                <Link
-                                                    className="avatar bg-light border avatar-rounded fs-16 text-dark fw-normal"
-                                                    to="#"
-                                                >
-                                                    +9
-                                                </Link>
-                                            </div>
-                                        </div>
-                                        <div className="row g-2">
-                                            <div className="col-sm-7">
-                                                <Link
-                                                    to="#"
-                                                    className="btn btn-white d-flex align-items-center justify-content-center w-100"
-                                                >
-                                                    <i className="ti ti-calendar-due me-1" />
-                                                    Add to Calendar
-                                                </Link>
-                                            </div>
-                                            <div className="col-sm-5">
-                                                <Link
-                                                    to="#"
-                                                    className="btn btn-light d-flex align-items-center justify-content-center w-100"
-                                                >
-                                                    <i className="ti ti-video me-1" />
-                                                    Join Now
-                                                </Link>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="p-3 rounded border border-start border-start-4 border-start-secondary mb-3">
-                                        <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-3">
-                                            <div>
-                                                <p className="text-dark fw-semibold mb-1">
-                                                    Senior Developer React
-                                                </p>
-                                                <p className="fs-13 mb-0">03:00 PM - 04:00 PM</p>
-                                            </div>
-                                            <div className="avatar-list-stacked avatar-group-md">
-                                                <Link to="#" className="avatar avatar-rounded">
-                                                    <ImageWithBasePath
-                                                        className="border border-white"
-                                                        src="assets/img/users/user-39.jpg"
-                                                        alt="user"
-                                                    />
-                                                </Link>
-                                                <Link to="#" className="avatar avatar-rounded">
-                                                    <ImageWithBasePath
-                                                        className="border border-white"
-                                                        src="assets/img/users/user-41.jpg"
-                                                        alt="user"
-                                                    />
-                                                </Link>
-                                                <Link to="#" className="avatar avatar-rounded">
-                                                    <ImageWithBasePath
-                                                        className="border border-white"
-                                                        src="assets/img/users/user-44.jpg"
-                                                        alt="user"
-                                                    />
-                                                </Link>
-                                                <Link
-                                                    className="avatar bg-light border avatar-rounded fs-16 text-dark fw-normal"
-                                                    to="#"
-                                                >
-                                                    +4
-                                                </Link>
-                                            </div>
-                                        </div>
-                                        <div className="row g-2">
-                                            <div className="col-sm-7">
-                                                <Link
-                                                    to="#"
-                                                    className="btn btn-white d-flex align-items-center justify-content-center w-100"
-                                                >
-                                                    <i className="ti ti-calendar-due me-1" />
-                                                    Add to Calendar
-                                                </Link>
-                                            </div>
-                                            <div className="col-sm-5">
-                                                <Link
-                                                    to="#"
-                                                    className="btn btn-light d-flex align-items-center justify-content-center w-100"
-                                                >
-                                                    <i className="ti ti-video me-1" />
-                                                    Join Now
-                                                </Link>
-                                            </div>
-                                        </div>
+                                    <div className="text-center py-4 text-muted">
+                                        <i className="ti ti-calendar-event fs-32 mb-2 d-block" />
+                                        Interview scheduling coming soon
                                     </div>
                                     <Link to={all_routes.candidatesGrid} className="btn btn-light w-100">
                                         View All
                                         <i className="ti ti-arrow-right ms-1" />
                                     </Link>
                                 </div>{" "}
-                                {/* end card body */}
                             </div>{" "}
-                            {/* end card */}
                         </div>{" "}
-                        {/* end col */}
                     </div>
                     {/* end row */}
-                    {/* start row */}
+
+                    {/* start row — Payroll + Top Employees + Pending Approvals */}
                     <div className="row">
                         <div className="col-xl-7 d-flex flex-column">
                             {/* start row */}
@@ -1152,7 +667,7 @@ const HrDashboard = () => {
                                             <div className="d-flex align-items-center justify-content-between">
                                                 <div>
                                                     <p className="mb-1">Benefits Deductions</p>
-                                                    <h2 className="mb-2">$56K</h2>
+                                                    <h2 className="mb-2">—</h2>
                                                     <p className="mb-0">Insurance + 401(k)</p>
                                                 </div>
                                                 <div>
@@ -1160,270 +675,127 @@ const HrDashboard = () => {
                                                 </div>
                                             </div>
                                         </div>{" "}
-                                        {/* end card body */}
                                     </div>{" "}
-                                    {/* end card */}
                                 </div>{" "}
-                                {/* end col */}
                                 <div className="col-md-6 d-flex">
                                     <div className="card flex-fill">
                                         <div className="card-body">
                                             <div className="d-flex align-items-center justify-content-between">
                                                 <div>
                                                     <p className="mb-1">Total Payroll</p>
-                                                    <h2 className="mb-2">$2.4M</h2>
+                                                    <h2 className="mb-2">—</h2>
                                                     <p className="mb-0">
-                                                        <span className="text-success">
-                                                            <i className="ti ti-arrow-wave-right-up me-1" />
-                                                            +55%
-                                                        </span>{" "}
-                                                        Increased
+                                                        <span className="text-muted">Payroll module coming soon</span>
                                                     </p>
                                                 </div>
                                                 <div className="text-end">
-                                                    <div className="dropdown mb-3">
-                                                        <Link
-                                                            to="#"
-                                                            className="border btn btn-white btn-md d-inline-flex align-items-center"
-                                                            data-bs-toggle="dropdown"
-                                                        >
-                                                            <i className="ti ti-calendar-due me-1" />
-                                                            Monthly
-                                                        </Link>
-                                                        <ul className="dropdown-menu mt-2 p-3">
-                                                            <li>
-                                                                <Link
-                                                                    to="#"
-                                                                    className="dropdown-item rounded-1"
-                                                                >
-                                                                    Monthly
-                                                                </Link>
-                                                            </li>
-                                                            <li>
-                                                                <Link
-                                                                    to="#"
-                                                                    className="dropdown-item rounded-1"
-                                                                >
-                                                                    Weekly
-                                                                </Link>
-                                                            </li>
-                                                            <li>
-                                                                <Link
-                                                                    to="#"
-                                                                    className="dropdown-item rounded-1"
-                                                                >
-                                                                    Today
-                                                                </Link>
-                                                            </li>
-                                                        </ul>
-                                                    </div>
                                                     <PayrollChart />
                                                 </div>
                                             </div>
                                         </div>{" "}
-                                        {/* end card body */}
                                     </div>{" "}
-                                    {/* end card */}
                                 </div>{" "}
-                                {/* end col */}
                             </div>
                             {/* end row */}
                             <div className="card flex-fill">
                                 <div className="card-body">
                                     <div className="border rounded border-start border-start-primary d-flex align-items-center justify-content-between p-2 gap-2 flex-wrap mb-3">
                                         <h2 className="card-title mb-0">Top Employees</h2>
-                                        <div>
-                                            <div className="border bg-light rounded p-1">
-                                                <nav className="nav nav-pills flex-row gap-1 custom-tab" role="tablist">
-                                                    <Link to="#" className="flex-fill text-center nav-link p-1 px-2 active">1D</Link>
-                                                    <Link to="#" className="flex-fill text-sm-center nav-link p-1 px-2">7D</Link>
-                                                    <Link to="#" className="flex-fill text-sm-center nav-link p-1 px-2">1M</Link>
-                                                    <Link to="#" className="flex-fill text-sm-center nav-link p-1 px-2">1Y</Link>
-                                                </nav>
-                                            </div>
-
-                                        </div>
                                     </div>
                                     <div className="tab-content">
-                                        <div
-                                            className="tab-pane fade show active"
-                                            id="day"
-                                            role="tabpanel"
-                                            aria-labelledby="day-tab"
-                                        >
-                                            <div className="chart-container">
-                                                <ImagePointChart />
-                                            </div>
-                                        </div>
-                                        <div
-                                            className="tab-pane fade"
-                                            id="week"
-                                            role="tabpanel"
-                                            aria-labelledby="week-tab"
-                                        >
-                                            <div className="chart-container">
-                                                <ImagePointChart />
-                                            </div>
-                                        </div>
-                                        <div
-                                            className="tab-pane fade"
-                                            id="month"
-                                            role="tabpanel"
-                                            aria-labelledby="month-tab"
-                                        >
-                                            <div className="chart-container">
-                                                <ImagePointChart />
-                                            </div>
-                                        </div>
-                                        <div
-                                            className="tab-pane fade"
-                                            id="year"
-                                            role="tabpanel"
-                                            aria-labelledby="year-tab"
-                                        >
+                                        <div className="tab-pane fade show active" id="day" role="tabpanel">
                                             <div className="chart-container">
                                                 <ImagePointChart />
                                             </div>
                                         </div>
                                     </div>
                                 </div>{" "}
-                                {/* end card body */}
                             </div>{" "}
-                            {/* end card */}
                         </div>{" "}
-                        {/* end col */}
                         <div className="col-xl-5 d-flex">
                             <div className="card flex-fill">
                                 <div className="card-body">
                                     <div className="border rounded border-start border-start-primary d-flex align-items-center justify-content-between p-2 gap-2 flex-wrap mb-3">
                                         <h2 className="card-title mb-0">Pending Approvals</h2>
-                                        <Link to={all_routes.leaveemployee} className="btn btn-md btn-light">
+                                        <Link to={all_routes.leaveadmin} className="btn btn-md btn-light">
                                             View All
                                         </Link>
                                     </div>
-                                    <div className="p-2 rounded border d-flex align-items-sm-center justify-content-between gap-2 flex-column flex-sm-row mb-2">
-                                        <div>
-                                            <div className="d-flex align-items-center mb-1">
-                                                <Link to="#" className="avatar avatar-sm flex-shrink-0">
-                                                    <ImageWithBasePath
-                                                        src="assets/img/users/user-29.jpg"
-                                                        className="rounded-circle"
-                                                        alt="user"
-                                                    />
-                                                </Link>
-                                                <div className="ms-2">
-                                                    <p className="fs-14 fw-semibold text-truncate mb-0">
-                                                        <Link to="#">Hendrita Merkel</Link>
-                                                    </p>
+                                    {loading ? (
+                                        <p className="text-muted text-center py-3">Loading...</p>
+                                    ) : dashData.pendingLeaves.length === 0 ? (
+                                        <div className="text-center py-4 text-muted">
+                                            <i className="ti ti-circle-check text-success fs-32 mb-2 d-block" />
+                                            No pending approvals!
+                                        </div>
+                                    ) : (
+                                        dashData.pendingLeaves.map((leave, i) => (
+                                            <div
+                                                key={leave.id}
+                                                className={`p-2 rounded border d-flex align-items-sm-center justify-content-between gap-2 flex-column flex-sm-row ${i < dashData.pendingLeaves.length - 1 ? 'mb-2' : 'mb-0'}`}
+                                            >
+                                                <div>
+                                                    <div className="d-flex align-items-center mb-1">
+                                                        <Link to="#" className="avatar avatar-sm flex-shrink-0">
+                                                            <img
+                                                                src={getPhotoSrc(leave.photo)}
+                                                                className="rounded-circle"
+                                                                alt="user"
+                                                                style={{ width: 32, height: 32, objectFit: 'cover' }}
+                                                                onError={(e) => {
+                                                                    e.currentTarget.src = 'assets/img/users/user-13.jpg'
+                                                                }}
+                                                            />
+                                                        </Link>
+                                                        <div className="ms-2">
+                                                            <p className="fs-14 fw-semibold text-truncate mb-0">
+                                                                <Link to="#">{leave.employeeName}</Link>
+                                                            </p>
+                                                            {leave.designation && (
+                                                                <p className="fs-12 text-muted mb-0">{leave.designation}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="d-inline-flex align-items-center gap-1">
+                                                        <p className="fs-13 d-inline-flex align-items-center mb-0">
+                                                            <i className="ti ti-calendar-up me-1" />
+                                                            {formatDateRange(leave.startDate, leave.endDate)}
+                                                        </p>
+                                                        <span>
+                                                            <i className="ti ti-minus-vertical border-color fs-14" />
+                                                        </span>
+                                                        <p className="fs-13 d-inline-flex align-items-center mb-0">
+                                                            <i className="ti ti-clock-hour-11 me-1" />{leave.totalDays} day{leave.totalDays !== 1 ? 's' : ''}
+                                                        </p>
+                                                    </div>
+                                                    {leave.reason && (
+                                                        <p className="fs-13 mb-0 text-truncate" style={{ maxWidth: 200 }}>
+                                                            Reason: {leave.reason}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="d-flex align-items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-primary"
+                                                        onClick={() => handleLeaveAction(leave.id, 'APPROVED')}
+                                                    >
+                                                        Approve
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-primary"
+                                                        onClick={() => handleLeaveAction(leave.id, 'REJECTED')}
+                                                    >
+                                                        Decline
+                                                    </button>
                                                 </div>
                                             </div>
-                                            <div className="d-inline-flex align-items-center gap-1">
-                                                <p className="fs-13 d-inline-flex align-items-center mb-0">
-                                                    <i className="ti ti-calendar-up me-1" />
-                                                    Jan 10 - Jan 16
-                                                </p>
-                                                <span>
-                                                    <i className="ti ti-minus-vertical border-color fs-14" />
-                                                </span>
-                                                <p className="fs-13 d-inline-flex align-items-center mb-0">
-                                                    <i className="ti ti-clock-hour-11 me-1" />4 days
-                                                </p>
-                                            </div>
-                                            <p className="fs-13 mb-0">Reason: Family trip</p>
-                                        </div>
-                                        <div className="d-flex align-items-center gap-2">
-                                            <Link to="#" className="btn btn-sm btn-primary">
-                                                Approve
-                                            </Link>
-                                            <Link to="#" className="btn btn-sm btn-outline-primary">
-                                                Decline
-                                            </Link>
-                                        </div>
-                                    </div>
-                                    <div className="p-2 rounded border d-flex align-items-sm-center justify-content-between gap-2 flex-column flex-sm-row  mb-2">
-                                        <div>
-                                            <div className="d-flex align-items-center mb-1">
-                                                <Link to="#" className="avatar avatar-sm flex-shrink-0">
-                                                    <ImageWithBasePath
-                                                        src="assets/img/users/user-27.jpg"
-                                                        className="rounded-circle"
-                                                        alt="user"
-                                                    />
-                                                </Link>
-                                                <div className="ms-2">
-                                                    <p className="fs-14 fw-semibold text-truncate mb-0">
-                                                        <Link to="#">Michael Brown</Link>
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="d-inline-flex align-items-center gap-1">
-                                                <p className="fs-13 d-inline-flex align-items-center mb-0">
-                                                    <i className="ti ti-calendar-up me-1" />
-                                                    Jan 3 - Jan 9
-                                                </p>
-                                                <span>
-                                                    <i className="ti ti-minus-vertical border-color fs-14" />
-                                                </span>
-                                                <p className="fs-13 d-inline-flex align-items-center mb-0">
-                                                    <i className="ti ti-clock-hour-11 me-1" />2 days
-                                                </p>
-                                            </div>
-                                            <p className="fs-13 mb-0">Reason: Medical appointment</p>
-                                        </div>
-                                        <div className="d-flex align-items-center gap-2">
-                                            <Link to="#" className="btn btn-sm btn-primary">
-                                                Approve
-                                            </Link>
-                                            <Link to="#" className="btn btn-sm btn-outline-primary">
-                                                Decline
-                                            </Link>
-                                        </div>
-                                    </div>
-                                    <div className="p-2 rounded border d-flex align-items-sm-center justify-content-between gap-2 flex-column flex-sm-row  mb-0">
-                                        <div>
-                                            <div className="d-flex align-items-center mb-1">
-                                                <Link to="#" className="avatar avatar-sm flex-shrink-0">
-                                                    <ImageWithBasePath
-                                                        src="assets/img/users/user-30.jpg"
-                                                        className="rounded-circle"
-                                                        alt="user"
-                                                    />
-                                                </Link>
-                                                <div className="ms-2">
-                                                    <p className="fs-14 fw-semibold text-truncate mb-0">
-                                                        <Link to="#">Daniel Martinez</Link>
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="d-inline-flex align-items-center gap-1">
-                                                <p className="fs-13 d-inline-flex align-items-center mb-0">
-                                                    <i className="ti ti-calendar-up me-1" />
-                                                    Jan 17 - Jan 23
-                                                </p>
-                                                <span>
-                                                    <i className="ti ti-minus-vertical border-color fs-14" />
-                                                </span>
-                                                <p className="fs-13 d-inline-flex align-items-center mb-0">
-                                                    <i className="ti ti-clock-hour-11 me-1" />2 days
-                                                </p>
-                                            </div>
-                                            <p className="fs-13 mb-0">Reason: Personal Work</p>
-                                        </div>
-                                        <div className="d-flex align-items-center gap-2">
-                                            <Link to="#" className="btn btn-sm btn-primary">
-                                                Approve
-                                            </Link>
-                                            <Link to="#" className="btn btn-sm btn-outline-primary">
-                                                Decline
-                                            </Link>
-                                        </div>
-                                    </div>
+                                        ))
+                                    )}
                                 </div>{" "}
-                                {/* end card body */}
                             </div>{" "}
-                            {/* end card */}
                         </div>{" "}
-                        {/* end col */}
                     </div>
                     {/* end row */}
                 </div>
