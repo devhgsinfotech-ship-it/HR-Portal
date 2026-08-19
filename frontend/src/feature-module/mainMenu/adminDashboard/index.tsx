@@ -11,13 +11,48 @@ import ProjectModals from "../../../core/modals/projectModal";
 import RequestModals from "../../../core/modals/requestModal";
 import TodoModal from "../../../core/modals/todoModal";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
+import apiClient from "../../../core/utils/apiClient";
+import { useAppSelector } from "../../../core/data/redux/store";
 
 const AdminDashboard = () => {
   const routes = all_routes;
+  const { user } = useAppSelector((state) => state.auth);
+  const [date, setDate] = useState(new Date());
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>({
+    totalEmployees: 0,
+    pendingLeavesCount: 0,
+    fullTimeCount: 0,
+    contractCount: 0,
+    probationCount: 0,
+    wfhCount: 0,
+    presentCount: 0,
+    lateCount: 0,
+    absentCount: 0,
+    permissionCount: 0,
+    totalAttendanceToday: 0,
+    latestEmployees: []
+  });
+
+  useEffect(() => {
+    const fetchSummary = async () => {
+      try {
+        setLoading(true);
+        const offset = date.getTimezoneOffset();
+        const localDateObj = new Date(date.getTime() - (offset * 60 * 1000));
+        const formattedDate = localDateObj.toISOString().split('T')[0];
+        const res = await apiClient.get(`/dashboard/admin-summary?date=${formattedDate}`);
+        setData(res.data);
+      } catch (err) {
+        console.error('Error fetching admin summary:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSummary();
+  }, [date]);
 
   const [isTodo, setIsTodo] = useState([false, false, false]);
-
-  const [date, setDate] = useState(new Date());
 
   //New Chart
   interface ChartSeries {
@@ -218,13 +253,12 @@ const AdminDashboard = () => {
   const [chartData, setChartData] = useState({});
   const [chartOptions, setChartOptions] = useState({});
   useEffect(() => {
-    const data = {
+    const chartVal = {
       labels: ['Late', 'Present', 'Permission', 'Absent'],
       datasets: [
-
         {
           label: 'Semi Donut',
-          data: [40, 20, 30, 10],
+          data: [data.lateCount, data.presentCount, data.permissionCount, data.absentCount],
           backgroundColor: ['#0C4B5E', '#03C95A', '#FFC107', '#E70D0D'],
           borderWidth: 5,
           borderRadius: 10,
@@ -252,9 +286,9 @@ const AdminDashboard = () => {
       },
     };
 
-    setChartData(data);
+    setChartData(chartVal);
     setChartOptions(options);
-  }, []);
+  }, [data]);
 
   //Semi Donut ChartJs
   const [semidonutData, setSemidonutData] = useState({});
@@ -389,16 +423,28 @@ const AdminDashboard = () => {
           <div className="card border-0">
             <div className="card-body d-flex align-items-center justify-content-between flex-wrap pb-1">
               <div className="d-flex align-items-center mb-3">
-                <span className="avatar avatar-xl flex-shrink-0">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-31.jpg"
-                    className="rounded-circle"
-                    alt="img"
-                  />
+                <span className="avatar avatar-xl flex-shrink-0 overflow-hidden">
+                  {user?.profilePhotoUrl ? (
+                    <img
+                      src={user.profilePhotoUrl.startsWith('http') ? user.profilePhotoUrl : `${apiClient.defaults.baseURL}${user.profilePhotoUrl}`}
+                      alt="img"
+                      className="img-fluid rounded-circle"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={(e) => {
+                        e.currentTarget.src = "assets/img/profiles/avatar-31.jpg";
+                      }}
+                    />
+                  ) : (
+                    <ImageWithBasePath
+                      src="assets/img/profiles/avatar-31.jpg"
+                      className="rounded-circle"
+                      alt="img"
+                    />
+                  )}
                 </span>
                 <div className="ms-3">
                   <h3 className="mb-2">
-                    Welcome Back, Adrian{" "}
+                    Welcome Back, {user?.name || 'Admin'}{" "}
                     <Link to="#" className="edit-icon">
                       <i className="ti ti-edit fs-14" />
                     </Link>
@@ -406,11 +452,11 @@ const AdminDashboard = () => {
                   <p>
                     You have{" "}
                     <span className="text-primary text-decoration-underline">
-                      21
+                      {loading ? '—' : data.pendingLeavesCount}
                     </span>{" "}
                     Pending Approvals &amp;{" "}
                     <span className="text-primary text-decoration-underline">
-                      14
+                      {loading ? '—' : data.pendingLeavesCount}
                     </span>{" "}
                     Leave Requests
                   </p>
@@ -452,7 +498,9 @@ const AdminDashboard = () => {
                       <h6 className="fs-13 fw-medium text-default mb-1">
                         Attendance Overview
                       </h6>
-                      <h3 className="mb-3">120/154</h3>
+                      <h3 className="mb-3">
+                        {loading ? '—' : `${data.totalAttendanceToday}/${data.totalEmployees}`}
+                      </h3>
                       <Link to={all_routes.attendanceemployee} className="link-default">
                         View Details
                       </Link>
@@ -564,7 +612,9 @@ const AdminDashboard = () => {
                       <h6 className="fs-13 fw-medium text-default mb-1">
                         New Hire
                       </h6>
-                      <h3 className="mb-3">45/48</h3>
+                      <h3 className="mb-3">
+                        {loading ? '—' : `${data.newHiresCount}/${data.totalEmployees}`}
+                      </h3>
                       <Link to={all_routes.candidateslist} className="link-default">
                         View All
                       </Link>
@@ -681,50 +731,34 @@ const AdminDashboard = () => {
                 <div className="card-body">
                   <div className="d-flex align-items-center justify-content-between mb-1">
                     <p className="fs-13 mb-3">Total Employee</p>
-                    <h3 className="mb-3">154</h3>
+                    <h3 className="mb-3">{loading ? '—' : data.totalEmployees}</h3>
                   </div>
                   <div className="progress-stacked emp-stack mb-3">
                     <div
                       className="progress"
                       role="progressbar"
-                      aria-label="Segment one"
-                      aria-valuenow={15}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      style={{ width: "40%" }}
+                      style={{ width: `${loading ? 25 : (data.totalEmployees ? Math.round((data.fullTimeCount / data.totalEmployees) * 100) : 0)}%` }}
                     >
                       <div className="progress-bar bg-warning" />
                     </div>
                     <div
                       className="progress"
                       role="progressbar"
-                      aria-label="Segment two"
-                      aria-valuenow={30}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      style={{ width: "20%" }}
+                      style={{ width: `${loading ? 25 : (data.totalEmployees ? Math.round((data.contractCount / data.totalEmployees) * 100) : 0)}%` }}
                     >
                       <div className="progress-bar bg-secondary" />
                     </div>
                     <div
                       className="progress"
                       role="progressbar"
-                      aria-label="Segment three"
-                      aria-valuenow={20}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      style={{ width: "10%" }}
+                      style={{ width: `${loading ? 25 : (data.totalEmployees ? Math.round((data.probationCount / data.totalEmployees) * 100) : 0)}%` }}
                     >
                       <div className="progress-bar bg-danger" />
                     </div>
                     <div
                       className="progress"
                       role="progressbar"
-                      aria-label="Segment four"
-                      aria-valuenow={20}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      style={{ width: "30%" }}
+                      style={{ width: `${loading ? 25 : (data.totalEmployees ? Math.round((data.wfhCount / data.totalEmployees) * 100) : 0)}%` }}
                     >
                       <div className="progress-bar bg-pink" />
                     </div>
@@ -735,36 +769,36 @@ const AdminDashboard = () => {
                         <div className="p-2 flex-fill border-end border-bottom">
                           <p className="fs-13 mb-2">
                             <i className="ti ti-square-rounded-filled text-primary fs-12 me-2" />
-                            Fulltime <span className="text-gray-9">(48%)</span>
+                            Fulltime <span className="text-gray-9">({loading ? '—' : (data.totalEmployees ? Math.round((data.fullTimeCount / data.totalEmployees) * 100) : 0)}%)</span>
                           </p>
-                          <h2 className="fs-40 fw-bold">112</h2>
+                          <h2 className="fs-40 fw-bold">{loading ? '—' : data.fullTimeCount}</h2>
                         </div>
                       </div>
                       <div className="col-6">
                         <div className="p-2 flex-fill border-bottom text-end">
                           <p className="fs-13 mb-2">
                             <i className="ti ti-square-rounded0filled me-2 text-secondary fs-12" />
-                            Contract <span className="text-gray-9">(20%)</span>
+                            Contract <span className="text-gray-9">({loading ? '—' : (data.totalEmployees ? Math.round((data.contractCount / data.totalEmployees) * 100) : 0)}%)</span>
                           </p>
-                          <h2 className="fs-40 fw-bold">112</h2>
+                          <h2 className="fs-40 fw-bold">{loading ? '—' : data.contractCount}</h2>
                         </div>
                       </div>
                       <div className="col-6">
                         <div className="p-2 flex-fill border-end">
                           <p className="fs-13 mb-2">
                             <i className="ti ti-square-rounded-filled me-2 text-danger fs-12" />
-                            Probation <span className="text-gray-9">(22%)</span>
+                            Probation <span className="text-gray-9">({loading ? '—' : (data.totalEmployees ? Math.round((data.probationCount / data.totalEmployees) * 100) : 0)}%)</span>
                           </p>
-                          <h2 className="fs-40 fw-bold">12</h2>
+                          <h2 className="fs-40 fw-bold">{loading ? '—' : data.probationCount}</h2>
                         </div>
                       </div>
                       <div className="col-6">
                         <div className="p-2 flex-fill text-end">
                           <p className="fs-13 mb-2">
                             <i className="ti ti-square-rounded-filled text-pink me-2 fs-12" />
-                            WFH <span className="text-gray-9">(20%)</span>
+                            WFH <span className="text-gray-9">({loading ? '—' : (data.totalEmployees ? Math.round((data.wfhCount / data.totalEmployees) * 100) : 0)}%)</span>
                           </p>
-                          <h2 className="fs-40 fw-bold">04</h2>
+                          <h2 className="fs-40 fw-bold">{loading ? '—' : data.wfhCount}</h2>
                         </div>
                       </div>
                     </div>
@@ -851,7 +885,7 @@ const AdminDashboard = () => {
                     <Chart type="doughnut" data={chartData} options={chartOptions} className="w-full attendence-chart md:w-30rem" />
                     <div className="position-absolute text-center attendance-canvas">
                       <p className="fs-13 mb-1">Total Attendance</p>
-                      <h3>120</h3>
+                      <h3>{loading ? '—' : data.totalAttendanceToday}</h3>
                     </div>
                   </div>
                   <h6 className="mb-3">Status</h6>
@@ -860,28 +894,28 @@ const AdminDashboard = () => {
                       <i className="ti ti-circle-filled text-success me-1" />
                       Present
                     </p>
-                    <p className="f-13 fw-medium text-gray-9 mb-2">59%</p>
+                    <p className="f-13 fw-medium text-gray-9 mb-2">{loading ? '—' : (data.totalEmployees ? Math.round((data.presentCount / data.totalEmployees) * 100) : 0)}%</p>
                   </div>
                   <div className="d-flex align-items-center justify-content-between">
                     <p className="f-13 mb-2">
                       <i className="ti ti-circle-filled text-secondary me-1" />
                       Late
                     </p>
-                    <p className="f-13 fw-medium text-gray-9 mb-2">21%</p>
+                    <p className="f-13 fw-medium text-gray-9 mb-2">{loading ? '—' : (data.totalEmployees ? Math.round((data.lateCount / data.totalEmployees) * 100) : 0)}%</p>
                   </div>
                   <div className="d-flex align-items-center justify-content-between">
                     <p className="f-13 mb-2">
                       <i className="ti ti-circle-filled text-warning me-1" />
                       Permission
                     </p>
-                    <p className="f-13 fw-medium text-gray-9 mb-2">2%</p>
+                    <p className="f-13 fw-medium text-gray-9 mb-2">{loading ? '—' : (data.totalEmployees ? Math.round((data.permissionCount / data.totalEmployees) * 100) : 0)}%</p>
                   </div>
                   <div className="d-flex align-items-center justify-content-between mb-2">
                     <p className="f-13 mb-2">
                       <i className="ti ti-circle-filled text-danger me-1" />
                       Absent
                     </p>
-                    <p className="f-13 fw-medium text-gray-9 mb-2">15%</p>
+                    <p className="f-13 fw-medium text-gray-9 mb-2">{loading ? '—' : (data.totalEmployees ? Math.round((data.absentCount / data.totalEmployees) * 100) : 0)}%</p>
                   </div>
                   <div className="bg-light br-5 box-shadow-xs p-2 pb-0 d-flex align-items-center justify-content-between flex-wrap">
                     <div className="d-flex align-items-center">
@@ -1007,151 +1041,110 @@ const AdminDashboard = () => {
                 </div>
                 <div className="card-body">
                   <div>
-                    <div className="d-flex align-items-center justify-content-between mb-3 p-2 border border-dashed br-5">
-                      <div className="d-flex align-items-center">
-                        <Link
-                          to="#"
-                          className="avatar flex-shrink-0"
-                        >
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-24.jpg"
-                            className="rounded-circle border border-2"
-                            alt="img"
-                          />
-                        </Link>
-                        <div className="ms-2">
-                          <h6 className="fs-14 fw-medium text-truncate">
-                            Daniel Esbella
-                          </h6>
-                          <p className="fs-13">UI/UX Designer</p>
+                    {loading ? (
+                      <p className="text-muted text-center py-3">Loading...</p>
+                    ) : data.clockedInList.length === 0 ? (
+                      <p className="text-muted text-center py-3">No clocked-in employees today</p>
+                    ) : (
+                      data.clockedInList.map((item: any, idx: number) => (
+                        <div key={item.id} className={`d-flex align-items-center justify-content-between mb-3 p-2 border br-5 ${idx === 0 ? 'border-dashed' : ''}`}>
+                          <div className="d-flex align-items-center">
+                            <div className="avatar flex-shrink-0">
+                              <img
+                                src={item.photo ? `${apiClient.defaults.baseURL}${item.photo}` : "assets/img/profiles/avatar-24.jpg"}
+                                className="rounded-circle border border-2"
+                                alt="img"
+                                onError={(e) => { e.currentTarget.src = "assets/img/profiles/avatar-24.jpg"; }}
+                                style={{ width: 38, height: 38, objectFit: 'cover' }}
+                              />
+                            </div>
+                            <div className="ms-2">
+                              <h6 className="fs-14 fw-medium text-truncate">
+                                {item.name}
+                              </h6>
+                              <p className="fs-13">{item.designation}</p>
+                            </div>
+                          </div>
+                          <div className="d-flex align-items-center">
+                            <Link to="#" className="link-default me-2">
+                              <i className="ti ti-clock-share" />
+                            </Link>
+                            <span className="fs-10 fw-medium d-inline-flex align-items-center badge badge-success">
+                              <i className="ti ti-circle-filled fs-5 me-1" />
+                              {item.checkIn}
+                            </span>
+                          </div>
                         </div>
+                      ))
+                    )}
+
+                    {/* Overall Summary Stats Box */}
+                    <div className="d-flex align-items-center justify-content-between flex-wrap mt-2 border br-5 p-2 pb-0 mb-3 bg-light">
+                      <div>
+                        <p className="mb-1 d-inline-flex align-items-center">
+                          <i className="ti ti-circle-filled text-success fs-5 me-1" />
+                          Clock In
+                        </p>
+                        <h6 className="fs-13 fw-normal mb-2">{loading ? '—' : data.firstCheckIn}</h6>
                       </div>
-                      <div className="d-flex align-items-center">
-                        <Link to="#" className="link-default me-2">
-                          <i className="ti ti-clock-share" />
-                        </Link>
-                        <span className="fs-10 fw-medium d-inline-flex align-items-center badge badge-success">
-                          <i className="ti ti-circle-filled fs-5 me-1" />
-                          09:15
-                        </span>
+                      <div>
+                        <p className="mb-1 d-inline-flex align-items-center">
+                          <i className="ti ti-circle-filled text-danger fs-5 me-1" />
+                          Clock Out
+                        </p>
+                        <h6 className="fs-13 fw-normal mb-2">{loading ? '—' : data.lastCheckOut}</h6>
+                      </div>
+                      <div>
+                        <p className="mb-1 d-inline-flex align-items-center">
+                          <i className="ti ti-circle-filled text-warning fs-5 me-1" />
+                          Production
+                        </p>
+                        <h6 className="fs-13 fw-normal mb-2">{loading ? '—' : data.totalProduction}</h6>
                       </div>
                     </div>
-                    <div className="d-flex align-items-center justify-content-between mb-3 p-2 border br-5">
-                      <div className="d-flex align-items-center">
-                        <Link
-                          to="#"
-                          className="avatar flex-shrink-0"
-                        >
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-23.jpg"
-                            className="rounded-circle border border-2"
-                            alt="img"
-                          />
-                        </Link>
-                        <div className="ms-2">
-                          <h6 className="fs-14 fw-medium">Doglas Martini</h6>
-                          <p className="fs-13">Project Manager</p>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center">
-                        <Link to="#" className="link-default me-2">
-                          <i className="ti ti-clock-share" />
-                        </Link>
-                        <span className="fs-10 fw-medium d-inline-flex align-items-center badge badge-success">
-                          <i className="ti ti-circle-filled fs-5 me-1" />
-                          09:36
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mb-3 p-2 border br-5">
-                      <div className="d-flex align-items-center justify-content-between">
+                  </div>
+                  
+                  <h6 className="mb-2">Late</h6>
+                  {loading ? (
+                    <p className="text-muted text-center py-2">Loading...</p>
+                  ) : data.lateList.length === 0 ? (
+                    <p className="text-muted text-center py-2">No late arrivals today</p>
+                  ) : (
+                    data.lateList.map((item: any) => (
+                      <div key={item.id} className="d-flex align-items-center justify-content-between mb-3 p-2 border border-dashed br-5">
                         <div className="d-flex align-items-center">
-                          <Link
-                            to="#"
-                            className="avatar flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/profiles/avatar-27.jpg"
+                          <span className="avatar flex-shrink-0">
+                            <img
+                              src={item.photo ? `${apiClient.defaults.baseURL}${item.photo}` : "assets/img/profiles/avatar-29.jpg"}
                               className="rounded-circle border border-2"
                               alt="img"
+                              onError={(e) => { e.currentTarget.src = "assets/img/profiles/avatar-29.jpg"; }}
+                              style={{ width: 38, height: 38, objectFit: 'cover' }}
                             />
-                          </Link>
+                          </span>
                           <div className="ms-2">
                             <h6 className="fs-14 fw-medium text-truncate">
-                              Brian Villalobos
+                              {item.name}{" "}
+                              <span className="fs-10 fw-medium d-inline-flex align-items-center badge badge-danger">
+                                <i className="ti ti-clock-hour-11 me-1" />
+                                {item.lateMinutes}
+                              </span>
                             </h6>
-                            <p className="fs-13">PHP Developer</p>
+                            <p className="fs-13">{item.designation}</p>
                           </div>
                         </div>
                         <div className="d-flex align-items-center">
-                          <Link
-                            to="#"
-                            className="link-default me-2"
-                          >
+                          <Link to="#" className="link-default me-2">
                             <i className="ti ti-clock-share" />
                           </Link>
                           <span className="fs-10 fw-medium d-inline-flex align-items-center badge badge-success">
                             <i className="ti ti-circle-filled fs-5 me-1" />
-                            09:15
+                            {item.checkIn}
                           </span>
                         </div>
                       </div>
-                      <div className="d-flex align-items-center justify-content-between flex-wrap mt-2 border br-5 p-2 pb-0">
-                        <div>
-                          <p className="mb-1 d-inline-flex align-items-center">
-                            <i className="ti ti-circle-filled text-success fs-5 me-1" />
-                            Clock In
-                          </p>
-                          <h6 className="fs-13 fw-normal mb-2">10:30 AM</h6>
-                        </div>
-                        <div>
-                          <p className="mb-1 d-inline-flex align-items-center">
-                            <i className="ti ti-circle-filled text-danger fs-5 me-1" />
-                            Clock Out
-                          </p>
-                          <h6 className="fs-13 fw-normal mb-2">09:45 AM</h6>
-                        </div>
-                        <div>
-                          <p className="mb-1 d-inline-flex align-items-center">
-                            <i className="ti ti-circle-filled text-warning fs-5 me-1" />
-                            Production
-                          </p>
-                          <h6 className="fs-13 fw-normal mb-2">09:21 Hrs</h6>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <h6 className="mb-2">Late</h6>
-                  <div className="d-flex align-items-center justify-content-between mb-3 p-2 border border-dashed br-5">
-                    <div className="d-flex align-items-center">
-                      <span className="avatar flex-shrink-0">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-29.jpg"
-                          className="rounded-circle border border-2"
-                          alt="img"
-                        />
-                      </span>
-                      <div className="ms-2">
-                        <h6 className="fs-14 fw-medium text-truncate">
-                          Anthony Lewis{" "}
-                          <span className="fs-10 fw-medium d-inline-flex align-items-center badge badge-danger">
-                            <i className="ti ti-clock-hour-11 me-1" />
-                            30 Min
-                          </span>
-                        </h6>
-                        <p className="fs-13">Marketing Head</p>
-                      </div>
-                    </div>
-                    <div className="d-flex align-items-center">
-                      <Link to="#" className="link-default me-2">
-                        <i className="ti ti-clock-share" />
-                      </Link>
-                      <span className="fs-10 fw-medium d-inline-flex align-items-center badge badge-success">
-                        <i className="ti ti-circle-filled fs-5 me-1" />
-                        08:35
-                      </span>
-                    </div>
-                  </div>
+                    ))
+                  )}
                   <Link
                     to={all_routes.attendancereport}
                     className="btn btn-light btn-md w-100"
@@ -1431,126 +1424,48 @@ const AdminDashboard = () => {
                   <div className="table-responsive">
                     <table className="table table-nowrap mb-0">
                       <tbody>
-                        <tr>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link to="#" className="avatar">
-                                <ImageWithBasePath
-                                  src="assets/img/users/user-32.jpg"
-                                  className="img-fluid rounded-circle"
-                                  alt="img"
-                                />
-                              </Link>
-                              <div className="ms-2">
-                                <h6 className="fw-medium">
-                                  <Link to="#">Anthony Lewis</Link>
-                                </h6>
-                                <span className="fs-12">Finance</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="text-end">
-                            <span className="badge badge-secondary-transparent badge-xs">
-                              Finance
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link to="#" className="avatar">
-                                <ImageWithBasePath
-                                  src="assets/img/users/user-09.jpg"
-                                  className="img-fluid rounded-circle"
-                                  alt="img"
-                                />
-                              </Link>
-                              <div className="ms-2">
-                                <h6 className="fw-medium">
-                                  <Link to="#">Brian Villalobos</Link>
-                                </h6>
-                                <span className="fs-12">PHP Developer</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="text-end">
-                            <span className="badge badge-danger-transparent badge-xs">
-                              Development
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link to="#" className="avatar">
-                                <ImageWithBasePath
-                                  src="assets/img/users/user-01.jpg"
-                                  className="img-fluid rounded-circle"
-                                  alt="img"
-                                />
-                              </Link>
-                              <div className="ms-2">
-                                <h6 className="fw-medium">
-                                  <Link to="#">Stephan Peralt</Link>
-                                </h6>
-                                <span className="fs-12">Executive</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="text-end">
-                            <span className="badge badge-info-transparent badge-xs">
-                              Marketing
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link to="#" className="avatar">
-                                <ImageWithBasePath
-                                  src="assets/img/users/user-34.jpg"
-                                  className="img-fluid rounded-circle"
-                                  alt="img"
-                                />
-                              </Link>
-                              <div className="ms-2">
-                                <h6 className="fw-medium">
-                                  <Link to="#">Doglas Martini</Link>
-                                </h6>
-                                <span className="fs-12">Project Manager</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="text-end">
-                            <span className="badge badge-purple-transparent badge-xs">
-                              Manager
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="border-0">
-                            <div className="d-flex align-items-center">
-                              <Link to="#" className="avatar">
-                                <ImageWithBasePath
-                                  src="assets/img/users/user-37.jpg"
-                                  className="img-fluid rounded-circle"
-                                  alt="img"
-                                />
-                              </Link>
-                              <div className="ms-2">
-                                <h6 className="fw-medium">
-                                  <Link to="#">Anthony Lewis</Link>
-                                </h6>
-                                <span className="fs-12">UI/UX Designer</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="border-0 text-end">
-                            <span className="badge badge-pink-transparent badge-xs">
-                              UI/UX Design
-                            </span>
-                          </td>
-                        </tr>
+                        {loading ? (
+                          <tr>
+                            <td colSpan={2} className="text-center py-3 text-muted">
+                              Loading...
+                            </td>
+                          </tr>
+                        ) : data.latestEmployees.length === 0 ? (
+                          <tr>
+                            <td colSpan={2} className="text-center py-3 text-muted">
+                              No employees found
+                            </td>
+                          </tr>
+                        ) : (
+                          data.latestEmployees.map((emp: any) => (
+                            <tr key={emp.id}>
+                              <td>
+                                <div className="d-flex align-items-center">
+                                  <Link to={all_routes.employeedetails} className="avatar">
+                                    <img
+                                      src={emp.photo ? `${apiClient.defaults.baseURL}${emp.photo}` : "assets/img/users/user-32.jpg"}
+                                      className="img-fluid rounded-circle"
+                                      alt="img"
+                                      onError={(e) => { e.currentTarget.src = "assets/img/users/user-32.jpg"; }}
+                                      style={{ width: 32, height: 32, objectFit: 'cover' }}
+                                    />
+                                  </Link>
+                                  <div className="ms-2">
+                                    <h6 className="fw-medium">
+                                      <Link to={all_routes.employeedetails}>{emp.name}</Link>
+                                    </h6>
+                                    <span className="fs-12">{emp.designation}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="text-end">
+                                <span className="badge badge-secondary-transparent badge-xs">
+                                  {emp.department}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
