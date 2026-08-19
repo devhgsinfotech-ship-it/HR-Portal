@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
+import apiClient, { getSubdomain } from "../../../core/utils/apiClient";
 
 type PasswordField = "password" | "confirmPassword";
 
@@ -18,12 +19,19 @@ interface PasswordResponse {
 const ResetPassword = () => {
   const routes = all_routes;
   const navigation = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token") || "";
+  const subdomain = getSubdomain();
 
   const [passwordVisibility, setPasswordVisibility] = useState<PasswordVisibility>({
     password: false,
     confirmPassword: false,
   });
   const [password, setPassword] = useState<string>("");
+  const [confirmPassword, setConfirmPassword] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [passwordResponce, setPasswordResponce] = useState<PasswordResponse>({
     passwordResponceText: "Use 8 or more characters with a mix of letters, numbers, and symbols.",
     passwordResponceKey: "",
@@ -36,33 +44,33 @@ const ResetPassword = () => {
     }));
   };
 
-  const onChangePassword = (password: string) => {
-    setPassword(password);
-    if (password.match(/^$|\s+/)) {
+  const onChangePassword = (value: string) => {
+    setPassword(value);
+    if (value.match(/^$|\s+/)) {
       setPasswordResponce({
         passwordResponceText: "Use 8 or more characters with a mix of letters, numbers & symbols",
         passwordResponceKey: "",
       });
-    } else if (password.length === 0) {
+    } else if (value.length === 0) {
       setPasswordResponce({
         passwordResponceText: "",
         passwordResponceKey: "",
       });
-    } else if (password.length < 8) {
+    } else if (value.length < 8) {
       setPasswordResponce({
         passwordResponceText: "Weak. Must contain at least 8 characters",
         passwordResponceKey: "0",
       });
     } else if (
-      password.search(/[a-z]/) < 0 ||
-      password.search(/[A-Z]/) < 0 ||
-      password.search(/[0-9]/) < 0
+      value.search(/[a-z]/) < 0 ||
+      value.search(/[A-Z]/) < 0 ||
+      value.search(/[0-9]/) < 0
     ) {
       setPasswordResponce({
         passwordResponceText: "Average. Must contain at least 1 upper case and number",
         passwordResponceKey: "1",
       });
-    } else if (password.search(/(?=.*?[#?!@$%^&*-])/) < 0) {
+    } else if (value.search(/(?=.*?[#?!@$%^&*-])/) < 0) {
       setPasswordResponce({
         passwordResponceText: "Almost. Must contain a special symbol",
         passwordResponceKey: "2",
@@ -75,9 +83,44 @@ const ResetPassword = () => {
     }
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    navigation(routes.resetPasswordSuccess);
+    setError("");
+    setSuccess("");
+
+    if (!token) {
+      setError("Reset token is missing or invalid.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await apiClient.post("/auth/reset-password", {
+        token,
+        password,
+        subdomain,
+      });
+      setSuccess(response.data.message || "Password reset successful.");
+      setTimeout(() => {
+        navigation(routes.resetPasswordSuccess);
+      }, 2000);
+    } catch (err: any) {
+      console.error("Password reset failed:", err);
+      setError(err.response?.data?.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -128,6 +171,10 @@ const ResetPassword = () => {
                           passwords.
                         </p>
                       </div>
+
+                      {error && <div className="alert alert-danger p-2 text-center">{error}</div>}
+                      {success && <div className="alert alert-success p-2 text-center">{success}</div>}
+
                       <div>
                         <div className="input-block mb-3">
                           <div className="mb-3">
@@ -141,6 +188,7 @@ const ResetPassword = () => {
                                 placeholder="Enter your password"
                                 required
                                 autoComplete="new-password"
+                                disabled={loading}
                               />
                               <span
                                 className={`ti toggle-passwords ${passwordVisibility.password ? "ti-eye" : "ti-eye-off"}`}
@@ -177,9 +225,13 @@ const ResetPassword = () => {
                           <div className="pass-group">
                             <input
                               type={passwordVisibility.confirmPassword ? "text" : "password"}
+                              value={confirmPassword}
+                              onChange={(e) => setConfirmPassword(e.target.value)}
                               className="pass-input form-control"
                               required
                               autoComplete="new-password"
+                              placeholder="Confirm your password"
+                              disabled={loading}
                             />
                             <span
                               className={`ti toggle-passwords ${passwordVisibility.confirmPassword ? "ti-eye" : "ti-eye-off"}`}
@@ -191,8 +243,8 @@ const ResetPassword = () => {
                           </div>
                         </div>
                         <div className="mb-3">
-                          <button type="submit" className="btn btn-primary w-100">
-                            Submit
+                          <button type="submit" className="btn btn-primary w-100" disabled={loading}>
+                            {loading ? "Submitting..." : "Submit"}
                           </button>
                         </div>
                       </div>

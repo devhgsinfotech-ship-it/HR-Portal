@@ -149,6 +149,7 @@ model User {
   notificationsReceived Notification[]     @relation("NotificationReceiver")
   notificationsSent     Notification[]     @relation("NotificationSender")
   regularizations       AttendanceRegularization[] // Requests reviewed by this user
+  passwordResetTokens   PasswordResetToken[]
 
   @@map("users")
 }
@@ -700,3 +701,18 @@ model LeavePolicy {
   @@map("leave_policies")
 }
 
+// ============================================================
+// PASSWORD RESET TOKENS — secure forgot password flow
+// ============================================================
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("password_reset_tokens")
+}

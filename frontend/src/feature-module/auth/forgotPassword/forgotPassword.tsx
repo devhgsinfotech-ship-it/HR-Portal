@@ -1,14 +1,33 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
+import apiClient, { getSubdomain } from "../../../core/utils/apiClient";
 
 const ForgotPassword = () => {
   const routes = all_routes;
-  const navigation = useNavigate();
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const subdomain = getSubdomain();
 
-  const navigationPath = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault(); // Prevent page reload
-    navigation(routes.resetPassword);
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      const response = await apiClient.post("/auth/forgot-password", { email, subdomain });
+      setSuccess(response.data.message || "A password reset link has been sent to your email address.");
+      setEmail("");
+    } catch (err: any) {
+      console.error("Forgot password failed:", err);
+      setError(err.response?.data?.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -42,7 +61,7 @@ const ForgotPassword = () => {
           <div className="col-lg-7 col-md-12 col-sm-12">
             <div className="row justify-content-center align-items-center vh-100 overflow-auto flex-wrap">
               <div className="col-md-7 mx-auto vh-100">
-                <form className="vh-100" onSubmit={navigationPath}>
+                <form className="vh-100" onSubmit={handleSubmit}>
                   <div className="vh-100 d-flex flex-column justify-content-between p-4 pb-0">
                     <div className="mx-auto mb-5 text-center">
                       <ImageWithBasePath
@@ -59,16 +78,22 @@ const ForgotPassword = () => {
                           instructions to reset your password.
                         </p>
                       </div>
+                      
+                      {error && <div className="alert alert-danger p-2 text-center">{error}</div>}
+                      {success && <div className="alert alert-success p-2 text-center">{success}</div>}
+
                       <div className="mb-3">
                         <label className="form-label" htmlFor="email">Email Address</label>
                         <div className="input-group">
                           <input
                             id="email"
                             type="email"
-                            defaultValue=""
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             className="form-control border-end-0"
                             required
                             autoComplete="email"
+                            disabled={loading}
                           />
                           <span className="input-group-text border-start-0">
                             <i className="ti ti-mail" />
@@ -76,14 +101,14 @@ const ForgotPassword = () => {
                         </div>
                       </div>
                       <div className="mb-3">
-                        <button type="submit" className="btn btn-primary w-100">
-                          Submit
+                        <button type="submit" className="btn btn-primary w-100" disabled={loading}>
+                          {loading ? "Submitting..." : "Submit"}
                         </button>
                       </div>
                       <div className="text-center">
                         <h6 className="fw-normal text-dark mb-0">
                           Return to
-                          <Link to={all_routes.login} className="hover-a ms-1">
+                          <Link to={routes.login} className="hover-a ms-1">
                             Sign In
                           </Link>
                         </h6>

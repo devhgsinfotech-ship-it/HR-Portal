@@ -377,4 +377,137 @@ async function resendVerification(req, res) {
     }
 }
 
-module.exports = { login, register, verifyEmail, acceptInvite, resendVerification };
+async function forgotPassword(req, res) {
+    try {
+        const { email, subdomain } = req.body;
+        if (!email) {
+            return res.status(400).json({ message: 'Email is required' });
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { email },
+            include: { company: true }
+        });
+
+        if (!user) {
+            // Return success even if not found to prevent email enumeration
+            return res.json({ message: 'If your email is registered, a password reset link has been sent.' });
+        }
+
+        // Subdomain & Role validation for forgot password
+        if (subdomain) {
+            // Trying to reset password from a specific company workspace
+            if (!user.company || user.company.subdomain !== subdomain) {
+                return res.status(403).json({ message: 'This account does not belong to this workspace / subdomain' });
+            }
+        } else {
+            // Resetting from the main domain
+            // ONLY Super Admins are allowed here.
+            if (user.role !== 'SUPER_ADMIN') {
+                return res.status(403).json({ message: 'Please request password reset from your company\'s specific workspace URL.' });
+            }
+        }
+
+        // Generate a 32-byte hex token (64 characters)
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+        // Deactivate any previous reset tokens for this user
+        await prisma.passwordResetToken.updateMany({
+            where: { userId: user.id, used: false },
+            data: { used: true }
+        });
+
+        await prisma.passwordResetToken.create({
+            data: {
+                userId: user.id,
+                token: resetToken,
+                expiresAt
+            }
+        });
+
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
+        const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
+        const protocol = domain.includes('localhost') ? 'http' : 'https';
+        
+        let workspaceUrl = '';
+        if (user.company && user.company.subdomain) {
+            workspaceUrl = `${protocol}://${user.company.subdomain}.${domain}`;
+        } else {
+            workspaceUrl = `${protocol}://${domain}`;
+        }
+
+        await emailService.sendPasswordResetEmail(email, resetToken, workspaceUrl, user.name);
+
+        res.json({ message: 'If your email is registered, a password reset link has been sent.' });
+    } catch (error) {
+        console.error('Forgot Password Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function resetPassword(req, res) {
+    try {
+        const { token, password, subdomain } = req.body;
+        if (!token || !password) {
+            return res.status(400).json({ message: 'Token and new password are required' });
+        }
+
+        if (password.length < 8) {
+            return res.status(400).json({ message: 'Password must be at least 8 characters long' });
+        }
+
+        const resetRecord = await prisma.passwordResetToken.findUnique({
+            where: { token },
+            include: { user: { include: { company: true } } }
+        });
+
+        if (!resetRecord || resetRecord.used) {
+            return res.status(400).json({ message: 'Invalid or already used token' });
+        }
+
+        if (new Date() > resetRecord.expiresAt) {
+            return res.status(400).json({ message: 'Token has expired' });
+        }
+
+        // Validate subdomain matches during password reset
+        const user = resetRecord.user;
+        if (subdomain) {
+            if (!user.company || user.company.subdomain !== subdomain) {
+                return res.status(403).json({ message: 'This reset token is not valid for this workspace / subdomain.' });
+            }
+        } else {
+            if (user.role !== 'SUPER_ADMIN') {
+                return res.status(403).json({ message: 'Please reset password from your company\'s specific workspace URL.' });
+            }
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        await prisma.$transaction([
+            prisma.user.update({
+                where: { id: resetRecord.userId },
+                data: { password: hashedPassword }
+            }),
+            prisma.passwordResetToken.update({
+                where: { id: resetRecord.id },
+                data: { used: true }
+            })
+        ]);
+
+        res.json({ message: 'Password has been reset successfully! You can now log in.' });
+    } catch (error) {
+        console.error('Reset Password Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+module.exports = { 
+    login, 
+    register, 
+    verifyEmail, 
+    acceptInvite, 
+    resendVerification,
+    forgotPassword,
+    resetPassword
+};
