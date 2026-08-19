@@ -5,6 +5,8 @@ const nodemailer = require('nodemailer');
  * Creates and returns a Nodemailer transporter.
  * If standard SMTP details are not in ENV, it generates an Ethereal test account.
  */
+let cachedTransporter = null;
+
 async function getTransporter() {
     // If real SMTP is configured, use it
     if (process.env.SMTP_HOST && process.env.SMTP_USER) {
@@ -13,7 +15,7 @@ async function getTransporter() {
 
         console.log(`[SMTP] Connecting to ${process.env.SMTP_HOST}:${port} secure=${secure} user=${process.env.SMTP_USER}`);
 
-        const transporter = nodemailer.createTransport({
+        return nodemailer.createTransport({
             host: process.env.SMTP_HOST,
             port,
             secure,
@@ -22,18 +24,16 @@ async function getTransporter() {
                 pass: process.env.SMTP_PASS,
             },
         });
-
-        // Verify SMTP connection — this will throw a clear error if credentials/port are wrong
-        await transporter.verify();
-        console.log('[SMTP] Connection verified successfully!');
-        return transporter;
     }
 
-    // Otherwise, generate a test Ethereal account
-    console.log('No SMTP credentials found in ENV. Generating Ethereal test account...');
+    if (cachedTransporter) {
+        return cachedTransporter;
+    }
+
+    console.log('Generating Ethereal test account for email service...');
     const testAccount = await nodemailer.createTestAccount();
     
-    return nodemailer.createTransport({
+    cachedTransporter = nodemailer.createTransport({
         host: "smtp.ethereal.email",
         port: 587,
         secure: false, // true for 465, false for other ports
@@ -42,6 +42,7 @@ async function getTransporter() {
             pass: testAccount.pass, // generated ethereal password
         },
     });
+    return cachedTransporter;
 }
 
 /**
@@ -154,7 +155,56 @@ async function sendEmployeeInviteEmail(toEmail, token, companyName, employeeName
     }
 }
 
+async function sendPasswordResetEmail(toEmail, token, workspaceUrl, userName) {
+    try {
+        const transporter = await getTransporter();
+
+        const resetLink = `${workspaceUrl}/reset-password?token=${token}`;
+
+        const mailOptions = {
+            from: `"SmartHR Support" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
+            to: toEmail,
+            subject: 'Reset your SmartHR Password',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                    <h2 style="color: #333;">Hello, ${userName || 'User'}!</h2>
+                    <p style="color: #555; font-size: 16px;">
+                        We received a request to reset your password. If you didn't make this request, you can safely ignore this email.
+                        Otherwise, click the button below to choose a new password.
+                    </p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${resetLink}" style="background-color: #ff5722; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+                            Reset Password
+                        </a>
+                    </div>
+                    <p style="color: #555; font-size: 14px;">
+                        Or copy and paste this link into your browser:<br/>
+                        <a href="${resetLink}" style="color: #ff5722; word-break: break-all;">${resetLink}</a>
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                    <p style="color: #999; font-size: 12px; text-align: center;">
+                        This link will expire in 1 hour.
+                    </p>
+                </div>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        
+        console.log('--------------------------------------------------');
+        console.log('Password Reset Email sent: %s', info.messageId);
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('--------------------------------------------------');
+
+        return info;
+    } catch (error) {
+        console.error('Error sending password reset email:', error);
+        throw error;
+    }
+}
+
 module.exports = {
     sendVerificationEmail,
-    sendEmployeeInviteEmail
+    sendEmployeeInviteEmail,
+    sendPasswordResetEmail
 };
