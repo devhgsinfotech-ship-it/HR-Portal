@@ -20,6 +20,9 @@ router.put('/requests/:id/status', requireRole('HR', 'MANAGER', 'SUPER_ADMIN'), 
 // Leave Balances
 router.get('/balances', leaveController.getLeaveBalances);
 
+// Leave Admin Summary
+router.get('/admin-summary', requireRole('HR', 'MANAGER', 'SUPER_ADMIN'), leaveController.getLeaveAdminSummary);
+
 // Leave Policies
 router.get('/policies', leaveController.getLeavePolicies);
 router.post('/policies', requireRole('HR', 'SUPER_ADMIN'), leaveController.createLeavePolicy);

@@ -16,6 +16,13 @@ const LeaveAdmin = () => {
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
   const [dbTypes, setDbTypes] = useState<any[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [summary, setSummary] = useState({
+    totalEmployees: 0,
+    presentToday: 0,
+    pendingCount: 0,
+    plannedToday: 0,
+    unplannedToday: 0
+  });
   // Determine current user role for scoped view
   const currentUser = (() => { try { return JSON.parse(localStorage.getItem('authUser') || '{}'); } catch { return {}; } })();
   const isManager = (currentUser?.role || '') === 'MANAGER';
@@ -52,6 +59,15 @@ const LeaveAdmin = () => {
       setDbRequests(mapped);
       setDbEmployees(empRes.data);
       setDbTypes(typesRes.data);
+
+      // Fetch summary details dynamically
+      try {
+        const sumRes = await apiClient.get('/leaves/admin-summary');
+        setSummary(sumRes.data);
+      } catch (err) {
+        console.error('Error fetching leave summary:', err);
+      }
+
       setIsLoaded(true);
     } catch (err) {
       console.error(err);
@@ -292,7 +308,7 @@ const LeaveAdmin = () => {
                     </div>
                     <div className="text-end">
                       <p className="mb-1">Total Present</p>
-                      <h4>180/200</h4>
+                      <h4>{summary.presentToday}/{summary.totalEmployees}</h4>
                     </div>
                   </div>
                 </div>
@@ -311,7 +327,7 @@ const LeaveAdmin = () => {
                     </div>
                     <div className="text-end">
                       <p className="mb-1">Planned Leaves</p>
-                      <h4>10</h4>
+                      <h4>{summary.plannedToday}</h4>
                     </div>
                   </div>
                 </div>
@@ -330,7 +346,7 @@ const LeaveAdmin = () => {
                     </div>
                     <div className="text-end">
                       <p className="mb-1">Unplanned Leaves</p>
-                      <h4>10</h4>
+                      <h4>{summary.unplannedToday}</h4>
                     </div>
                   </div>
                 </div>
@@ -349,7 +365,7 @@ const LeaveAdmin = () => {
                     </div>
                     <div className="text-end">
                       <p className="mb-1">Pending Requests</p>
-                      <h4>15</h4>
+                      <h4>{summary.pendingCount}</h4>
                     </div>
                   </div>
                 </div>
