@@ -156,6 +156,17 @@ const ProjectGrid = () => {
     fetchMetadata();
   }, []);
 
+  const getPlainDescription = (htmlStr: string | null) => {
+    if (!htmlStr) return "No description provided.";
+    const cleanText = htmlStr.replace(/<[^>]*>/g, ' ');
+    const decoded = cleanText
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+    return decoded.trim() || "No description provided.";
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -524,9 +535,21 @@ const ProjectGrid = () => {
                         </div>
 
                         <p
-                          className="text-muted fs-13 line-clamp-3 mb-3 flex-grow-1"
-                          dangerouslySetInnerHTML={{ __html: proj.description || "No description provided." }}
-                        />
+                          className="text-muted fs-13 mb-3 flex-grow-1"
+                          style={{
+                            minHeight: "58px",
+                            maxHeight: "58px",
+                            height: "58px",
+                            overflow: "hidden",
+                            display: "-webkit-box",
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: "vertical",
+                            textOverflow: "ellipsis",
+                            lineHeight: "1.5"
+                          }}
+                        >
+                          {getPlainDescription(proj.description)}
+                        </p>
 
                         <div className="bg-light rounded p-2 mb-3 fs-12">
                           <div className="d-flex justify-content-between mb-1">
