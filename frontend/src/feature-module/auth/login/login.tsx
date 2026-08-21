@@ -119,7 +119,6 @@ const Login = () => {
                         <div className="input-group">
                           <input
                             type="email"
-                            defaultValue=""
                             className="form-control border-end-0"
                             required
                             autoComplete="email"

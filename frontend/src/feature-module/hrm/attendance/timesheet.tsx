@@ -1,122 +1,285 @@
-import { Link } from 'react-router-dom'
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { all_routes } from "../../../router/all_routes";
 import Table from "../../../core/common/dataTable/index";
-import ImageWithBasePath from '../../../core/common/imageWithBasePath';
-import CommonSelect from '../../../core/common/commonSelect';
-import { DatePicker } from 'antd';
-import { OverlayTrigger, Tooltip } from "react-bootstrap";
-import { timesheet_details } from '../../../core/data/json/timesheet_details';
-import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
-import { all_routes } from '../../../router/all_routes';
+import apiClient from "../../../core/utils/apiClient";
+import { useAppSelector } from "../../../core/data/redux/store";
 
-// Define a type for timesheet data
-interface TimesheetData {
-  Employee: string;
-  Image: string;
-  Role: string;
-  Date: string;
-  Project: string;
-  AssignedHours: string;
-  WorkedHours: string;
-  actions?: string;
+interface Project {
+  id: number;
+  name: string;
+}
+
+interface Task {
+  id: number;
+  name: string;
+  title?: string;
+}
+
+interface TimeLog {
+  id: number;
+  logDate: string;
+  hoursSpent: number;
+  billableHours: number;
+  description: string | null;
+  approvalStatus: string;
+  project: {
+    id: number;
+    name: string;
+  };
+  task: {
+    id: number;
+    title: string;
+  } | null;
+  employee: {
+    id: number;
+    firstName: string;
+    lastName: string;
+  };
 }
 
 const TimeSheet = () => {
+  const currentUser = useAppSelector((state) => state.auth.user);
 
-  const data: TimesheetData[] = timesheet_details;
-  const columns = [
+  // Scopes & Permissions check
+  const isFinanceOrAdmin = currentUser?.role === 'SUPER_ADMIN' || 
+                           currentUser?.role === 'HR' ||
+                           currentUser?.permissions?.some(p => p.module === 'FINANCE' && p.canWrite);
+
+  const [logs, setLogs] = useState<TimeLog[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters
+  const [filterProject, setFilterProject] = useState("ALL");
+  const [filterStatus, setFilterStatus] = useState("ALL");
+
+  // Form State
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [logDate, setLogDate] = useState("");
+  const [hoursSpent, setHoursSpent] = useState("");
+  const [billableHours, setBillableHours] = useState("");
+  const [description, setDescription] = useState("");
+
+  const [message, setMessage] = useState("");
+
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+      // If Finance or Admin, call GET /api/timesheets which returns employee scopes automatically or we query all
+      const res = await apiClient.get("/api/timesheets");
+      if (res.data?.success) {
+        setLogs(res.data.data);
+      }
+    } catch (err) {
+      console.error("Failed to load logs:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const res = await apiClient.get("/api/projects");
+      if (res.data?.success) {
+        setProjects(res.data.data);
+      }
+    } catch (err) {
+      console.error("Failed to load projects:", err);
+    }
+  };
+
+  // When selected project changes in Form, fetch project tasks
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setTasks([]);
+      return;
+    }
+    const fetchProjectTasks = async () => {
+      try {
+        const res = await apiClient.get(`/api/tasks?projectId=${selectedProjectId}`);
+        if (res.data?.success) {
+          setTasks(res.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load tasks:", err);
+      }
+    };
+    fetchProjectTasks();
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    fetchLogs();
+    fetchProjects();
+  }, []);
+
+  const handleLogTime = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProjectId || !logDate || !hoursSpent) return;
+
+    try {
+      setMessage("");
+      const payload = {
+        projectId: parseInt(selectedProjectId, 10),
+        taskId: selectedTaskId ? parseInt(selectedTaskId, 10) : undefined,
+        logDate,
+        hoursSpent: parseFloat(hoursSpent),
+        billableHours: billableHours ? parseFloat(billableHours) : parseFloat(hoursSpent),
+        description
+      };
+
+      const res = await apiClient.post("/api/timesheets", payload);
+      if (res.data?.success) {
+        setSelectedProjectId("");
+        setSelectedTaskId("");
+        setLogDate("");
+        setHoursSpent("");
+        setBillableHours("");
+        setDescription("");
+
+        // Refresh
+        fetchLogs();
+
+        // Close modal
+        const closeBtn = document.getElementById("close-logtime-modal");
+        if (closeBtn) closeBtn.click();
+      }
+    } catch (err: any) {
+      console.error("Failed to log time:", err);
+      setMessage(err.response?.data?.message || "Failed to log hours.");
+    }
+  };
+
+  const handleDeleteLog = async (logId: number) => {
+    if (!window.confirm("Are you sure you want to delete this log entry?")) return;
+    try {
+      const res = await apiClient.delete(`/api/timesheets/${logId}`);
+      if (res.data?.success) {
+        fetchLogs();
+      }
+    } catch (err) {
+      console.error("Failed to delete log entry:", err);
+    }
+  };
+
+  const handleApproveLog = async (logId: number, status: "APPROVED" | "REJECTED") => {
+    try {
+      const res = await apiClient.patch(`/api/timesheets/${logId}/approve`, { status });
+      if (res.data?.success) {
+        fetchLogs();
+      }
+    } catch (err) {
+      console.error("Failed to approve log:", err);
+    }
+  };
+
+  // Filter logs locally
+  const filteredLogs = logs.filter((log) => {
+    if (filterProject !== "ALL" && log.project.id !== parseInt(filterProject, 10)) return false;
+    if (filterStatus !== "ALL" && log.approvalStatus !== filterStatus) return false;
+    return true;
+  });
+
+  const columns: any[] = [
     {
       title: "Employee",
-      dataIndex: "Employee",
-      render: (_text: string, record: TimesheetData) => (
-        <div className="d-flex align-items-center file-name-icon">
-          <span className="avatar avatar-md border avatar-rounded">
-            <ImageWithBasePath src={`assets/img/users/${record.Image}`} className="img-fluid" alt={`${record.Employee} Profile`} />
-          </span>
-          <div className="ms-2">
-            <h6 className="fw-medium">{record.Employee}</h6>
-            <span className="fs-12 fw-normal ">{record.Role}</span>
-          </div>
-        </div>
+      dataIndex: "employee",
+      render: (emp: any) => (
+        <span className="fw-medium text-dark">{emp ? `${emp.firstName} ${emp.lastName}` : "N/A"}</span>
       ),
-      sorter: (a: TimesheetData, b: TimesheetData) => a.Employee.length - b.Employee.length,
-    },
-    {
-      title: "Date",
-      dataIndex: "Date",
-      sorter: (a: TimesheetData, b: TimesheetData) => a.Date.length - b.Date.length,
+      sorter: (a: TimeLog, b: TimeLog) => `${a.employee.firstName} ${a.employee.lastName}`.localeCompare(`${b.employee.firstName} ${b.employee.lastName}`),
     },
     {
       title: "Project",
-      dataIndex: "Project",
-      render: (_text: string, record: TimesheetData) => (
-        <p className="fs-14 fw-medium text-gray-9 d-flex align-items-center">
-          {record.Project}
-          <OverlayTrigger
-            placement="bottom"
-            overlay={<Tooltip id="collapse-tooltip">Worked on the Management design & Development</Tooltip>}
-          >
-            <i className="ti ti-info-circle text-info ms-1"></i>
-          </OverlayTrigger>
-        </p>
-      ),
-      sorter: (a: TimesheetData, b: TimesheetData) => a.Project.length - b.Project.length,
+      dataIndex: "project",
+      render: (proj: any) => <span className="fw-medium">{proj?.name || "N/A"}</span>,
+      sorter: (a: TimeLog, b: TimeLog) => a.project.name.localeCompare(b.project.name),
     },
     {
-      title: "Assigned hours",
-      dataIndex: "AssignedHours",
-      sorter: (a: TimesheetData, b: TimesheetData) => a.AssignedHours.length - b.AssignedHours.length,
+      title: "Date",
+      dataIndex: "logDate",
+      render: (d: string) => <span>{new Date(d).toLocaleDateString()}</span>,
+      sorter: (a: TimeLog, b: TimeLog) => new Date(a.logDate).getTime() - new Date(b.logDate).getTime(),
     },
     {
-      title: "Worked Hours",
-      dataIndex: "WorkedHours",
-      sorter: (a: TimesheetData, b: TimesheetData) => a.WorkedHours.length - b.WorkedHours.length,
+      title: "Task",
+      dataIndex: "task",
+      render: (task: any) => <span>{task?.title || "General / Other"}</span>,
     },
     {
-      title: "",
-      dataIndex: "actions",
-      render: () => (
-        <div className="action-icon d-inline-flex">
-          <button
-            type="button"
-            className="me-2"
-            data-bs-toggle="modal"
-            data-bs-target="#edit_timesheet"
-            aria-label="Edit timesheet"
-          >
-            <i className="ti ti-edit" />
-          </button>
-          <button
-            type="button"
-            data-bs-toggle="modal"
-            data-bs-target="#delete_modal"
-            aria-label="Delete timesheet"
-          >
-            <i className="ti ti-trash" />
-          </button>
+      title: "Hours Spent",
+      dataIndex: "hoursSpent",
+      render: (hrs: number) => <span className="fw-bold">{hrs} hrs</span>,
+      sorter: (a: TimeLog, b: TimeLog) => a.hoursSpent - b.hoursSpent,
+    },
+    {
+      title: "Billable Hours",
+      dataIndex: "billableHours",
+      render: (hrs: number) => <span>{hrs} hrs</span>,
+    },
+    {
+      title: "Description",
+      dataIndex: "description",
+      render: (desc: string) => <span className="text-muted text-truncate d-inline-block" style={{ maxWidth: "200px" }}>{desc || "--"}</span>
+    },
+    {
+      title: "Status",
+      dataIndex: "approvalStatus",
+      render: (status: string) => {
+        let badgeClass = "bg-warning-transparent text-warning";
+        if (status === "APPROVED") badgeClass = "bg-success-transparent text-success";
+        if (status === "REJECTED") badgeClass = "bg-danger-transparent text-danger";
+        return <span className={`badge ${badgeClass}`}>{status}</span>;
+      },
+      sorter: (a: TimeLog, b: TimeLog) => a.approvalStatus.localeCompare(b.approvalStatus),
+    },
+    {
+      title: "Action",
+      dataIndex: "id",
+      render: (id: number, record: TimeLog) => (
+        <div className="d-flex align-items-center gap-2">
+          {isFinanceOrAdmin && record.approvalStatus === "PENDING" && (
+            <>
+              <button
+                onClick={() => handleApproveLog(id, "APPROVED")}
+                className="btn btn-xs btn-success text-white"
+                title="Approve Hours"
+              >
+                Approve
+              </button>
+              <button
+                onClick={() => handleApproveLog(id, "REJECTED")}
+                className="btn btn-xs btn-danger text-white"
+                title="Reject Hours"
+              >
+                Reject
+              </button>
+            </>
+          )}
+          {record.approvalStatus === "PENDING" && (
+            <button
+              onClick={() => handleDeleteLog(id)}
+              className="btn btn-link text-danger p-0"
+              title="Delete Entry"
+            >
+              <i className="ti ti-trash fs-14" />
+            </button>
+          )}
         </div>
       ),
-    },
-  ]
-  const projectChoose = [
-    { value: "Office Management", label: "Office Management" },
-    { value: "Project Management", label: "Project Management" },
-    { value: "Hospital Administration", label: "Hospital Administration" },
+    }
   ];
-
-  const getModalContainer = () => {
-    const modalElement = document.getElementById('modal-datepicker');
-    return modalElement ? modalElement : document.body;
-  };
 
   return (
     <>
-      {/* Page Wrapper */}
       <div className="page-wrapper">
         <div className="content">
           {/* Breadcrumb */}
           <div className="d-md-flex d-block align-items-center justify-content-between page-breadcrumb mb-3">
             <div className="my-auto mb-2">
-              <h2 className="mb-1">Timesheets</h2>
+              <h2 className="mb-1">Time Logs (Timesheets)</h2>
               <nav>
                 <ol className="breadcrumb mb-0">
                   <li className="breadcrumb-item">
@@ -124,392 +287,192 @@ const TimeSheet = () => {
                       <i className="ti ti-smart-home" />
                     </Link>
                   </li>
-                  <li className="breadcrumb-item">Attendance</li>
-                  <li className="breadcrumb-item active" aria-current="page">
-                    Timesheets
-                  </li>
+                  <li className="breadcrumb-item">HRM</li>
+                  <li className="breadcrumb-item active">Timesheets</li>
                 </ol>
               </nav>
             </div>
-            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
-              <div className="me-2 mb-2">
-                <div className="dropdown">
-                  <button
-                    type="button"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
+            
+            <div className="mb-2">
+              <button
+                data-bs-toggle="modal"
+                data-bs-target="#log_time_modal"
+                className="btn btn-primary d-flex align-items-center"
+              >
+                <i className="ti ti-clock me-2" />
+                Log Hours
+              </button>
+            </div>
+          </div>
+
+          {/* Filtering */}
+          <div className="card mb-3 shadow-xs">
+            <div className="card-body p-3">
+              <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <h5 className="mb-0 fw-semibold">Logged Hours Index</h5>
+                <div className="d-flex align-items-center flex-wrap gap-3">
+                  <span className="fs-12 text-muted">Project:</span>
+                  <select
+                    className="form-select form-select-sm w-auto"
+                    value={filterProject}
+                    onChange={(e) => setFilterProject(e.target.value)}
                   >
-                    <i className="ti ti-file-export me-1" />
-                    Export
-                  </button>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <button
-                        type="button"
-                        className="dropdown-item rounded-1"
-                      >
-                        <i className="ti ti-file-type-pdf me-1" />
-                        Export as PDF
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        type="button"
-                        className="dropdown-item rounded-1"
-                      >
-                        <i className="ti ti-file-type-xls me-1" />
-                        Export as Excel{" "}
-                      </button>
-                    </li>
-                  </ul>
+                    <option value="ALL">All Projects</option>
+                    {projects.map(p => (
+                      <option value={p.id} key={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+
+                  <span className="fs-12 text-muted">Status:</span>
+                  <select
+                    className="form-select form-select-sm w-auto"
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                  >
+                    <option value="ALL">All States</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
+                  </select>
                 </div>
-              </div>
-              <div className="mb-2">
-                <button
-                  type="button"
-                  data-bs-toggle="modal"
-                  data-bs-target="#add_timesheet"
-                  className="btn btn-primary d-flex align-items-center"
-                >
-                  <i className="ti ti-circle-plus me-2" />
-                  Add Today’s Work
-                </button>
-              </div>
-              <div className="head-icons ms-2">
-                <CollapseHeader />
               </div>
             </div>
           </div>
-          {/* /Breadcrumb */}
-          {/* Performance Indicator list */}
-          <div className="card">
-            <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-              <h5>Timesheet</h5>
-              <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-                <div className="dropdown me-3">
-                  <button
-                    type="button"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Select Project
-                  </button>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <button type="button" className="dropdown-item rounded-1">
-                        Office Management
-                      </button>
-                    </li>
-                    <li>
-                      <button type="button" className="dropdown-item rounded-1">
-                        Project Management
-                      </button>
-                    </li>
-                    <li>
-                      <button type="button" className="dropdown-item rounded-1">
-                        Hospital Administration
-                      </button>
-                    </li>
-                  </ul>
-                </div>
-                <div className="dropdown">
-                  <button
-                    type="button"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Sort By : Last 7 Days
-                  </button>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <button type="button" className="dropdown-item rounded-1">
-                        Recently Added
-                      </button>
-                    </li>
-                    <li>
-                      <button type="button" className="dropdown-item rounded-1">
-                        Ascending
-                      </button>
-                    </li>
-                    <li>
-                      <button type="button" className="dropdown-item rounded-1">
-                        Descending
-                      </button>
-                    </li>
-                    <li>
-                      <button type="button" className="dropdown-item rounded-1">
-                        Last Month
-                      </button>
-                    </li>
-                    <li>
-                      <button type="button" className="dropdown-item rounded-1">
-                        Last 7 Days
-                      </button>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
+
+          {/* Table index */}
+          <div className="card shadow-sm border-0">
             <div className="card-body p-0">
-              <Table dataSource={data} columns={columns} Selection={false} />
+              <Table
+                dataSource={filteredLogs}
+                columns={columns}
+                loading={loading}
+              />
             </div>
           </div>
-          {/* /Performance Indicator list */}
-        </div>
-        <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-          <p className="mb-0">2014 - 2026 © SmartHR.</p>
-          <p>
-            Designed &amp; Developed By{" "}
-            <Link to="#" className="text-primary">
-              Dreams
-            </Link>
-          </p>
         </div>
       </div>
-      {/* /Page Wrapper */}
-      {/* Add Timesheet */}
-      <div className="modal fade" id="add_timesheet">
-        <div className="modal-dialog modal-dialog-centered modal-md">
+
+      {/* Log Time Modal */}
+      <div className="modal fade" id="log_time_modal" tabIndex={-1} role="dialog">
+        <div className="modal-dialog modal-dialog-centered">
           <div className="modal-content">
             <div className="modal-header">
-              <h4 className="modal-title">Add Todays Work</h4>
+              <h5 className="modal-title">Log Daily Worked Hours</h5>
               <button
                 type="button"
-                className="btn-close custom-btn-close"
+                className="btn-close"
                 data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
+                id="close-logtime-modal"
+              />
             </div>
-            <form>
-              <div className="modal-body pb-0">
+            <form onSubmit={handleLogTime}>
+              <div className="modal-body">
+                {message && <div className="alert alert-danger mb-3">{message}</div>}
+                
+                <div className="mb-3">
+                  <label className="form-label fs-13">Choose Project <span className="text-danger">*</span></label>
+                  <select
+                    className="form-select"
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                    required
+                  >
+                    <option value="">-- Choose Project --</option>
+                    {projects.map(p => (
+                      <option value={p.id} key={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fs-13">Project Task</label>
+                  <select
+                    className="form-select"
+                    value={selectedTaskId}
+                    onChange={(e) => setSelectedTaskId(e.target.value)}
+                    disabled={!selectedProjectId}
+                  >
+                    <option value="">-- General / No Specific Task --</option>
+                    {tasks.map(t => (
+                      <option value={t.id} key={t.id}>{t.title || t.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fs-13">Date <span className="text-danger">*</span></label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={logDate}
+                    onChange={(e) => setLogDate(e.target.value)}
+                    required
+                  />
+                </div>
+
                 <div className="row">
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Project <span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={projectChoose}
-                        defaultValue={projectChoose[0]}
-                      />
-                    </div>
+                  <div className="col-6 mb-3">
+                    <label className="form-label fs-13">Hours Logged <span className="text-danger">*</span></label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="24"
+                      className="form-control"
+                      placeholder="e.g. 8"
+                      value={hoursSpent}
+                      onChange={(e) => setHoursSpent(e.target.value)}
+                      required
+                    />
                   </div>
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Deadline <span className="text-danger"> *</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
+                  <div className="col-6 mb-3">
+                    <label className="form-label fs-13">Billable Hours</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="24"
+                      className="form-control"
+                      placeholder="Same as hours spent"
+                      value={billableHours}
+                      onChange={(e) => setBillableHours(e.target.value)}
+                    />
                   </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Total Hours <span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Remaining Hours<span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Date<span className="text-danger"> *</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Hours<span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fs-13">Activity Description</label>
+                  <textarea
+                    className="form-control"
+                    rows={3}
+                    placeholder="Provide details on features developed, bug fixes, or administrative scope..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
                 </div>
               </div>
               <div className="modal-footer">
                 <button
                   type="button"
-                  className="btn btn-light me-2"
+                  className="btn btn-outline-light border me-2"
                   data-bs-dismiss="modal"
                 >
                   Cancel
                 </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                  Add Changes
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={!selectedProjectId || !logDate || !hoursSpent}
+                >
+                  Submit Hours
                 </button>
               </div>
             </form>
           </div>
         </div>
       </div>
-      {/* /Add Timesheet */}
-      {/* Edit Timesheet */}
-      <div className="modal fade" id="edit_timesheet">
-        <div className="modal-dialog modal-dialog-centered modal-md">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title">Edit Todays Work</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <form>
-              <div className="modal-body pb-0">
-                <div className="row">
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Project <span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={projectChoose}
-                        defaultValue={projectChoose[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Deadline <span className="text-danger"> *</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Total Hours <span className="text-danger"> *</span>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue={32}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Remaining Hours<span className="text-danger"> *</span>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue={8}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Date<span className="text-danger"> *</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Hours<span className="text-danger">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue={13}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-light me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                  Save Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      {/* /Edit Timesheet */}
     </>
-  )
-}
-export default TimeSheet
+  );
+};
+
+export default TimeSheet;

@@ -1,18 +1,19 @@
-import { status } from '../../../core/common/selectoption/selectoption'
-import CommonSelect from '../../../core/common/commonSelect'
-import { all_routes } from '../../../router/all_routes'
-import { Link } from 'react-router-dom'
-import PredefinedDateRanges from '../../../core/common/datePicker'
+import { useState, useEffect } from 'react';
+import { all_routes } from '../../../router/all_routes';
+import { Link } from 'react-router-dom';
 import Table from "../../../core/common/dataTable/index";
-import { rolesDetails } from '../../../core/data/json/rolesDetails'
-import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
+import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
+import apiClient from '../../../core/utils/apiClient';
 
-// Define interfaces
-interface RoleItem {
-    role: string;
-    created_date: string;
-    status: string;
-    [key: string]: any; // Remove if not needed
+interface CompanyRole {
+    id: number;
+    name: string;
+    description: string | null;
+    isActive: boolean;
+    createdAt: string;
+    _count?: {
+        employees: number;
+    };
 }
 
 interface ColumnType<T> {
@@ -23,55 +24,148 @@ interface ColumnType<T> {
 }
 
 const RolesPermission = () => {
+    const [roles, setRoles] = useState<CompanyRole[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [newRoleName, setNewRoleName] = useState("");
+    const [newRoleDesc, setNewRoleDesc] = useState("");
+    const [selectedRole, setSelectedRole] = useState<CompanyRole | null>(null);
 
-    const data: RoleItem[] = rolesDetails;
-    const columns: ColumnType<RoleItem>[] = [
+    // Fetch all company roles
+    const fetchRoles = async () => {
+        try {
+            setLoading(true);
+            const response = await apiClient.get('/api/roles');
+            if (response.data?.success) {
+                setRoles(response.data.data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch roles:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchRoles();
+    }, []);
+
+    // Create a new role
+    const handleAddRole = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newRoleName) return;
+        try {
+            const response = await apiClient.post('/api/roles', {
+                name: newRoleName,
+                description: newRoleDesc
+            });
+            if (response.data?.success) {
+                setNewRoleName("");
+                setNewRoleDesc("");
+                fetchRoles();
+            }
+        } catch (err) {
+            console.error('Failed to create role:', err);
+        }
+    };
+
+    // Save edited role
+    const handleEditRole = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedRole || !selectedRole.name) return;
+        try {
+            const response = await apiClient.put(`/api/roles/${selectedRole.id}`, {
+                name: selectedRole.name,
+                description: selectedRole.description,
+                isActive: selectedRole.isActive
+            });
+            if (response.data?.success) {
+                setSelectedRole(null);
+                fetchRoles();
+            }
+        } catch (err) {
+            console.error('Failed to update role:', err);
+        }
+    };
+
+    // Delete a role
+    const handleDeleteRole = async (roleId: number) => {
+        try {
+            const response = await apiClient.delete(`/api/roles/${roleId}`);
+            if (response.data?.success) {
+                fetchRoles();
+            }
+        } catch (err) {
+            console.error('Failed to delete role:', err);
+        }
+    };
+
+    const columns: ColumnType<CompanyRole>[] = [
         {
-            title: "Role",
-            dataIndex: "role",
-            sorter: (a, b) => a.role.length - b.role.length,
+            title: "Role Name",
+            dataIndex: "name",
+            sorter: (a, b) => a.name.localeCompare(b.name),
+            render: (text: string) => <span className="fw-medium text-gray-9">{text}</span>
+        },
+        {
+            title: "Description",
+            dataIndex: "description",
+            render: (text: string) => <span>{text || '—'}</span>
+        },
+        {
+            title: "Active Employees",
+            dataIndex: "employees",
+            render: (_text: any, record?: CompanyRole) => <span>{record?._count?.employees || 0}</span>
         },
         {
             title: "Created Date",
-            dataIndex: "created_date",
-            sorter: (a, b) => a.created_date.length - b.created_date.length,
+            dataIndex: "createdAt",
+            render: (text: string) => <span>{new Date(text).toLocaleDateString()}</span>
         },
         {
             title: "Status",
-            dataIndex: "status",
-            render: (text: string) => (
+            dataIndex: "isActive",
+            render: (isActive: boolean) => (
                 <span
-                    className={`badge d-inline-flex align-items-center badge-xs ${text === 'Active'
-                        ? 'badge-success'
-                        : 'badge-danger'
-                        }`}
+                    className={`badge d-inline-flex align-items-center badge-xs ${isActive ? 'badge-success' : 'badge-danger'}`}
                 >
                     <i className="ti ti-point-filled me-1"></i>
-                    {text}
+                    {isActive ? 'Active' : 'Inactive'}
                 </span>
             ),
-            sorter: (a, b) => a.status.length - b.status.length,
         },
         {
-            title: "",
+            title: "Actions",
             dataIndex: "actions",
-            render: () => (
-                <div className="action-icon d-inline-flex">
-                    <Link to={all_routes.permissionpage} className="me-2">
-                        <i className="ti ti-shield" />
-                    </Link>
-                    <Link
-                        to="#"
-                        className="me-2"
-                        data-bs-toggle="modal" data-inert={true}
-                        data-bs-target="#edit_role"
-                    >
-                        <i className="ti ti-edit" />
-                    </Link>
-                    <Link to="#" data-bs-toggle="modal" data-inert={true} data-bs-target="#delete_modal">
-                        <i className="ti ti-trash" />
-                    </Link>
-                </div>
+            render: (_text: any, record?: CompanyRole) => (
+                record && (
+                    <div className="action-icon d-inline-flex">
+                        <Link to={`${all_routes.permissionpage}?id=${record.id}`} className="me-2 text-primary" title="Edit Permissions">
+                            <i className="ti ti-shield" />
+                        </Link>
+                        <Link
+                            to="#"
+                            className="me-2 text-info"
+                            data-bs-toggle="modal"
+                            data-bs-target="#edit_role"
+                            onClick={() => setSelectedRole(record)}
+                            title="Edit Role Details"
+                        >
+                            <i className="ti ti-edit" />
+                        </Link>
+                        <Link
+                            to="#"
+                            className="text-danger"
+                            onClick={() => {
+                                if (window.confirm("Are you sure you want to delete this role? Employees assigned to this role will be unassigned.")) {
+                                    handleDeleteRole(record.id);
+                                }
+                            }}
+                            title="Delete Role"
+                        >
+                            <i className="ti ti-trash" />
+                        </Link>
+                    </div>
+                )
             ),
         },
     ];
@@ -84,7 +178,7 @@ const RolesPermission = () => {
                     {/* Breadcrumb */}
                     <div className="d-md-flex d-block align-items-center justify-content-between page-breadcrumb mb-3">
                         <div className="my-auto mb-2">
-                            <h2 className="mb-1">Roles</h2>
+                            <h2 className="mb-1">Roles & Permissions</h2>
                             <nav>
                                 <ol className="breadcrumb mb-0">
                                     <li className="breadcrumb-item">
@@ -100,47 +194,15 @@ const RolesPermission = () => {
                             </nav>
                         </div>
                         <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
-                            <div className="me-2 mb-2">
-                                <div className="dropdown">
-                                    <Link
-                                        to="#"
-                                        className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                    >
-                                        <i className="ti ti-file-export me-1" />
-                                        Export
-                                    </Link>
-                                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                <i className="ti ti-file-type-pdf me-1" />
-                                                Export as PDF
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                <i className="ti ti-file-type-xls me-1" />
-                                                Export as Excel{" "}
-                                            </Link>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
                             <div className="mb-2">
                                 <Link
                                     to="#"
-                                    data-bs-toggle="modal" data-inert={true}
+                                    data-bs-toggle="modal"
                                     data-bs-target="#add_role"
                                     className="btn btn-primary d-flex align-items-center"
                                 >
                                     <i className="ti ti-circle-plus me-2" />
-                                    Add New Roles
+                                    Add New Role
                                 </Link>
                             </div>
                             <div className="head-icons ms-2">
@@ -148,116 +210,21 @@ const RolesPermission = () => {
                             </div>
                         </div>
                     </div>
-                    {/* /Breadcrumb */}
-                    {/* Assets Lists */}
+
+                    {/* Roles List */}
                     <div className="card">
                         <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
                             <h5>Roles List</h5>
-                            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-                                <div className="me-3">
-                                    <div className="input-icon position-relative">
-                                        <PredefinedDateRanges />
-
-                                    </div>
-                                </div>
-                                <div className="dropdown me-3">
-                                    <Link
-                                        to="#"
-                                        className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                    >
-                                        Status
-                                    </Link>
-                                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Active
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Inactive
-                                            </Link>
-                                        </li>
-                                    </ul>
-                                </div>
-                                <div className="dropdown">
-                                    <Link
-                                        to="#"
-                                        className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                    >
-                                        Sort By : Last 7 Days
-                                    </Link>
-                                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Recently Added
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Ascending
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Descending
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Last Month
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Last 7 Days
-                                            </Link>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
                         </div>
                         <div className="card-body p-0">
-                            <Table dataSource={data} columns={columns} Selection={true} />
+                            <Table dataSource={roles} columns={columns} Selection={false} loading={loading} />
                         </div>
                     </div>
                 </div>
-                <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-                    <p className="mb-0">2014 - 2026 © SmartHR.</p>
-                    <p>
-                        Designed &amp; Developed By{" "}
-                        <Link to="#" className="text-primary">
-                            Dreams
-                        </Link>
-                    </p>
-                </div>
             </div>
-            {/* /Page Wrapper */}
-            {/* Add Assets */}
-            <div className="modal fade" id="add_role">
+
+            {/* Add Role Modal */}
+            <div className="modal fade" id="add_role" tabIndex={-1} aria-hidden="true">
                 <div className="modal-dialog modal-dialog-centered">
                     <div className="modal-content">
                         <div className="modal-header">
@@ -267,26 +234,36 @@ const RolesPermission = () => {
                                 className="btn-close custom-btn-close"
                                 data-bs-dismiss="modal"
                                 aria-label="Close"
+                                id="close-add-role"
                             >
                                 <i className="ti ti-x" />
                             </button>
                         </div>
-                        <form>
+                        <form onSubmit={handleAddRole}>
                             <div className="modal-body pb-0">
                                 <div className="row">
                                     <div className="col-md-12">
                                         <div className="mb-3">
                                             <label className="form-label">Role Name</label>
-                                            <input type="text" className="form-control" />
+                                            <input
+                                                type="text"
+                                                className="form-control"
+                                                placeholder="e.g. Finance, Project Manager"
+                                                value={newRoleName}
+                                                onChange={(e) => setNewRoleName(e.target.value)}
+                                                required
+                                            />
                                         </div>
                                     </div>
                                     <div className="col-md-12">
-                                        <div className="mb-3 ">
-                                            <label className="form-label">Status</label>
-                                            <CommonSelect
-                                                className='select'
-                                                options={status}
-                                                defaultValue={status[0]}
+                                        <div className="mb-3">
+                                            <label className="form-label">Description</label>
+                                            <textarea
+                                                className="form-control"
+                                                rows={3}
+                                                placeholder="Describe role permissions/scope"
+                                                value={newRoleDesc}
+                                                onChange={(e) => setNewRoleDesc(e.target.value)}
                                             />
                                         </div>
                                     </div>
@@ -300,7 +277,7 @@ const RolesPermission = () => {
                                 >
                                     Cancel
                                 </button>
-                                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                                <button type="submit" data-bs-dismiss="modal" className="btn btn-primary" disabled={!newRoleName}>
                                     Add Role
                                 </button>
                             </div>
@@ -308,9 +285,9 @@ const RolesPermission = () => {
                     </div>
                 </div>
             </div>
-            {/* /Add Assets */}
-            {/* Edit Role */}
-            <div className="modal fade" id="edit_role">
+
+            {/* Edit Role Modal */}
+            <div className="modal fade" id="edit_role" tabIndex={-1} aria-hidden="true">
                 <div className="modal-dialog modal-dialog-centered">
                     <div className="modal-content">
                         <div className="modal-header">
@@ -324,7 +301,7 @@ const RolesPermission = () => {
                                 <i className="ti ti-x" />
                             </button>
                         </div>
-                        <form>
+                        <form onSubmit={handleEditRole}>
                             <div className="modal-body pb-0">
                                 <div className="row">
                                     <div className="col-md-12">
@@ -333,18 +310,37 @@ const RolesPermission = () => {
                                             <input
                                                 type="text"
                                                 className="form-control"
-                                                defaultValue="Office Furnitures"
+                                                value={selectedRole?.name || ""}
+                                                onChange={(e) => selectedRole && setSelectedRole({ ...selectedRole, name: e.target.value })}
+                                                required
                                             />
                                         </div>
                                     </div>
                                     <div className="col-md-12">
-                                        <div className="mb-3 ">
-                                            <label className="form-label">Status</label>
-                                            <CommonSelect
-                                                className='select'
-                                                options={status}
-                                                defaultValue={status[1]}
+                                        <div className="mb-3">
+                                            <label className="form-label">Description</label>
+                                            <textarea
+                                                className="form-control"
+                                                rows={3}
+                                                value={selectedRole?.description || ""}
+                                                onChange={(e) => selectedRole && setSelectedRole({ ...selectedRole, description: e.target.value })}
                                             />
+                                        </div>
+                                    </div>
+                                    <div className="col-md-12">
+                                        <div className="mb-3">
+                                            <div className="form-check">
+                                                <input
+                                                    type="checkbox"
+                                                    className="form-check-input"
+                                                    id="edit-role-active"
+                                                    checked={selectedRole?.isActive || false}
+                                                    onChange={(e) => selectedRole && setSelectedRole({ ...selectedRole, isActive: e.target.checked })}
+                                                />
+                                                <label className="form-check-label" htmlFor="edit-role-active">
+                                                    Active Status
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -357,18 +353,16 @@ const RolesPermission = () => {
                                 >
                                     Cancel
                                 </button>
-                                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                                    Save
+                                <button type="submit" data-bs-dismiss="modal" className="btn btn-primary" disabled={!selectedRole?.name}>
+                                    Save Changes
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
             </div>
-            {/* /Edit Role */}
         </>
+    );
+};
 
-    )
-}
-
-export default RolesPermission
+export default RolesPermission;

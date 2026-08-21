@@ -476,6 +476,13 @@ async function getAdminDashboardSummary(req, res) {
             }));
         }
 
+        // Fetch live counts for projects, clients, and tasks in the company
+        const [totalProjects, totalClients, totalTasks] = await Promise.all([
+            prisma.project.count({ where: { companyId } }),
+            prisma.client.count({ where: { companyId } }),
+            prisma.task.count({ where: { companyId } })
+        ]);
+
         res.json({
             totalEmployees,
             pendingLeavesCount,
@@ -494,7 +501,10 @@ async function getAdminDashboardSummary(req, res) {
             firstCheckIn,
             lastCheckOut,
             totalProduction,
-            newHiresCount
+            newHiresCount,
+            totalProjects,
+            totalClients,
+            totalTasks
         });
 
     } catch (error) {

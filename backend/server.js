@@ -47,6 +47,13 @@ const attendanceRoutes = require('./src/routes/attendanceRoutes');
 const holidayRoutes = require('./src/routes/holidayRoutes'); // Added Holiday Routes
 const hrDashboardRoutes = require('./src/routes/hrDashboardRoutes');
 
+// PSA Module Routes
+const clientRoutes = require('./src/routes/clientRoutes');
+const projectRoutes = require('./src/routes/projectRoutes');
+const taskRoutes = require('./src/routes/taskRoutes');
+const timesheetRoutes = require('./src/routes/timesheetRoutes');
+const roleRoutes = require('./src/routes/roleRoutes');
+
 // Initialize Cron Jobs
 require('./src/cron/attendanceJobs');
 
@@ -58,6 +65,14 @@ app.use('/leaves', leaveRoutes);
 app.use('/attendance', attendanceRoutes);
 app.use('/holidays', holidayRoutes);
 app.use('/dashboard', hrDashboardRoutes);
+
+// PSA Module
+app.use('/api/clients', clientRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/timesheets', timesheetRoutes);
+app.use('/api/roles', roleRoutes);
+
 
 const prisma = require('./src/config/prisma');
 app.get('/health', async (req, res) => {

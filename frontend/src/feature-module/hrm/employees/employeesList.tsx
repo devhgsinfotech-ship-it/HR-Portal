@@ -181,13 +181,14 @@ const EmployeeList = () => {
   
   const [dbDepartments, setDbDepartments] = useState<any[]>([]);
   const [dbDesignations, setDbDesignations] = useState<any[]>([]);
+  const [dbRoles, setDbRoles] = useState<any[]>([]);
   const [newEmp, setNewEmp] = useState({ 
-    firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '',
+    firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', companyRoleId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '',
     basic: 0, hra: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0,
     pfDeduction: 0, professionalTax: 0, otherDeductions: 0,
     grossSalary: 0, netSalary: 0
   });
-  const [editEmp, setEditEmp] = useState<any>({ id: '', firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', profilePhotoUrl: '', employeeCode: '', username: '', company: '', password: '', confirmPassword: '', role: 'EMPLOYEE', reportingManagerId: '' });
+  const [editEmp, setEditEmp] = useState<any>({ id: '', firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', companyRoleId: '', dateOfJoining: '', profilePhotoUrl: '', employeeCode: '', username: '', company: '', password: '', confirmPassword: '', role: 'EMPLOYEE', reportingManagerId: '' });
   const [errorMsg, setErrorMsg] = useState('');
   const [newEmpFile, setNewEmpFile] = useState<File | null>(null);
   const [editEmpFile, setEditEmpFile] = useState<File | null>(null);
@@ -235,10 +236,11 @@ const EmployeeList = () => {
 
   const fetchData = async () => {
     try {
-      const [empRes, deptRes, desigRes] = await Promise.all([
+      const [empRes, deptRes, desigRes, rolesRes] = await Promise.all([
         apiClient.get('/employees'),
         apiClient.get('/departments'),
-        apiClient.get('/designations')
+        apiClient.get('/designations'),
+        apiClient.get('/api/roles')
       ]);
       const mappedEmployees = empRes.data.map((emp: any) => ({
         key: emp.id,
@@ -246,7 +248,7 @@ const EmployeeList = () => {
         EmpId: emp.employeeCode || emp.employeeId || 'N/A',
         Name: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
         Image: emp.profilePhotoUrl || 'avatar-20.jpg',
-        CurrentRole: emp.designation?.name || 'N/A',
+        CurrentRole: emp.companyRole?.name || emp.designation?.name || 'N/A',
         Email: emp.user?.email || emp.email || 'N/A',
         Phone: emp.phone || 'N/A',
         Designation: emp.designation?.name || 'N/A',
@@ -261,6 +263,9 @@ const EmployeeList = () => {
       setDbEmployees(mappedEmployees);
       setDbDepartments(deptRes.data.map((d: any) => ({ value: d.id, label: d.name })));
       setDbDesignations(desigRes.data.map((d: any) => ({ value: d.id, label: d.name })));
+      if (rolesRes.data?.success) {
+        setDbRoles(rolesRes.data.data.map((r: any) => ({ value: r.id, label: r.name })));
+      }
     } catch (err) {
       console.error(err);
     }
@@ -294,7 +299,7 @@ const EmployeeList = () => {
       }
       fetchData();
       setNewEmp({ 
-        firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '',
+        firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', companyRoleId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '',
         basic: 0, hra: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0, pfDeduction: 0, professionalTax: 0, otherDeductions: 0, grossSalary: 0, netSalary: 0
       });
       setNewEmpFile(null);
@@ -1240,6 +1245,16 @@ const EmployeeList = () => {
                               { value: 'SUPER_ADMIN', label: 'Super Admin' }
                             ]}
                             onChange={(opt) => setNewEmp({...newEmp, role: opt?.value || 'EMPLOYEE'})}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Permission Group (Role Permissions)</label>
+                          <CommonSelect
+                            className="select"
+                            options={[{ value: '', label: '-- None --' }, ...dbRoles]}
+                            onChange={(opt) => setNewEmp({...newEmp, companyRoleId: opt?.value || ''})}
                           />
                         </div>
                       </div>
@@ -2428,6 +2443,20 @@ const EmployeeList = () => {
                                 { value: 'SUPER_ADMIN', label: 'Super Admin' }
                               ];
                               return roles.find(r => r.value === editEmp.role) || roles[0];
+                            })()}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Permission Group (Role Permissions)</label>
+                          <CommonSelect
+                            className="select"
+                            options={[{ value: '', label: '-- None --' }, ...dbRoles]}
+                            onChange={(opt) => setEditEmp({...editEmp, companyRoleId: opt?.value || ''})}
+                            defaultValue={(() => {
+                              const allOptions = [{ value: '', label: '-- None --' }, ...dbRoles];
+                              return allOptions.find(r => r.value === editEmp.companyRoleId) || allOptions[0];
                             })()}
                           />
                         </div>

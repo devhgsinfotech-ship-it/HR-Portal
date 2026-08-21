@@ -44,7 +44,7 @@ async function checkEmailAvailability(req, res) {
 async function createEmployee(req, res) {
     try {
         const { 
-            firstName, lastName, email, password, phone, departmentId, designationId, dateOfJoining, role, reportingManagerId,
+            firstName, lastName, email, password, phone, departmentId, designationId, dateOfJoining, role, reportingManagerId, companyRoleId,
             basic, hra, conveyance, medicalAllowance, specialAllowance, pfDeduction, professionalTax, otherDeductions, grossSalary, netSalary
         } = req.body;
         const companyId = req.user.companyId;
@@ -110,6 +110,7 @@ async function createEmployee(req, res) {
                     phone,
                     departmentId: departmentId && departmentId !== 'undefined' ? parseInt(departmentId, 10) : null,
                     designationId: designationId && designationId !== 'undefined' ? parseInt(designationId, 10) : null,
+                    companyRoleId: companyRoleId && companyRoleId !== 'undefined' && companyRoleId !== 'null' ? parseInt(companyRoleId, 10) : null,
                     dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : new Date(),
                     reportingManagerId: (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null') ? parseInt(reportingManagerId, 10) : null,
                     profilePhotoUrl,
@@ -123,6 +124,7 @@ async function createEmployee(req, res) {
                     },
                     department: true,
                     designation: true,
+                    companyRole: true
                 }
             });
 
@@ -191,6 +193,7 @@ async function getEmployees(req, res) {
                 },
                 department: true,
                 designation: true,
+                companyRole: true,
                 bankDetails: true,
                 salaryStructure: true
             },
@@ -214,6 +217,7 @@ async function getEmployeeById(req, res) {
                 user: true,
                 department: true,
                 designation: true,
+                companyRole: true,
                 bankDetails: true,
                 salaryStructure: true,
                 reportingManager: {
@@ -236,7 +240,7 @@ async function updateEmployee(req, res) {
         const { id } = req.params;
         const companyId = req.user.companyId;
         const { 
-            firstName, lastName, phone, departmentId, designationId, dateOfJoining, email, password, role, reportingManagerId,
+            firstName, lastName, phone, departmentId, designationId, dateOfJoining, email, password, role, reportingManagerId, companyRoleId,
             basic, hra, conveyance, medicalAllowance, specialAllowance, pfDeduction, professionalTax, otherDeductions, grossSalary, netSalary,
             // Profile & Bio
             about, education, experience,
@@ -292,6 +296,9 @@ async function updateEmployee(req, res) {
         }
         if (reportingManagerId !== undefined) {
             dataToUpdate.reportingManagerId = (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null') ? parseInt(reportingManagerId, 10) : null;
+        }
+        if (companyRoleId !== undefined) {
+            dataToUpdate.companyRoleId = (companyRoleId && companyRoleId !== 'undefined' && companyRoleId !== 'null') ? parseInt(companyRoleId, 10) : null;
         }
 
         if (req.file) {
