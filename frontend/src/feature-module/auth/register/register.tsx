@@ -15,24 +15,49 @@ const Register = () => {
   const routes = all_routes;
 
   // Form fields
-  const [fullName, setFullName]         = useState("");
-  const [email, setEmail]               = useState("");
-  const [companyName, setCompanyName]   = useState("");
-  const [phone, setPhone]               = useState("");
-  const [companySize, setCompanySize]   = useState("");
-  const [password, setPassword]         = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [companySize, setCompanySize] = useState("");
+  const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [agreedToTerms, setAgreedToTerms]     = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [logoUrl, setLogoUrl] = useState("");
+  const [logoUploading, setLogoUploading] = useState(false);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setLogoUploading(true);
+      setError("");
+      const formData = new FormData();
+      formData.append("logo", file);
+
+      const res = await apiClient.post("/auth/upload-logo", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      if (res.data?.success) {
+        setLogoUrl(res.data.url);
+      }
+    } catch (err: any) {
+      console.error("Logo upload failed:", err);
+      setError("Failed to upload company logo. Please try again.");
+    } finally {
+      setLogoUploading(false);
+    }
+  };
 
   // UI state
-  const [isLoading, setIsLoading]   = useState(false);
-  const [error, setError]           = useState("");
-  const [success, setSuccess]       = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
   const [workspaceUrl, setWorkspaceUrl] = useState("");
   const [registeredEmail, setRegisteredEmail] = useState("");
 
   // Resend state
-  const [isResending, setIsResending]   = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [resendMessage, setResendMessage] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
 
@@ -72,6 +97,7 @@ const Register = () => {
         phone,
         companySize,
         password,
+        logoUrl,
       });
 
       const { company } = response.data;
@@ -228,7 +254,7 @@ const Register = () => {
                 <div className="text-center mb-4">
                   <div className="mx-auto mb-3" style={{ maxWidth: 160 }}>
                     <ImageWithBasePath
-                      src="assets/img/logo.svg"
+                      src="assets/img/hgs-logo-HR.webp"
                       className="img-fluid"
                       alt="Logo"
                     />
@@ -343,6 +369,37 @@ const Register = () => {
                     </div>
                   </div>
 
+                  {/* Company Logo Upload */}
+                  <div className="mb-3">
+                    <label className="form-label">Company Logo</label>
+                    <div className="d-flex align-items-center gap-3 border p-2 rounded bg-light">
+                      <div className="avatar avatar-lg rounded overflow-hidden bg-white border d-flex align-items-center justify-content-center" style={{ width: "50px", height: "50px" }}>
+                        {logoUrl ? (
+                          <img
+                            src={logoUrl.startsWith("http") ? logoUrl : `${apiClient.defaults.baseURL || "http://localhost:5000"}${logoUrl}`}
+                            alt="Company Logo Preview"
+                            className="img-fluid"
+                            style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+                          />
+                        ) : (
+                          <i className="ti ti-photo fs-24 text-muted" />
+                        )}
+                      </div>
+                      <div className="flex-fill">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="form-control form-control-sm"
+                          onChange={handleLogoUpload}
+                          disabled={logoUploading}
+                        />
+                        <span className="fs-11 text-muted">
+                          {logoUploading ? "Uploading logo..." : "Support PNG, JPG, WEBP formats"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Password */}
                   <div className="mb-3">
                     <label className="form-label">
@@ -360,9 +417,8 @@ const Register = () => {
                         onChange={(e) => setPassword(e.target.value)}
                       />
                       <span
-                        className={`ti toggle-passwords ${
-                          passwordVisibility.password ? "ti-eye" : "ti-eye-off"
-                        }`}
+                        className={`ti toggle-passwords ${passwordVisibility.password ? "ti-eye" : "ti-eye-off"
+                          }`}
                         onClick={() => togglePasswordVisibility("password")}
                         role="button"
                         tabIndex={0}
@@ -389,11 +445,10 @@ const Register = () => {
                         onChange={(e) => setConfirmPassword(e.target.value)}
                       />
                       <span
-                        className={`ti toggle-passwords ${
-                          passwordVisibility.confirmPassword
-                            ? "ti-eye"
-                            : "ti-eye-off"
-                        }`}
+                        className={`ti toggle-passwords ${passwordVisibility.confirmPassword
+                          ? "ti-eye"
+                          : "ti-eye-off"
+                          }`}
                         onClick={() =>
                           togglePasswordVisibility("confirmPassword")
                         }

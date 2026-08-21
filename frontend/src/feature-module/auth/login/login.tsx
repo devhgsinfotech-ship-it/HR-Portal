@@ -18,6 +18,45 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [resolvedLogo, setResolvedLogo] = useState<string | null>(null);
+  const [resolvedCompanyName, setResolvedCompanyName] = useState<string | null>(null);
+
+  // Auto-resolve logo by subdomain on mount
+  useState(() => {
+    const fetchSubdomainLogo = async () => {
+      if (!subdomain) return;
+      try {
+        const res = await apiClient.get(`/auth/company-logo?subdomain=${subdomain}`);
+        if (res.data?.success && res.data.logoUrl) {
+          setResolvedLogo(res.data.logoUrl);
+          setResolvedCompanyName(res.data.companyName);
+        }
+      } catch (err) {
+        console.error("Failed to fetch subdomain logo:", err);
+      }
+    };
+    fetchSubdomainLogo();
+  });
+
+  // Resolve logo by email domain on blur
+  const handleEmailBlur = async () => {
+    if (!email || !email.includes("@")) return;
+    const domain = email.split("@")[1]?.toLowerCase();
+    if (!domain) return;
+
+    const publicDomains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com", "icloud.com"];
+    if (publicDomains.includes(domain)) return;
+
+    try {
+      const res = await apiClient.get(`/auth/company-logo?emailDomain=${domain}`);
+      if (res.data?.success && res.data.logoUrl) {
+        setResolvedLogo(res.data.logoUrl);
+        setResolvedCompanyName(res.data.companyName);
+      }
+    } catch (err) {
+      console.error("Failed to load email domain logo:", err);
+    }
+  };
 
 
   const handleLogin = async (event: React.FormEvent) => {
@@ -101,13 +140,25 @@ const Login = () => {
               <div className="col-md-7 mx-auto vh-100">
                 <form className="vh-100" onSubmit={handleLogin}>
                   <div className="vh-100 d-flex flex-column justify-content-between p-4 pb-0">
-                    <div className="mx-auto mb-5 text-center">
-                      <ImageWithBasePath
-                        src="assets/img/logo.svg"
-                        className="img-fluid"
-                        alt="Smarthr logo"
-                      />
-                    </div>
+                    <div className="mx-auto mb-5 text-center" style={{ minHeight: "60px" }}>
+                       {resolvedLogo ? (
+                         <div className="d-flex flex-column align-items-center gap-2">
+                           <img
+                             src={resolvedLogo.startsWith("http") ? resolvedLogo : `${apiClient.defaults.baseURL || "http://localhost:5000"}${resolvedLogo}`}
+                             alt={resolvedCompanyName || "Company Logo"}
+                             className="img-fluid border rounded p-1 bg-white shadow-xs"
+                             style={{ maxHeight: "60px", maxWidth: "180px", objectFit: "contain" }}
+                           />
+                           {resolvedCompanyName && <h5 className="fw-bold text-dark mb-0 fs-14">{resolvedCompanyName}</h5>}
+                         </div>
+                       ) : (
+                         <ImageWithBasePath
+                           src="assets/img/logo.svg"
+                           className="img-fluid"
+                           alt="Smarthr logo"
+                         />
+                       )}
+                     </div>
                     <div className="">
                       <div className="text-center mb-3">
                         <h2 className="mb-2">Sign In</h2>
@@ -124,6 +175,7 @@ const Login = () => {
                             autoComplete="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
+                            onBlur={handleEmailBlur}
                           />
                           <span className="input-group-text border-start-0">
                             <i className="ti ti-mail" />

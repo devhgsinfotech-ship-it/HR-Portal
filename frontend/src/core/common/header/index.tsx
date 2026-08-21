@@ -11,6 +11,7 @@ import {
 import { all_routes } from "../../../router/all_routes";
 import { HorizontalSidebarData } from "../../data/json/horizontalSidebar";
 import React from "react";
+import apiClient from "../../../core/utils/apiClient";
 import type {
   AppRootState as RootState,
   AppDispatch,
@@ -70,9 +71,28 @@ const Header = React.memo(() => {
   const dataLayout = useSelector(
     (state: RootState) => state.themeSetting.dataLayout,
   );
-  const user = useSelector((state: RootState) => state.auth.user);
+  const user = useSelector((state: RootState) => state.auth.user) as any;
   const Location = useLocation();
   const apiUrl = APP_CONFIG.getBackendUrl();
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      const currentSub = window.location.hostname.split('.')[0];
+      const sub = currentSub && currentSub !== 'localhost' && currentSub !== 'www' ? currentSub : user?.subdomain;
+      
+      if (!sub) return;
+      try {
+        const res = await apiClient.get(`/auth/company-logo?subdomain=${sub}`);
+        if (res.data?.success && res.data.logoUrl) {
+          setCompanyLogo(res.data.logoUrl);
+        }
+      } catch (err) {
+        console.error("Failed to load company logo in header:", err);
+      }
+    };
+    fetchLogo();
+  }, [user]);
 
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -442,11 +462,27 @@ const Header = React.memo(() => {
       <div className="header">
         <div className="main-header">
           <div className="header-left">
-            <Link to={routes.adminDashboard} className="logo">
-              <ImageWithBasePath src="assets/img/logo.svg" alt="Logo" />
+            <Link to={routes.adminDashboard} className="logo d-flex align-items-center gap-2">
+              {companyLogo || user?.companyLogoUrl ? (
+                <img
+                  src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiUrl || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
+                  alt="Company Logo"
+                  style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
+                />
+              ) : (
+                <ImageWithBasePath src="assets/img/logo.svg" alt="Logo" />
+              )}
             </Link>
-            <Link to={routes.adminDashboard} className="dark-logo">
-              <ImageWithBasePath src="assets/img/logo-white.svg" alt="Logo" />
+            <Link to={routes.adminDashboard} className="dark-logo d-flex align-items-center gap-2">
+              {companyLogo || user?.companyLogoUrl ? (
+                <img
+                  src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiUrl || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
+                  alt="Company Logo"
+                  style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
+                />
+              ) : (
+                <ImageWithBasePath src="assets/img/logo-white.svg" alt="Logo" />
+              )}
             </Link>
           </div>
 

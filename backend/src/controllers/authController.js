@@ -85,6 +85,7 @@ async function login(req, res) {
                 role: user.role,
                 companyId: user.companyId,
                 subdomain: user.company?.subdomain || null,
+                companyLogoUrl: user.company?.logoUrl || null,
                 profilePhotoUrl: user.employee?.profilePhotoUrl || null,
                 onboardingStatus: user.employee?.onboardingStatus || 'COMPLETED',
                 companyRoleName: user.employee?.companyRole?.name || null,
@@ -131,7 +132,7 @@ function buildBaseSubdomain(companyName) {
 
 async function register(req, res) {
     try {
-        const { companyName, email, contactPerson, phone, companySize, industry, address, password } = req.body;
+        const { companyName, email, contactPerson, phone, companySize, industry, address, password, logoUrl } = req.body;
 
         if (!companyName || !email || !password || !contactPerson) {
             return res.status(400).json({ message: 'Company name, email, contact person and password are required' });
@@ -190,6 +191,7 @@ async function register(req, res) {
                     industry: industry || null,
                     companySize: companySize || null,
                     address: address || null,
+                    logoUrl: logoUrl || null,
                 },
             });
 
@@ -510,6 +512,42 @@ async function resetPassword(req, res) {
     }
 }
 
+async function getCompanyLogo(req, res) {
+    try {
+        const { subdomain, email, emailDomain } = req.query;
+        let company = null;
+
+        if (subdomain) {
+            company = await prisma.company.findUnique({
+                where: { subdomain },
+                select: { logoUrl: true, name: true }
+            });
+        } else if (email) {
+            const domain = email.split('@')[1]?.toLowerCase();
+            if (domain) {
+                company = await prisma.company.findFirst({
+                    where: { emailDomain: domain },
+                    select: { logoUrl: true, name: true }
+                });
+            }
+        } else if (emailDomain) {
+            company = await prisma.company.findFirst({
+                where: { emailDomain: emailDomain.toLowerCase() },
+                select: { logoUrl: true, name: true }
+            });
+        }
+
+        if (!company) {
+            return res.json({ success: false, logoUrl: null });
+        }
+
+        res.json({ success: true, logoUrl: company.logoUrl, companyName: company.name });
+    } catch (err) {
+        console.error('Error fetching company logo:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = { 
     login, 
     register, 
@@ -517,5 +555,6 @@ module.exports = {
     acceptInvite, 
     resendVerification,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    getCompanyLogo
 };
