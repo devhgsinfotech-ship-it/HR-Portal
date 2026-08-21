@@ -9,6 +9,7 @@ import { SidebarDataTest } from "../../data/json/sidebarMenu";
 import { all_routes } from "../../../router/all_routes";
 import { useAppSelector } from "../../data/redux/store";
 import type { AppDispatch } from "../../data/redux/store";
+import apiClient from "../../../core/utils/apiClient";
 
 // Define flexible types for sidebar data
 interface SidebarMenuItem {
@@ -182,8 +183,27 @@ const Sidebar = React.memo(() => {
   const dispatch = useDispatch<AppDispatch>();
   const currentPath = location.pathname;
 
-  const user = useAppSelector((state) => state.auth.user);
+  const user = useAppSelector((state) => state.auth.user) as any;
   const currentRole = (user?.role as Role) || "EMPLOYEE";
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      const currentSub = window.location.hostname.split('.')[0];
+      const sub = currentSub && currentSub !== 'localhost' && currentSub !== 'www' ? currentSub : user?.subdomain;
+      
+      if (!sub) return;
+      try {
+        const res = await apiClient.get(`/auth/company-logo?subdomain=${sub}`);
+        if (res.data?.success && res.data.logoUrl) {
+          setCompanyLogo(res.data.logoUrl);
+        }
+      } catch (err) {
+        console.error("Failed to load company logo in sidebar:", err);
+      }
+    };
+    fetchLogo();
+  }, [user]);
 
   // Filter sidebar data deeply based on role
   const filteredSidebarData = useMemo(() => {
@@ -363,13 +383,37 @@ const Sidebar = React.memo(() => {
       {/* Logo */}
       <div className="sidebar-logo">
         <Link to={all_routes.adminDashboard} className="logo logo-normal">
-          <ImageWithBasePath src="assets/img/logo.svg" alt="Logo" />
+          {companyLogo || user?.companyLogoUrl ? (
+            <img
+              src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiClient.defaults.baseURL || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
+              alt="Logo"
+              style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
+            />
+          ) : (
+            <ImageWithBasePath src="assets/img/logo.svg" alt="Logo" />
+          )}
         </Link>
         <Link to={all_routes.adminDashboard} className="logo-small">
-          <ImageWithBasePath src="assets/img/logo-small.svg" alt="Logo" />
+          {companyLogo || user?.companyLogoUrl ? (
+            <img
+              src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiClient.defaults.baseURL || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
+              alt="Logo"
+              style={{ maxHeight: "25px", maxWidth: "25px", objectFit: "contain", borderRadius: "4px" }}
+            />
+          ) : (
+            <ImageWithBasePath src="assets/img/logo-small.svg" alt="Logo" />
+          )}
         </Link>
         <Link to={all_routes.adminDashboard} className="dark-logo">
-          <ImageWithBasePath src="assets/img/logo-white.svg" alt="Logo" />
+          {companyLogo || user?.companyLogoUrl ? (
+            <img
+              src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiClient.defaults.baseURL || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
+              alt="Logo"
+              style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
+            />
+          ) : (
+            <ImageWithBasePath src="assets/img/logo-white.svg" alt="Logo" />
+          )}
         </Link>
       </div>
 

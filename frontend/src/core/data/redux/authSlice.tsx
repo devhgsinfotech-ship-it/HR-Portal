@@ -20,6 +20,7 @@ export interface AuthUser {
     role: "SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
     companyId: number | null;
     subdomain: string | null;
+    companyLogoUrl?: string | null;
     profilePhotoUrl?: string | null;
     onboardingStatus?: string;
     companyRoleName?: string | null;
