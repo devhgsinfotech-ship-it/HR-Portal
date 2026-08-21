@@ -31,7 +31,10 @@ const AdminDashboard = () => {
     absentCount: 0,
     permissionCount: 0,
     totalAttendanceToday: 0,
-    latestEmployees: []
+    latestEmployees: [],
+    totalProjects: 0,
+    totalClients: 0,
+    totalTasks: 0
   });
 
   useEffect(() => {
@@ -514,9 +517,9 @@ const AdminDashboard = () => {
                         <i className="ti ti-browser fs-16" />
                       </span>
                       <h6 className="fs-13 fw-medium text-default mb-1">
-                        Total No of Project's
+                        Total No of Projects
                       </h6>
-                      <h3 className="mb-3">90/125</h3>
+                      <h3 className="mb-3">{loading ? '—' : data.totalProjects || 0}</h3>
                       <Link to={all_routes.project} className="link-default">
                         View All
                       </Link>
@@ -532,7 +535,7 @@ const AdminDashboard = () => {
                       <h6 className="fs-13 fw-medium text-default mb-1">
                         Total No of Clients
                       </h6>
-                      <h3 className="mb-3">69/86</h3>
+                      <h3 className="mb-3">{loading ? '—' : data.totalClients || 0}</h3>
                       <Link to={all_routes.clientlist} className="link-default">
                         View All
                       </Link>
@@ -548,7 +551,7 @@ const AdminDashboard = () => {
                       <h6 className="fs-13 fw-medium text-default mb-1">
                         Total No of Tasks
                       </h6>
-                      <h3 className="mb-3">96/100</h3>
+                      <h3 className="mb-3">{loading ? '—' : data.totalTasks || 0}</h3>
                       <Link to={all_routes.tasks} className="link-default">
                         View All
                       </Link>
