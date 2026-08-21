@@ -92,6 +92,33 @@ enum NotificationType {
   DOCUMENT_VERIFIED
 }
 
+enum ProjectStatus {
+  ACTIVE
+  INACTIVE
+  COMPLETED
+  ON_HOLD
+}
+
+enum ProjectPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ProjectHealth {
+  GOOD
+  AT_RISK
+  CRITICAL
+}
+
+enum TaskStatus {
+  TODO
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+}
+
 // ============================================================
 // COMPANY — each registered company's workspace
 // ============================================================
@@ -101,8 +128,8 @@ model Company {
   name            String
   email           String    @unique
   phone           String?
-  subdomain       String    @unique  // ← ADD THIS LINE e.g. "techcorp"
-  emailDomain     String?   // The corporate email domain (e.g. hgsinfotech.com)
+  subdomain       String    @unique
+  emailDomain     String?
   industry        String?
   companySize     String?
   address         String?
@@ -112,18 +139,24 @@ model Company {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  users           User[]
-  departments     Department[]
-  designations    Designation[]
-  leaveTypes      LeaveType[]
-  holidays        Holiday[]
-  assets          Asset[]
+  users            User[]
+  departments      Department[]
+  designations     Designation[]
+  leaveTypes       LeaveType[]
+  holidays         Holiday[]
+  assets           Asset[]
   attendancePolicy AttendancePolicy?
-  assetCategories AssetCategory[]
-  settings        CompanySetting?
-  announcements   Announcement[]
-  shiftPolicies   ShiftPolicy[]
-  leavePolicies   LeavePolicy[]
+  assetCategories  AssetCategory[]
+  settings         CompanySetting?
+  announcements    Announcement[]
+  shiftPolicies    ShiftPolicy[]
+  leavePolicies    LeavePolicy[]
+  clients          Client[]
+  projects         Project[]
+  tasks            Task[]
+  timeLogs         TimeLog[]
+  companyRoles     CompanyRole[]
+
   @@map("companies")
 }
 
@@ -148,8 +181,9 @@ model User {
   emailVerifyTokens     EmailVerifyToken[]
   notificationsReceived Notification[]     @relation("NotificationReceiver")
   notificationsSent     Notification[]     @relation("NotificationSender")
-  regularizations       AttendanceRegularization[] // Requests reviewed by this user
+  regularizations       AttendanceRegularization[]
   passwordResetTokens   PasswordResetToken[]
+  tasksCreated          Task[]             @relation("TaskCreator")
 
   @@map("users")
 }
@@ -159,10 +193,10 @@ model User {
 // ============================================================
 
 model Employee {
-  id                  Int             @id @default(autoincrement())
-  userId              Int             @unique
-  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  employeeCode        String          @unique
+  id                  Int              @id @default(autoincrement())
+  userId              Int              @unique
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode        String           @unique
   firstName           String
   lastName            String
   gender              Gender?
@@ -175,23 +209,23 @@ model Employee {
   postalCode          String?
   profilePhotoUrl     String?
   dateOfJoining       DateTime?
-  employmentType      EmploymentType  @default(FULL_TIME)
+  employmentType      EmploymentType   @default(FULL_TIME)
   departmentId        Int?
-  department          Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  department          Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   designationId       Int?
-  designation         Designation?    @relation(fields: [designationId], references: [id], onDelete: SetNull)
+  designation         Designation?     @relation(fields: [designationId], references: [id], onDelete: SetNull)
   reportingManagerId  Int?
-  reportingManager    Employee?       @relation("ManagerSubordinates", fields: [reportingManagerId], references: [id], onDelete: SetNull)
-  subordinates        Employee[]      @relation("ManagerSubordinates")
+  reportingManager    Employee?        @relation("ManagerSubordinates", fields: [reportingManagerId], references: [id], onDelete: SetNull)
+  subordinates        Employee[]       @relation("ManagerSubordinates")
   emergencyContactName  String?
   emergencyContactPhone String?
   onboardingStatus    OnboardingStatus @default(INVITED)
   rejectionReason     String?
   shiftPolicyId       Int?
-  shiftPolicy         ShiftPolicy?    @relation(fields: [shiftPolicyId], references: [id], onDelete: SetNull)
+  shiftPolicy         ShiftPolicy?     @relation(fields: [shiftPolicyId], references: [id], onDelete: SetNull)
   leavePolicies       LeavePolicy[]
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
   aadhaarPath         String?
   panPath             String?
@@ -225,10 +259,20 @@ model Employee {
   documents           Document[]
   assetAssignments    AssetAssignment[]
   inviteTokens        InviteToken[]
-  performanceGoals    PerformanceGoal[]    @relation("EmployeeGoals")
-  goalsCreated        PerformanceGoal[]    @relation("ManagerGoals")
-  performanceReviews  PerformanceReview[]  @relation("EmployeeReviews")
-  reviewsConducted    PerformanceReview[]  @relation("ManagerReviews")
+  performanceGoals    PerformanceGoal[]   @relation("EmployeeGoals")
+  goalsCreated        PerformanceGoal[]   @relation("ManagerGoals")
+  performanceReviews  PerformanceReview[] @relation("EmployeeReviews")
+  reviewsConducted    PerformanceReview[] @relation("ManagerReviews")
+
+  // PSA Relations
+  companyRoleId       Int?
+  companyRole         CompanyRole?        @relation(fields: [companyRoleId], references: [id], onDelete: SetNull)
+  projectMemberships  ProjectMember[]
+  tasksAssigned       Task[]              @relation("TaskAssignee")
+  timeLogs            TimeLog[]
+  managedProjects     Project[]           @relation("ProjectManager")
+  createdNotes        ProjectNote[]       @relation("NoteCreator")
+  uploadedFiles       ProjectFile[]       @relation("FileUploader")
 
   @@map("employees")
 }
@@ -276,13 +320,13 @@ model Designation {
 // ============================================================
 
 model LeaveType {
-  id           Int       @id @default(autoincrement())
-  companyId    Int
-  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name         String
-  totalDaysPerYear Decimal @default(0) @db.Decimal(5, 1)
-  isPaid       Boolean   @default(true)
-  createdAt    DateTime  @default(now())
+  id               Int       @id @default(autoincrement())
+  companyId        Int
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name             String
+  totalDaysPerYear Decimal   @default(0) @db.Decimal(5, 1)
+  isPaid           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
 
   leaveRequests LeaveRequest[]
   leaveBalances LeaveBalance[]
@@ -321,14 +365,14 @@ model LeaveRequest {
 // ============================================================
 
 model LeaveBalance {
-  id           Int       @id @default(autoincrement())
-  employeeId   Int
-  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveTypeId  Int
-  leaveType    LeaveType @relation(fields: [leaveTypeId], references: [id])
-  year         Int
-  totalDays    Decimal   @default(0) @db.Decimal(5, 1)
-  usedDays     Decimal   @default(0) @db.Decimal(5, 1)
+  id          Int       @id @default(autoincrement())
+  employeeId  Int
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveTypeId Int
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id])
+  year        Int
+  totalDays   Decimal   @default(0) @db.Decimal(5, 1)
+  usedDays    Decimal   @default(0) @db.Decimal(5, 1)
 
   @@unique([employeeId, leaveTypeId, year])
   @@map("leave_balances")
@@ -347,7 +391,7 @@ model AttendancePolicy {
   allowWebPunch          Boolean  @default(true)
   requireGeofence        Boolean  @default(false)
   lateGracePeriod        Int      @default(15)
-  autoCheckoutTime       String   @default("18:00") // HH:MM in IST, used for on-login detection
+  autoCheckoutTime       String   @default("18:00")
   updatedAt              DateTime @updatedAt
 
   @@map("attendance_policies")
@@ -365,10 +409,10 @@ model AttendanceRecord {
   workingHours   Decimal?         @db.Decimal(5, 2)
   status         AttendanceStatus @default(PRESENT)
   punchLocation  String?
-  deviceType     String?          @default("WEB") // WEB, MOBILE, BIOMETRIC
+  deviceType     String?          @default("WEB")
   notes          String?
   createdAt      DateTime         @default(now())
-  
+
   regularizations AttendanceRegularization[]
 
   @@unique([employeeId, date])
@@ -383,7 +427,7 @@ model AttendanceRegularization {
   requestedBreakOut  DateTime?
   requestedCheckOut  DateTime?
   reason             String
-  status             LeaveStatus      @default(PENDING) // Reusing PENDING, APPROVED, REJECTED
+  status             LeaveStatus      @default(PENDING)
   reviewedById       Int?
   reviewedBy         User?            @relation(fields: [reviewedById], references: [id])
   remarks            String?
@@ -398,21 +442,21 @@ model AttendanceRegularization {
 // ============================================================
 
 model SalaryStructure {
-  id                Int      @id @default(autoincrement())
-  employeeId        Int      @unique
-  employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  basic             Decimal  @default(0) @db.Decimal(12, 2)
-  hra               Decimal  @default(0) @db.Decimal(12, 2)
-  conveyance        Decimal  @default(0) @db.Decimal(12, 2)
-  medicalAllowance  Decimal  @default(0) @db.Decimal(12, 2)
-  specialAllowance  Decimal  @default(0) @db.Decimal(12, 2)
-  pfDeduction       Decimal  @default(0) @db.Decimal(12, 2)
-  professionalTax   Decimal  @default(0) @db.Decimal(12, 2)
-  otherDeductions   Decimal  @default(0) @db.Decimal(12, 2)
-  grossSalary       Decimal  @default(0) @db.Decimal(12, 2)
-  netSalary         Decimal  @default(0) @db.Decimal(12, 2)
-  effectiveFrom     DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               Int      @id @default(autoincrement())
+  employeeId       Int      @unique
+  employee         Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  basic            Decimal  @default(0) @db.Decimal(12, 2)
+  hra              Decimal  @default(0) @db.Decimal(12, 2)
+  conveyance       Decimal  @default(0) @db.Decimal(12, 2)
+  medicalAllowance Decimal  @default(0) @db.Decimal(12, 2)
+  specialAllowance Decimal  @default(0) @db.Decimal(12, 2)
+  pfDeduction      Decimal  @default(0) @db.Decimal(12, 2)
+  professionalTax  Decimal  @default(0) @db.Decimal(12, 2)
+  otherDeductions  Decimal  @default(0) @db.Decimal(12, 2)
+  grossSalary      Decimal  @default(0) @db.Decimal(12, 2)
+  netSalary        Decimal  @default(0) @db.Decimal(12, 2)
+  effectiveFrom    DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@map("salary_structures")
 }
@@ -422,17 +466,17 @@ model SalaryStructure {
 // ============================================================
 
 model Payslip {
-  id            Int      @id @default(autoincrement())
-  employeeId    Int
-  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  month         Int
-  year          Int
-  basic         Decimal  @default(0) @db.Decimal(12, 2)
-  totalAllowances Decimal @default(0) @db.Decimal(12, 2)
-  totalDeductions Decimal @default(0) @db.Decimal(12, 2)
-  netPay        Decimal  @db.Decimal(12, 2)
-  filePath      String?
-  generatedAt   DateTime @default(now())
+  id              Int      @id @default(autoincrement())
+  employeeId      Int
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  month           Int
+  year            Int
+  basic           Decimal  @default(0) @db.Decimal(12, 2)
+  totalAllowances Decimal  @default(0) @db.Decimal(12, 2)
+  totalDeductions Decimal  @default(0) @db.Decimal(12, 2)
+  netPay          Decimal  @db.Decimal(12, 2)
+  filePath        String?
+  generatedAt     DateTime @default(now())
 
   @@unique([employeeId, month, year])
   @@map("payslips")
@@ -475,17 +519,17 @@ model AssetCategory {
 // ============================================================
 
 model Asset {
-  id          Int         @id @default(autoincrement())
-  companyId   Int
-  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  categoryId  Int?
-  category    AssetCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  name        String
-  assetCode   String      @unique
-  status      AssetStatus @default(AVAILABLE)
+  id           Int            @id @default(autoincrement())
+  companyId    Int
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  categoryId   Int?
+  category     AssetCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name         String
+  assetCode    String         @unique
+  status       AssetStatus    @default(AVAILABLE)
   purchaseDate DateTime?
-  description String?
-  createdAt   DateTime    @default(now())
+  description  String?
+  createdAt    DateTime       @default(now())
 
   assignments AssetAssignment[]
 
@@ -497,14 +541,14 @@ model Asset {
 // ============================================================
 
 model AssetAssignment {
-  id           Int       @id @default(autoincrement())
-  assetId      Int
-  asset        Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  employeeId   Int
-  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  assignedAt   DateTime  @default(now())
-  returnedAt   DateTime?
-  notes        String?
+  id         Int       @id @default(autoincrement())
+  assetId    Int
+  asset      Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  employeeId Int
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  assignedAt DateTime  @default(now())
+  returnedAt DateTime?
+  notes      String?
 
   @@map("asset_assignments")
 }
@@ -514,15 +558,15 @@ model AssetAssignment {
 // ============================================================
 
 model Document {
-  id          Int            @id @default(autoincrement())
-  employeeId  Int
-  employee    Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  name        String
-  fileUrl     String
-  fileType    String?
-  status      DocumentStatus @default(PENDING)
-  verifiedAt  DateTime?
-  createdAt   DateTime       @default(now())
+  id         Int            @id @default(autoincrement())
+  employeeId Int
+  employee   Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  name       String
+  fileUrl    String
+  fileType   String?
+  status     DocumentStatus @default(PENDING)
+  verifiedAt DateTime?
+  createdAt  DateTime       @default(now())
 
   @@map("documents")
 }
@@ -532,16 +576,16 @@ model Document {
 // ============================================================
 
 model PerformanceGoal {
-  id           Int      @id @default(autoincrement())
-  employeeId   Int
-  employee     Employee @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
-  createdById  Int
-  createdBy    Employee @relation("ManagerGoals", fields: [createdById], references: [id], onDelete: Cascade)
-  title        String
-  description  String?
-  targetDate   DateTime?
-  isCompleted  Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  employeeId  Int
+  employee    Employee @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
+  createdById Int
+  createdBy   Employee @relation("ManagerGoals", fields: [createdById], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  targetDate  DateTime?
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
   @@map("performance_goals")
 }
@@ -551,14 +595,14 @@ model PerformanceGoal {
 // ============================================================
 
 model PerformanceReview {
-  id           Int      @id @default(autoincrement())
-  employeeId   Int
-  employee     Employee @relation("EmployeeReviews", fields: [employeeId], references: [id], onDelete: Cascade)
-  reviewerId   Int
-  reviewer     Employee @relation("ManagerReviews", fields: [reviewerId], references: [id], onDelete: Cascade)
-  rating       Int      // 1 to 5
-  feedback     String?
-  reviewDate   DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  employee   Employee @relation("EmployeeReviews", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewerId Int
+  reviewer   Employee @relation("ManagerReviews", fields: [reviewerId], references: [id], onDelete: Cascade)
+  rating     Int
+  feedback   String?
+  reviewDate DateTime @default(now())
 
   @@map("performance_reviews")
 }
@@ -568,16 +612,16 @@ model PerformanceReview {
 // ============================================================
 
 model Notification {
-  id          Int              @id @default(autoincrement())
-  receiverId  Int
-  receiver    User             @relation("NotificationReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
-  senderId    Int?
-  sender      User?            @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
-  type        NotificationType
-  title       String
-  message     String
-  isRead      Boolean          @default(false)
-  createdAt   DateTime         @default(now())
+  id         Int              @id @default(autoincrement())
+  receiverId Int
+  receiver   User             @relation("NotificationReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  senderId   Int?
+  sender     User?            @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
+  type       NotificationType
+  title      String
+  message    String
+  isRead     Boolean          @default(false)
+  createdAt  DateTime         @default(now())
 
   @@map("notifications")
 }
@@ -587,12 +631,12 @@ model Notification {
 // ============================================================
 
 model Announcement {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  title       String
-  content     String   @db.Text
-  createdAt   DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title     String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
 
   @@map("announcements")
 }
@@ -649,7 +693,7 @@ model EmailVerifyToken {
 }
 
 // ============================================================
-// ONBOARDING & POLICIES
+// BANK DETAILS & SHIFT POLICIES
 // ============================================================
 
 model BankDetails {
@@ -672,9 +716,9 @@ model ShiftPolicy {
   companyId   Int
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name        String
-  startTime   String   // e.g. "09:00:00"
-  endTime     String   // e.g. "18:00:00"
-  gracePeriod Int      @default(15) // Minutes
+  startTime   String
+  endTime     String
+  gracePeriod Int      @default(15)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -684,25 +728,25 @@ model ShiftPolicy {
 }
 
 model LeavePolicy {
-  id             Int          @id @default(autoincrement())
-  companyId      Int
-  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  leaveTypeId    Int
-  leaveType      LeaveType    @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
-  name           String
-  description    String?
-  days           Decimal      @db.Decimal(5, 1)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id          Int       @id @default(autoincrement())
+  companyId   Int
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leaveTypeId Int
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  days        Decimal   @db.Decimal(5, 1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  employees      Employee[]
+  employees   Employee[]
 
   @@unique([companyId, leaveTypeId, name])
   @@map("leave_policies")
 }
 
 // ============================================================
-// PASSWORD RESET TOKENS — secure forgot password flow
+// PASSWORD RESET TOKENS
 // ============================================================
 
 model PasswordResetToken {
@@ -715,4 +759,251 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
 
   @@map("password_reset_tokens")
+}
+
+// ============================================================
+// KEKA PSA — CLIENTS
+// ============================================================
+
+model Client {
+  id            Int       @id @default(autoincrement())
+  companyId     Int
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyName   String
+  contactPerson String?
+  email         String
+  phone         String?
+  address       String?
+  website       String?
+  isActive      Boolean   @default(true)
+  projects      Project[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("clients")
+}
+
+// ============================================================
+// KEKA PSA — PROJECTS
+// ============================================================
+
+model Project {
+  id               Int                @id @default(autoincrement())
+  companyId        Int
+  company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  projectCode      String             @unique
+  name             String
+  description      String?            @db.Text
+  clientId         Int?
+  client           Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  projectManagerId Int?
+  projectManager   Employee?          @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
+  startDate        DateTime
+  endDate          DateTime
+  budget           Float?
+  actualCost       Float              @default(0.0)
+  priority         ProjectPriority    @default(MEDIUM)
+  status           ProjectStatus      @default(ACTIVE)
+  healthStatus     ProjectHealth      @default(GOOD)
+  attachmentUrl    String?
+  logoUrl          String?
+  members          ProjectMember[]
+  milestones       ProjectMilestone[]
+  tasks            Task[]
+  timeLogs         TimeLog[]
+  notes            ProjectNote[]
+  files            ProjectFile[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@map("projects")
+}
+
+// ============================================================
+// KEKA PSA — PROJECT MEMBERS (Resource Allocation)
+// ============================================================
+
+model ProjectMember {
+  id                   Int      @id @default(autoincrement())
+  projectId            Int
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  employeeId           Int
+  employee             Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  role                 String?
+  allocationPercentage Float    @default(100.0)
+  createdAt            DateTime @default(now())
+
+  @@unique([projectId, employeeId])
+  @@map("project_members")
+}
+
+// ============================================================
+// KEKA PSA — PROJECT MILESTONES (Phases)
+// ============================================================
+
+model ProjectMilestone {
+  id                   Int      @id @default(autoincrement())
+  projectId            Int
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name                 String
+  description          String?  @db.Text
+  startDate            DateTime @default(now())
+  dueDate              DateTime
+  completionPercentage Float    @default(0.0)
+  status               String   @default("PENDING")
+  tasks                Task[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("project_milestones")
+}
+
+// ============================================================
+// KEKA PSA — PROJECT NOTES
+// ============================================================
+
+model ProjectNote {
+  id          Int       @id @default(autoincrement())
+  projectId   Int
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  content     String    @db.Text
+  createdById Int?
+  createdBy   Employee? @relation("NoteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("project_notes")
+}
+
+// ============================================================
+// KEKA PSA — PROJECT FILES & IMAGES
+// ============================================================
+
+model ProjectFile {
+  id          Int       @id @default(autoincrement())
+  projectId   Int
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  url         String
+  fileType    String    @default("file") // "image" | "file"
+  mimeType    String?
+  sizeBytes   Int?
+  uploadedById Int?
+  uploadedBy  Employee? @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  @@map("project_files")
+}
+
+// ============================================================
+// KEKA PSA — TASKS
+// ============================================================
+
+model Task {
+  id             Int               @id @default(autoincrement())
+  companyId      Int
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taskCode       String            @unique
+  title          String
+  description    String?           @db.Text
+  projectId      Int
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestoneId    Int?
+  milestone      ProjectMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  assignedToId   Int?
+  assignedTo     Employee?         @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdById    Int?
+  createdBy      User?             @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  priority       ProjectPriority   @default(MEDIUM)
+  status         TaskStatus        @default(TODO)
+  startDate      DateTime?
+  dueDate        DateTime?
+  estimatedHours Float             @default(0.0)
+  actualHours    Float             @default(0.0)
+  dependsOnTaskId Int?
+  sortOrder      Int               @default(0)
+  subTasks       SubTask[]
+  timeLogs       TimeLog[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@map("tasks")
+}
+
+// ============================================================
+// KEKA PSA — SUB-TASKS (Checklist Items)
+// ============================================================
+
+model SubTask {
+  id          Int      @id @default(autoincrement())
+  taskId      Int
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title       String
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("sub_tasks")
+}
+
+// ============================================================
+// KEKA PSA — TIME LOGS (Employee Timesheets)
+// ============================================================
+
+model TimeLog {
+  id             Int      @id @default(autoincrement())
+  companyId      Int
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employeeId     Int
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  projectId      Int
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId         Int?
+  task           Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  logDate        DateTime
+  hoursSpent     Float
+  billableHours  Float    @default(0.0)
+  description    String?
+  approvalStatus String   @default("PENDING")
+  createdAt      DateTime @default(now())
+
+  @@map("time_logs")
+}
+
+// ============================================================
+// ROLE & PERMISSION MANAGEMENT (Company-defined roles)
+// ============================================================
+
+model CompanyRole {
+  id          Int              @id @default(autoincrement())
+  companyId   Int
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isActive    Boolean          @default(true)
+  employees   Employee[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([companyId, name])
+  @@map("company_roles")
+}
+
+model RolePermission {
+  id            Int         @id @default(autoincrement())
+  companyRoleId Int
+  companyRole   CompanyRole @relation(fields: [companyRoleId], references: [id], onDelete: Cascade)
+  module        String
+  canRead       Boolean     @default(false)
+  canWrite      Boolean     @default(false)
+  canCreate     Boolean     @default(false)
+  canDelete     Boolean     @default(false)
+  canImport     Boolean     @default(false)
+  canExport     Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([companyRoleId, module])
+  @@map("role_permissions")
 }

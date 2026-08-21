@@ -13,15 +13,18 @@ async function login(req, res) {
             return res.status(400).json({ message: 'Email and password are required' });
         }
 
-        // 1. Find user
+        // 1. Find user with companyRole permissions
         const user = await prisma.user.findUnique({
             where: { email },
             include: { 
                 company: true,
                 employee: {
-                    select: { 
-                        profilePhotoUrl: true,
-                        onboardingStatus: true 
+                    include: { 
+                        companyRole: {
+                            include: {
+                                permissions: true
+                            }
+                        }
                     }
                 }
             },
@@ -69,6 +72,9 @@ async function login(req, res) {
             { expiresIn: '1d' }
         );
 
+        // Map permission matrix for easy frontend consumption
+        const permissions = user.employee?.companyRole?.permissions || [];
+
         res.json({
             message: 'Login successful',
             token,
@@ -81,6 +87,8 @@ async function login(req, res) {
                 subdomain: user.company?.subdomain || null,
                 profilePhotoUrl: user.employee?.profilePhotoUrl || null,
                 onboardingStatus: user.employee?.onboardingStatus || 'COMPLETED',
+                companyRoleName: user.employee?.companyRole?.name || null,
+                permissions: permissions
             },
         });
 
@@ -89,7 +97,6 @@ async function login(req, res) {
         res.status(500).json({ message: 'Internal server error' });
     }
 }
-
 
 /**
  * Generates a clean subdomain from a company name.
@@ -289,6 +296,7 @@ async function verifyEmail(req, res) {
         res.status(500).json({ message: 'Internal server error' });
     }
 }
+
 async function acceptInvite(req, res) {
     try {
         const { token, password } = req.body;

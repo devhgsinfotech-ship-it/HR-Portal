@@ -1,6 +1,18 @@
 // frontend/src/core/data/redux/authSlice.tsx
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
+export interface RolePermission {
+    id: number;
+    companyRoleId: number;
+    module: string;
+    canRead: boolean;
+    canWrite: boolean;
+    canCreate: boolean;
+    canDelete: boolean;
+    canImport: boolean;
+    canExport: boolean;
+}
+
 export interface AuthUser {
     id: number;
     name: string;
@@ -10,6 +22,8 @@ export interface AuthUser {
     subdomain: string | null;
     profilePhotoUrl?: string | null;
     onboardingStatus?: string;
+    companyRoleName?: string | null;
+    permissions?: RolePermission[];
 }
 
 export interface AuthState {

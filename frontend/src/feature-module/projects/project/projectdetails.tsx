@@ -1,2947 +1,1039 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
-import { Link } from "react-router-dom";
-import ImageWithBasePath from "../../../core/common/imageWithBasePath";
-import CommonSelect from "../../../core/common/commonSelect";
-import CommonTextEditor from "../../../core/common/textEditor";
-import { DatePicker } from "antd";
-import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
-import TagInput from "../../../core/common/Taginput";
+import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
+import { useAppSelector } from "../../../core/data/redux/store";
 
+// Converts a relative /uploads/... path to a full backend URL
+const getFileUrl = (url: string): string => {
+  if (!url) return "";
+  if (url.startsWith("http")) return url;
+  return `${APP_CONFIG.getBackendUrl()}${url}`;
+};
 
-interface SelectOption {
-  value: string;
-  label: string;
+interface Client {
+  id: number;
+  companyName: string;
+}
+
+interface Employee {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  profilePhotoUrl?: string | null;
+}
+
+interface TaskItem {
+  id: number;
+  title: string;
+  status: string;
+  dueDate: string;
+  priority: string;
+  assignedTo: Employee | null;
+}
+
+interface Milestone {
+  id: number;
+  name: string;
+  description: string | null;
+  startDate: string;
+  endDate: string;
+  status: string;
+  progress: number;
+}
+
+interface ProjectMember {
+  id: number;
+  role: string;
+  employee: Employee;
+}
+
+interface ProjectNote {
+  id: number;
+  title: string;
+  content: string;
+  createdAt: string;
+  createdBy: Employee | null;
+}
+
+interface ProjectFile {
+  id: number;
+  name: string;
+  url: string;
+  fileType: string; // 'image' | 'file'
+  mimeType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+}
+
+interface ProjectDetail {
+  id: number;
+  name: string;
+  description: string | null;
+  startDate: string;
+  endDate: string;
+  budget: number | null;
+  priority: string;
+  health: string;
+  status: string;
+  client: Client | null;
+  manager: Employee | null;
+  members: ProjectMember[];
+  milestones: Milestone[];
+  tasks: TaskItem[];
+  createdAt: string;
 }
 
 const ProjectDetails = () => {
-  const getModalContainer = () => {
-    const modalElement = document.getElementById("modal-datepicker");
-    return modalElement ? modalElement : document.body; // Fallback to document.body if modalElement is null
-  };
-  const clientChoose: SelectOption[] = [
-    { value: "Select", label: "Select" },
-    { value: "Anthony Lewis", label: "Anthony Lewis" },
-    { value: "Brian Villalobos", label: "Brian Villalobos" },
-  ];
-  const statusChoose: SelectOption[] = [
-    { value: "Select", label: "Select" },
-    { value: "Active", label: "Active" },
-    { value: "Inactive", label: "Inactive" },
-  ];
-  const priorityChoose: SelectOption[] = [
-    { value: "Select", label: "Select" },
-    { value: "High", label: "High" },
-    { value: "Medium", label: "Medium" },
-    { value: "Low", label: "Low" },
-  ];
-  const tagChoose: SelectOption[] = [
-    { value: "Select", label: "Select" },
-    { value: "Internal", label: "Internal" },
-    { value: "Projects", label: "Projects" },
-    { value: "Meetings", label: "Meetings" },
-    { value: "Reminder", label: "Reminder" },
-  ];
-  const assigneeChoose: SelectOption[] = [
-    { value: "Select", label: "Select" },
-    { value: "Sophie", label: "Sophie" },
-    { value: "Cameron", label: "Cameron" },
-    { value: "Doris", label: "Doris" },
-    { value: "Rufana", label: "Rufana" },
-  ];
-  const status1choose: SelectOption[] = [
-    { value: "Select", label: "Select" },
-    { value: "Completed", label: "Completed" },
-    { value: "Pending", label: "Pending" },
-    { value: "Onhold", label: "Onhold" },
-    { value: "Inprogress", label: "Inprogress" },
-  ];
-  const [tags, setTags] = useState<string[]>([
-    "Jerald",
-    "Andrew",
-    "Philip",
-    "Davis",
-  ]);
-  const handleTagsChange = (newTags: string[]) => {
-    setTags(newTags);
-  };
-  const [tags1, setTags1] = useState<string[]>(["Hendry", "James"]);
-  const handleTagsChange1 = (newTags: string[]) => {
-    setTags1(newTags);
-  };
-  const [tags2, setTags2] = useState<string[]>(["Dwight"]);
-  const handleTagsChange2 = (newTags: string[]) => {
-    setTags2(newTags);
-  };
-  const [tags3, setTags3] = useState<string[]>([
-    "Collab",
-    "Promotion",
-    "Rated",
-  ]);
-  const handleTagsChange3 = (newTags: string[]) => {
-    setTags3(newTags);
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get("id");
+
+  const currentUser = useAppSelector((state) => state.auth.user);
+  
+  const canReadFinance = currentUser?.role === 'SUPER_ADMIN' || 
+                        currentUser?.role === 'HR' || 
+                        currentUser?.role === 'MANAGER' ||
+                        currentUser?.permissions?.some(p => p.module === 'FINANCE' && p.canRead);
+
+  const canWriteProjects = currentUser?.role === 'SUPER_ADMIN' || 
+                           currentUser?.role === 'HR' || 
+                           currentUser?.role === 'MANAGER' ||
+                           currentUser?.permissions?.some(p => p.module === 'PROJECTS' && p.canWrite);
+
+  const [project, setProject] = useState<ProjectDetail | null>(null);
+  const [employeesList, setEmployeesList] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Allocation State
+  const [selectedAllocEmp, setSelectedAllocEmp] = useState("");
+  const [allocRole, setAllocRole] = useState("MEMBER");
+
+  // Milestone State
+  const [msName, setMsName] = useState("");
+  const [msDesc, setMsDesc] = useState("");
+  const [msStart, setMsStart] = useState("");
+  const [msEnd, setMsEnd] = useState("");
+  const [msProgress, setMsProgress] = useState(0);
+
+  // Task Creation State
+  const [taskName, setTaskName] = useState("");
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskPriority, setTaskPriority] = useState("MEDIUM");
+  const [taskAssigneeId, setTaskAssigneeId] = useState("");
+
+  // Notes State
+  const [notes, setNotes] = useState<ProjectNote[]>([]);
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteContent, setNoteContent] = useState("");
+  const [showNoteForm, setShowNoteForm] = useState(false);
+
+  // Files State
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
+  const [fileUploading, setFileUploading] = useState(false);
+
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const fetchProjectDetails = async () => {
+    if (!projectId) return;
+    try {
+      setLoading(true);
+      const res = await apiClient.get(`/api/projects/${projectId}`);
+      if (res.data?.success) {
+        setProject(res.data.data);
+      }
+    } catch (err) {
+      console.error("Failed to load project details:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const fetchEmployees = async () => {
+    try {
+      const res = await apiClient.get("/employees");
+      if (Array.isArray(res.data)) {
+        setEmployeesList(res.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch employees list:", err);
+    }
+  };
+
+  const fetchNotes = async () => {
+    if (!projectId) return;
+    try {
+      const res = await apiClient.get(`/api/projects/${projectId}/notes`);
+      if (res.data?.success) setNotes(res.data.data);
+    } catch { /* silent */ }
+  };
+
+  const fetchFiles = async () => {
+    if (!projectId) return;
+    try {
+      const res = await apiClient.get(`/api/projects/${projectId}/files`);
+      if (res.data?.success) setProjectFiles(res.data.data);
+    } catch { /* silent */ }
+  };
+
+  useEffect(() => {
+    fetchProjectDetails();
+    fetchEmployees();
+    fetchNotes();
+    fetchFiles();
+  }, [projectId]);
+
+  // Allocate team member
+  const handleAllocateMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectId || !selectedAllocEmp) return;
+    try {
+      setErrorMsg("");
+      const res = await apiClient.post(`/api/projects/${projectId}/members`, {
+        employeeIds: [parseInt(selectedAllocEmp, 10)],
+        role: allocRole
+      });
+      if (res.data?.success) {
+        setSelectedAllocEmp("");
+        fetchProjectDetails();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || "Failed to allocate member");
+    }
+  };
+
+  const handleDeallocateMember = async (memberId: number) => {
+    if (!projectId) return;
+    if (!window.confirm("Remove this member from the project?")) return;
+    try {
+      const res = await apiClient.delete(`/api/projects/${projectId}/members/${memberId}`);
+      if (res.data?.success) {
+        fetchProjectDetails();
+      }
+    } catch (err) {
+      console.error("Failed to remove member:", err);
+    }
+  };
+
+  // Create Milestone
+  const handleAddMilestone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectId || !msName || !msStart || !msEnd) return;
+    try {
+      setErrorMsg("");
+      const res = await apiClient.post(`/api/projects/${projectId}/milestones`, {
+        name: msName,
+        description: msDesc,
+        startDate: msStart,
+        endDate: msEnd,
+        progress: Number(msProgress),
+        status: msProgress === 100 ? "COMPLETED" : "IN_PROGRESS"
+      });
+      if (res.data?.success) {
+        setMsName("");
+        setMsDesc("");
+        setMsStart("");
+        setMsEnd("");
+        setMsProgress(0);
+        fetchProjectDetails();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || "Failed to add milestone");
+    }
+  };
+
+  // Create Task
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectId || !taskName || !taskDueDate) return;
+    try {
+      setErrorMsg("");
+      const payload = {
+        title: taskName,
+        projectId: parseInt(projectId, 10),
+        dueDate: taskDueDate,
+        priority: taskPriority,
+        assignedToId: taskAssigneeId ? parseInt(taskAssigneeId, 10) : null,
+        status: "TODO"
+      };
+      const res = await apiClient.post("/api/tasks", payload);
+      if (res.data?.success) {
+        setTaskName("");
+        setTaskDueDate("");
+        setTaskPriority("MEDIUM");
+        setTaskAssigneeId("");
+        fetchProjectDetails();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || "Failed to create task");
+    }
+  };
+
+  // Toggle Task Status
+  const handleToggleTaskStatus = async (taskId: number, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === "COMPLETED" ? "TODO" : "COMPLETED";
+      const res = await apiClient.patch(`/api/tasks/${taskId}/status`, { status: newStatus });
+      if (res.data?.success) {
+        fetchProjectDetails();
+      }
+    } catch (err) {
+      console.error("Failed to toggle task status:", err);
+    }
+  };
+
+  // Add Note
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectId || !noteTitle || !noteContent) return;
+    try {
+      setErrorMsg("");
+      const res = await apiClient.post(`/api/projects/${projectId}/notes`, {
+        title: noteTitle,
+        content: noteContent,
+      });
+      if (res.data?.success) {
+        setNoteTitle("");
+        setNoteContent("");
+        setShowNoteForm(false);
+        fetchNotes();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || "Failed to add note");
+    }
+  };
+
+  // Delete Note
+  const handleDeleteNote = async (noteId: number) => {
+    if (!window.confirm("Delete this note?")) return;
+    try {
+      await apiClient.delete(`/api/projects/notes/${noteId}`);
+      setNotes((prev) => prev.filter((n) => n.id !== noteId));
+    } catch { /* silent */ }
+  };
+
+  // Upload File / Image
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!projectId || !e.target.files?.length) return;
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      setFileUploading(true);
+      // Do NOT set Content-Type manually — axios auto-sets multipart/form-data with boundary
+      const res = await apiClient.post(`/api/projects/${projectId}/files`, formData);
+      if (res.data?.success) fetchFiles();
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || "Failed to upload file");
+    } finally {
+      setFileUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  // Delete File
+  const handleDeleteFile = async (fileId: number) => {
+    if (!window.confirm("Delete this file?")) return;
+    try {
+      await apiClient.delete(`/api/projects/files/${fileId}`);
+      setProjectFiles((prev) => prev.filter((f) => f.id !== fileId));
+    } catch { /* silent */ }
+  };
+
+  // Delete Task
+  const handleDeleteTask = async (taskId: number) => {
+    if (!window.confirm("Are you sure you want to delete this task?")) return;
+    try {
+      const res = await apiClient.delete(`/api/tasks/${taskId}`);
+      if (res.data?.success) {
+        fetchProjectDetails();
+      }
+    } catch (err) {
+      console.error("Failed to delete task:", err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="page-wrapper text-center p-5">
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+        <p className="mt-2">Loading project data...</p>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="page-wrapper p-5">
+        <div className="alert alert-warning text-center">Project details not found or access restricted.</div>
+      </div>
+    );
+  }
+
+  // Calculate dynamic stats
+  const totalTasks = project.tasks?.length || 0;
+  const completedTasks = project.tasks?.filter((t) => t.status === "COMPLETED").length || 0;
+  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  
+  // Format budget
+  const formattedBudget = canReadFinance && project.budget !== null
+    ? `₹ ${project.budget.toLocaleString()}`
+    : "Confidential";
+
   return (
-    <>
-      {/* Page Wrapper */}
-      <div className="page-wrapper">
-        <div className="content">
-          <div className="row align-items-center mb-4">
-            <div className="d-md-flex d-sm-block justify-content-between align-items-center flex-wrap">
-              <h6 className="fw-medium d-inline-flex align-items-center mb-3 mb-sm-0">
-                <Link to={all_routes.projectlist}>
-                  <i className="ti ti-arrow-left me-2" />
-                  Back to List
-                </Link>
-              </h6>
-              <div className="d-flex">
-                <div className="text-end">
-                  <Link
-                    to="#"
-                    className="btn btn-primary"
-                    data-bs-toggle="modal"
-                    data-inert={true}
-                    data-bs-target="#edit_project"
-                  >
-                    <i className="ti ti-edit me-1" />
-                    Edit Project
-                  </Link>
-                </div>
-                <div className="head-icons ms-2 text-end">
-                  <CollapseHeader />
+    <div className="page-wrapper">
+      <div className="content">
+        {/* Top Header Actions */}
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <div>
+            <Link to={all_routes.project} className="text-secondary fw-semibold d-inline-flex align-items-center">
+              <i className="ti ti-arrow-left me-2 fs-16" /> Back to List
+            </Link>
+          </div>
+          <div>
+            <Link
+              to={all_routes.project}
+              className="btn btn-orange text-white d-flex align-items-center gap-2 px-3 py-2 rounded shadow-xs"
+              style={{ background: "#FF7300" }}
+            >
+              <i className="ti ti-edit fs-15" /> Edit Project
+            </Link>
+          </div>
+        </div>
+
+        {errorMsg && <div className="alert alert-danger mb-4">{errorMsg}</div>}
+
+        <div className="row">
+          {/* LEFT COLUMN: Sidebar Details (30% width) */}
+          <div className="col-xl-4 col-lg-4 col-md-12 mb-4">
+            {/* Project Details Card */}
+            <div className="card shadow-sm border-0 mb-4 rounded-3 overflow-hidden">
+              <div className="card-header bg-white py-3 border-bottom">
+                <h5 className="mb-0 fw-bold text-dark">Project Details</h5>
+              </div>
+              <div className="card-body p-0">
+                <div className="table-responsive">
+                  <table className="table table-borderless mb-0">
+                    <tbody>
+                      <tr className="border-bottom">
+                        <td className="text-muted py-3 px-4">Client</td>
+                        <td className="text-end fw-semibold text-dark py-3 px-4">
+                          {project.client?.companyName || "Internal Project"}
+                        </td>
+                      </tr>
+                      <tr className="border-bottom">
+                        <td className="text-muted py-3 px-4">Project Total Cost</td>
+                        <td className="text-end fw-semibold text-dark py-3 px-4">
+                          {formattedBudget}
+                        </td>
+                      </tr>
+                      <tr className="border-bottom">
+                        <td className="text-muted py-3 px-4">Hours of Work</td>
+                        <td className="text-end fw-semibold text-dark py-3 px-4">
+                          {totalTasks * 10 || 150} hrs
+                        </td>
+                      </tr>
+                      <tr className="border-bottom">
+                        <td className="text-muted py-3 px-4">Created on</td>
+                        <td className="text-end fw-semibold text-dark py-3 px-4">
+                          {project.createdAt ? new Date(project.createdAt).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric"
+                          }) : "N/A"}
+                        </td>
+                      </tr>
+                      <tr className="border-bottom">
+                        <td className="text-muted py-3 px-4">Started on</td>
+                        <td className="text-end fw-semibold text-dark py-3 px-4">
+                          {new Date(project.startDate).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric"
+                          })}
+                        </td>
+                      </tr>
+                      <tr className="border-bottom">
+                        <td className="text-muted py-3 px-4">Due Date</td>
+                        <td className="text-end fw-semibold text-dark py-3 px-4">
+                          <div className="d-flex align-items-center justify-content-end gap-2">
+                            <span>
+                              {new Date(project.endDate).toLocaleDateString("en-GB", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric"
+                              })}
+                            </span>
+                            {new Date(project.endDate).getTime() < Date.now() && project.status !== "COMPLETED" && (
+                              <span className="badge bg-danger rounded-pill fs-10 px-2 py-1">G1</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      <tr className="border-bottom">
+                        <td className="text-muted py-3 px-4">Created by</td>
+                        <td className="text-end fw-semibold text-dark py-3 px-4">
+                          <div className="d-flex align-items-center justify-content-end gap-2">
+                            <span className="avatar avatar-xs bg-light rounded-circle text-primary">
+                              {project.manager?.firstName[0] || "C"}
+                            </span>
+                            <span>{project.manager ? `${project.manager.firstName} ${project.manager.lastName}` : "System"}</span>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="text-muted py-3 px-4">Priority</td>
+                        <td className="text-end py-3 px-4">
+                          <span className={`badge ${project.priority === "HIGH" ? "bg-danger" : project.priority === "MEDIUM" ? "bg-warning text-dark" : "bg-info"} px-3 py-1.5`}>
+                            {project.priority}
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
+            </div>
+
+            {/* Tasks Details Card */}
+            <div className="card shadow-sm border-0 rounded-3 p-4 mb-4">
+              <h5 className="fw-bold text-dark mb-3">Tasks Details</h5>
+              <div className="mb-2">
+                <span className="text-muted">Tasks Done</span>
+                <h4 className="fw-bold text-dark mt-1">
+                  {completedTasks} / {totalTasks}
+                </h4>
+              </div>
+              <div className="progress mt-3" style={{ height: "8px" }}>
+                <div
+                  className="progress-bar bg-success rounded"
+                  role="progressbar"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <div className="text-muted fs-12 mt-2">{progressPercent}% Completed</div>
+            </div>
+
+            {/* Allocate Team Member Card */}
+            <div className="card shadow-sm border-0 rounded-3 p-4">
+              <h5 className="fw-bold text-dark mb-3">Allocate Team Member</h5>
+              <form onSubmit={handleAllocateMember}>
+                <div className="mb-3">
+                  <label className="form-label fs-13 text-muted">Select Employee</label>
+                  <select
+                    className="form-select"
+                    value={selectedAllocEmp}
+                    onChange={(e) => setSelectedAllocEmp(e.target.value)}
+                    required
+                  >
+                    <option value="">-- Choose Employee --</option>
+                    {employeesList
+                      .filter(emp => !project.members.some(m => m.employee.id === emp.id))
+                      .map(emp => (
+                        <option value={emp.id} key={emp.id}>{emp.firstName} {emp.lastName}</option>
+                      ))}
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fs-13 text-muted">Role / Title</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Lead, Developer"
+                    value={allocRole}
+                    onChange={(e) => setAllocRole(e.target.value)}
+                    required
+                  />
+                </div>
+                <button type="submit" className="btn btn-primary w-100 py-2" disabled={!selectedAllocEmp}>
+                  Allocate Member
+                </button>
+              </form>
             </div>
           </div>
-          <div className="row">
-            <div className="col-xxl-3 col-xl-4 theiaStickySidebar">
-              <div className="card">
-                <div className="card-body">
-                  <h5 className="mb-3">Project Details</h5>
-                  <div className="list-group details-list-group mb-4">
-                    <div className="list-group-item">
-                      <span>Client</span>
-                      <p className="text-gray-9">EcoVision Enterprises</p>
+
+          {/* RIGHT COLUMN: Project Metadata & Sections (70% width) */}
+          <div className="col-xl-8 col-lg-8 col-md-12 mb-4">
+            {/* Top Project Card */}
+            <div className="card shadow-sm border-0 p-4 mb-4 rounded-3">
+              <div className="d-flex align-items-start gap-3">
+                <div
+                  className="rounded-3 bg-primary text-white d-flex align-items-center justify-content-center flex-shrink-0"
+                  style={{ width: "56px", height: "56px", fontSize: "24px", fontWeight: "bold" }}
+                >
+                  {project.name[0]}
+                </div>
+                <div className="flex-grow-1">
+                  <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div>
+                      <h4 className="fw-bold text-dark mb-1">{project.name}</h4>
+                      <span className="text-muted fs-12">Project ID : <span className="text-danger fw-semibold">PRO-{project.id.toString().padStart(4, '0')}</span></span>
                     </div>
-                    <div className="list-group-item">
-                      <div className="d-flex align-items-center justify-content-between">
-                        <span>Project Total Cost</span>
-                        <p className="text-gray-9">$1400</p>
-                      </div>
+                    <div>
+                      <span className="badge bg-success-transparent text-success px-3 py-1.5 fs-12">
+                        {project.status.replace("_", " ")}
+                      </span>
                     </div>
-                    <div className="list-group-item">
-                      <div className="d-flex align-items-center justify-content-between">
-                        <span>Hours of Work</span>
-                        <p className="text-gray-9">150 hrs</p>
-                      </div>
-                    </div>
-                    <div className="list-group-item">
-                      <div className="d-flex align-items-center justify-content-between">
-                        <span>Created on</span>
-                        <p className="text-gray-9">14 Nov 2026</p>
-                      </div>
-                    </div>
-                    <div className="list-group-item">
-                      <div className="d-flex align-items-center justify-content-between">
-                        <span>Started on</span>
-                        <p className="text-gray-9">15 Jan 2026</p>
-                      </div>
-                    </div>
-                    <div className="list-group-item">
-                      <div className="d-flex align-items-center justify-content-between">
-                        <span>Due Date</span>
-                        <div className="d-flex align-items-center">
-                          <p className="text-gray-9 mb-0">15 Nov 2026</p>
-                          <span className="badge badge-danger d-inline-flex align-items-center ms-2">
-                            <i className="ti ti-clock-stop" />1
-                          </span>
+                  </div>
+
+                  {/* Dynamic Metadata Row */}
+                  <div className="row mt-4 align-items-center">
+                    <div className="col-md-6 mb-3">
+                      <div className="d-flex align-items-center gap-3">
+                        <span className="text-muted fs-13 w-80">Team</span>
+                        <div className="d-flex align-items-center gap-1">
+                          {project.members.slice(0, 4).map((m) => (
+                            <div
+                              className="avatar avatar-sm rounded-circle bg-light border-2 border-white d-flex align-items-center justify-content-center"
+                              key={m.id}
+                              title={`${m.employee.firstName} ${m.employee.lastName} (${m.role})`}
+                              style={{ width: "32px", height: "32px", marginLeft: "-6px" }}
+                            >
+                              <span className="fs-11 fw-semibold text-primary">{m.employee.firstName[0]}</span>
+                            </div>
+                          ))}
+                          {project.members.length > 4 && (
+                            <span className="badge bg-secondary rounded-circle fs-10 p-1.5" style={{ marginLeft: "-6px" }}>
+                              +{project.members.length - 4}
+                            </span>
+                          )}
+                          <span className="text-muted fs-12 ms-2 cursor-pointer hover-primary"><i className="ti ti-plus" /> Add New</span>
                         </div>
                       </div>
                     </div>
-                    <div className="list-group-item">
-                      <div className="d-flex align-items-center justify-content-between">
-                        <span>Created by</span>
-                        <div className="d-flex align-items-center">
-                          <span className="avatar avatar-sm avatar-rounded me-2">
-                            <ImageWithBasePath
-                              src="assets/img/profiles/avatar-02.jpg"
-                              alt="User Image"
-                            />
+                    <div className="col-md-6 mb-3">
+                      <div className="d-flex align-items-center gap-3">
+                        <span className="text-muted fs-13 w-80">Team Lead</span>
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="avatar avatar-sm rounded-circle bg-light d-flex align-items-center justify-content-center text-success">
+                            {project.manager?.firstName[0] || "U"}
                           </span>
-                          <p className="text-gray-9 mb-0">Cameron</p>
+                          <span className="fs-13 fw-semibold text-dark">
+                            {project.manager ? `${project.manager.firstName} ${project.manager.lastName}` : "Unassigned"}
+                          </span>
+                          <span className="text-muted fs-12 ms-2 cursor-pointer hover-primary"><i className="ti ti-plus" /> Add New</span>
                         </div>
                       </div>
                     </div>
-                    <div className="list-group-item">
-                      <div className="d-flex align-items-center justify-content-between">
-                        <span>Priority</span>
-                        <div className="dropdown">
-                          <Link
-                            to="#"
-                            className="dropdown-toggle btn btn-sm btn-white d-inline-flex align-items-center"
-                            data-bs-toggle="dropdown"
-                          >
-                            <span className="rounded-circle bg-transparent-danger d-flex justify-content-center align-items-center me-2">
-                              <i className="ti ti-point-filled text-danger" />
-                            </span>{" "}
-                            High
-                          </Link>
-                          <ul className="dropdown-menu  dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                to="#"
-                                className="dropdown-item rounded-1 d-flex justify-content-start align-items-center"
-                              >
-                                <span className="rounded-circle bg-transparent-danger d-flex justify-content-center align-items-center me-2">
-                                  <i className="ti ti-point-filled text-danger" />
-                                </span>
-                                High
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                to="#"
-                                className="dropdown-item rounded-1 d-flex justify-content-start align-items-center"
-                              >
-                                <span className="rounded-circle bg-transparent-warning d-flex justify-content-center align-items-center me-2">
-                                  <i className="ti ti-point-filled text-warning" />
-                                </span>
-                                Medium
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                to="#"
-                                className="dropdown-item rounded-1 d-flex justify-content-start align-items-center"
-                              >
-                                <span className="rounded-circle bg-transparent-success d-flex justify-content-center align-items-center me-2">
-                                  <i className="ti ti-point-filled text-success" />
-                                </span>
-                                Low
-                              </Link>
-                            </li>
-                          </ul>
+                    <div className="col-md-6 mb-3">
+                      <div className="d-flex align-items-center gap-3">
+                        <span className="text-muted fs-13 w-80">Project Manager</span>
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="avatar avatar-sm rounded-circle bg-light d-flex align-items-center justify-content-center text-info">
+                            {project.manager?.firstName[0] || "U"}
+                          </span>
+                          <span className="fs-13 fw-semibold text-dark">
+                            {project.manager ? `${project.manager.firstName} ${project.manager.lastName}` : "Unassigned"}
+                          </span>
+                          <span className="text-muted fs-12 ms-2 cursor-pointer hover-primary"><i className="ti ti-plus" /> Add New</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-6 mb-3">
+                      <div className="d-flex align-items-center gap-3">
+                        <span className="text-muted fs-13 w-80">Tags</span>
+                        <div className="d-flex align-items-center gap-1.5 flex-wrap">
+                          <span className="badge bg-danger-transparent text-danger px-2.5 py-1">Admin Panel</span>
+                          <span className="badge bg-primary-transparent text-primary px-2.5 py-1">High Tech</span>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <h5 className="mb-3">Tasks Details</h5>
-                  <div className="bg-light p-2 rounded">
-                    <span className="d-block mb-1">Tasks Done</span>
-                    <h4 className="mb-2">0 / 0</h4>
-                    <div className="progress progress-xs mb-2">
-                      <div className="progress-bar" role="progressbar" />
-                    </div>
-                    <p>0% Completed</p>
+
+                  <hr className="my-4" />
+
+                  {/* Description */}
+                  <h6 className="fw-bold text-dark mb-2">Description</h6>
+                  <div
+                    className="text-muted fs-13"
+                    style={{ lineHeight: "1.6" }}
+                    dangerouslySetInnerHTML={{ __html: project.description || "No description provided." }}
+                  />
+
+                  {/* Time Spent progress bar */}
+                  <div className="mt-4 bg-light p-3 rounded d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <span className="text-muted fs-13">Time Spent on this project</span>
+                    <span className="fw-bold text-dark">65/120 Hrs</span>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="col-xxl-9 col-xl-8">
-              <div className="card">
-                <div className="card-body">
-                  <div className="bg-light rounded p-3 mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to={all_routes.projectdetails}
-                        className="flex-shrink-0 me-2"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/social/project-01.svg"
-                          alt="User Image"
-                        />
-                      </Link>
-                      <div>
-                        <h6 className="mb-1">
-                          <Link to={all_routes.projectdetails}>
-                            Hospital Administration
-                          </Link>
-                        </h6>
-                        <p>
-                          Project ID :{" "}
-                          <span className="text-primary"> PRO-0004</span>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="row align-items-center">
-                    <div className="col-sm-3">
-                      <p className="d-flex align-items-center mb-3">
-                        <i className="ti ti-square-rounded me-2" />
-                        Status
-                      </p>
-                    </div>
-                    <div className="col-sm-9">
-                      <span className="badge badge-soft-purple d-inline-flex align-items-center mb-3">
-                        <i className="ti ti-point-filled me-1" />
-                        InProgress
-                      </span>
-                    </div>
-                    <div className="col-sm-3">
-                      <p className="d-flex align-items-center mb-3">
-                        <i className="ti ti-users-group me-2" />
-                        Team
-                      </p>
-                    </div>
-                    <div className="col-sm-9">
-                      <div className="d-flex align-items-center mb-3">
-                        <div className="bg-gray-100 p-1 rounded d-flex align-items-center me-2">
-                          <Link
-                            to="#"
-                            className="avatar avatar-sm avatar-rounded border border-white flex-shrink-0 me-2"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/profiles/avatar-12.jpg"
-                              alt="User Image"
-                            />
-                          </Link>
-                          <h6 className="fs-12">
-                            <Link to="#">Lewis</Link>
-                          </h6>
-                        </div>
-                        <div className="bg-gray-100 p-1 rounded d-flex align-items-center me-2">
-                          <Link
-                            to="#"
-                            className="avatar avatar-sm avatar-rounded border border-white flex-shrink-0 me-2"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/users/user-19.jpg"
-                              alt="User Image"
-                            />
-                          </Link>
-                          <h6 className="fs-12">
-                            <Link to="#">Leona</Link>
-                          </h6>
-                        </div>
-                        <div className="bg-gray-100 p-1 rounded d-flex align-items-center me-2">
-                          <Link
-                            to="#"
-                            className="avatar avatar-sm avatar-rounded border border-white flex-shrink-0 me-2"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/users/user-33.jpg"
-                              alt="User Image"
-                            />
-                          </Link>
-                          <h6 className="fs-12">
-                            <Link to="#">Pineiro</Link>
-                          </h6>
-                        </div>
-                        <div className="bg-gray-100 p-1 rounded d-flex align-items-center me-2">
-                          <Link
-                            to="#"
-                            className="avatar avatar-sm avatar-rounded border border-white flex-shrink-0 me-2"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/users/user-37.jpg"
-                              alt="User Image"
-                            />
-                          </Link>
-                          <h6 className="fs-12">
-                            <Link to="#">Moseley</Link>
-                          </h6>
-                        </div>
-                        <div>
-                          <Link
-                            to="#"
-                            className="d-flex align-items-center fs-12"
-                          >
-                            <i className="ti ti-circle-plus me-1" />
-                            Add New
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-sm-3">
-                      <p className="d-flex align-items-center mb-3">
-                        <i className="ti ti-user-shield me-2" />
-                        Team Lead
-                      </p>
-                    </div>
-                    <div className="col-sm-9">
-                      <div className="d-flex align-items-center mb-3">
-                        <div className="bg-gray-100 p-1 rounded d-flex align-items-center me-2">
-                          <Link
-                            to="#"
-                            className="avatar avatar-sm avatar-rounded border border-white flex-shrink-0 me-2"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/users/user-42.jpg"
-                              alt="User Image"
-                            />
-                          </Link>
-                          <h6 className="fs-12">
-                            <Link to="#">Ruth</Link>
-                          </h6>
-                        </div>
-                        <div className="bg-gray-100 p-1 rounded d-flex align-items-center me-2">
-                          <Link
-                            to="#"
-                            className="avatar avatar-sm avatar-rounded border border-white flex-shrink-0 me-2"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/users/user-44.jpg"
-                              alt="User Image"
-                            />
-                          </Link>
-                          <h6 className="fs-12">
-                            <Link to="#">Meredith</Link>
-                          </h6>
-                        </div>
-                        <div>
-                          <Link
-                            to="#"
-                            className="d-flex align-items-center fs-12"
-                          >
-                            <i className="ti ti-circle-plus me-1" />
-                            Add New
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-sm-3">
-                      <p className="d-flex align-items-center mb-3">
-                        <i className="ti ti-user-star me-2" />
-                        Project Manager
-                      </p>
-                    </div>
-                    <div className="col-sm-9">
-                      <div className="d-flex align-items-center mb-3">
-                        <div className="bg-gray-100 p-1 rounded d-flex align-items-center me-2">
-                          <Link
-                            to="#"
-                            className="avatar avatar-sm avatar-rounded border border-white flex-shrink-0 me-2"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/users/user-45.jpg"
-                              alt="User Image"
-                            />
-                          </Link>
-                          <h6 className="fs-12">
-                            <Link to="#">Dwight</Link>
-                          </h6>
-                        </div>
-                        <div>
-                          <Link
-                            to="#"
-                            className="d-flex align-items-center fs-12"
-                          >
-                            <i className="ti ti-circle-plus me-1" />
-                            Add New
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-sm-3">
-                      <p className="d-flex align-items-center mb-3">
-                        <i className="ti ti-bookmark me-2" />
-                        Tags
-                      </p>
-                    </div>
-                    <div className="col-sm-9">
-                      <div className="d-flex align-items-center mb-3">
-                        <Link
-                          to="#"
-                          className="badge task-tag bg-pink rounded-pill me-2"
-                        >
-                          Admin Panel
-                        </Link>
-                        <Link
-                          to="#"
-                          className="badge task-tag badge-info rounded-pill"
-                        >
-                          High Tech
-                        </Link>
-                      </div>
-                    </div>
-                    <div className="col-sm-12">
-                      <div className="mb-3">
-                        <h6 className="mb-1">Description</h6>
-                        <p>
-                          The Enhanced Patient Management System (EPMS) project
-                          aims to modernize and streamline the patient
-                          management processes within. By integrating advanced
-                          technologies and optimizing existing workflows, the
-                          project seeks to improve patient care, enhance
-                          operational efficiency, and ensure compliance with
-                          regulatory standards.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="col-md-12">
-                      <div className="bg-soft-secondary p-3 rounded d-flex align-items-center justify-content-between">
-                        <p className="text-secondary mb-0">
-                          Time Spent on this project
-                        </p>
-                        <h3 className="text-secondary">
-                          65/120 <span className="fs-16">Hrs</span>
-                        </h3>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+
+            {/* Dynamic Tasks Card */}
+            <div className="card shadow-sm border-0 rounded-3 mb-4">
+              <div className="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h5 className="mb-0 fw-bold text-dark">Tasks</h5>
+                <i className="ti ti-chevron-down text-muted" />
               </div>
-              <div className="custom-accordion-items">
-                <div
-                  className="accordion accordions-items-seperate"
-                  id="accordionExample"
-                >
-                  <div className="accordion-item">
-                    <div className="accordion-header" id="headingTwo">
-                      <div className="accordion-button">
-                        <h5>Tasks</h5>
-                        <div className=" ms-auto">
-                          <Link
-                            to="#"
-                            className="d-flex align-items-center collapsed collapse-arrow"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#primaryBorderTwo"
-                            aria-expanded="false"
-                            aria-controls="primaryBorderTwo"
-                          >
-                            <i className="ti ti-chevron-down fs-18" />
-                          </Link>
+              <div className="card-body p-4">
+                {project.tasks?.length === 0 ? (
+                  <p className="text-muted text-center py-4 mb-0">No tasks registered for this project yet.</p>
+                ) : (
+                  <div className="d-flex flex-column gap-3">
+                    {project.tasks.map((task) => (
+                      <div
+                        className="d-flex align-items-center justify-content-between border rounded p-3 bg-light-transparent"
+                        key={task.id}
+                      >
+                        <div className="d-flex align-items-center gap-3">
+                          {/* Checkbox status update toggle */}
+                          <input
+                            type="checkbox"
+                            className="form-check-input"
+                            style={{ width: "18px", height: "18px", borderColor: "#FF7300", accentColor: "#FF7300" }}
+                            checked={task.status === "COMPLETED"}
+                            onChange={() => handleToggleTaskStatus(task.id, task.status)}
+                          />
+                          <i className="ti ti-star text-warning cursor-pointer" />
+                          <span className={`fw-semibold text-dark ${task.status === "COMPLETED" ? "text-decoration-line-through text-muted" : ""}`}>
+                            {task.title}
+                          </span>
+                        </div>
+                        <div className="d-flex align-items-center gap-3">
+                          <span className={`badge ${task.status === "COMPLETED" ? "bg-success" : task.status === "IN_PROGRESS" ? "bg-info" : "bg-warning text-dark"} px-2.5 py-1 fs-11`}>
+                            {task.status.replace("_", " ")}
+                          </span>
+                          <span className="badge bg-danger-transparent text-danger px-2.5 py-1 fs-11">
+                            {task.priority}
+                          </span>
+                          <div className="avatar avatar-xs rounded-circle bg-light d-flex align-items-center justify-content-center text-primary" title={task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : "Unassigned"}>
+                            <span className="fs-10 fw-bold">{task.assignedTo?.firstName?.[0] || "U"}</span>
+                          </div>
+                          {/* Action toggle options */}
+                          <i className="ti ti-trash text-danger cursor-pointer hover-danger" onClick={() => handleDeleteTask(task.id)} title="Delete Task" />
                         </div>
                       </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Inline task creation form */}
+                {canWriteProjects && (
+                  <form onSubmit={handleCreateTask} className="mt-4 pt-4 border-top">
+                    <h6 className="fw-bold text-dark mb-3">Quick Add Task</h6>
+                    <div className="row">
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label fs-13 text-muted">Task Title</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="e.g. Code database migrations"
+                          value={taskName}
+                          onChange={(e) => setTaskName(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="col-md-3 mb-3">
+                        <label className="form-label fs-13 text-muted">Due Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={taskDueDate}
+                          onChange={(e) => setTaskDueDate(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="col-md-3 mb-3">
+                        <label className="form-label fs-13 text-muted">Assignee</label>
+                        <select
+                          className="form-select"
+                          value={taskAssigneeId}
+                          onChange={(e) => setTaskAssigneeId(e.target.value)}
+                        >
+                          <option value="">-- Choose --</option>
+                          {project.members.map((m) => (
+                            <option value={m.employee.id} key={m.employee.id}>
+                              {m.employee.firstName} {m.employee.lastName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                    <div
-                      id="primaryBorderTwo"
-                      className="accordion-collapse collapse show border-top"
-                      aria-labelledby="headingTwo"
-                      data-bs-parent="#accordionExample"
-                    >
-                      <div className="accordion-body">
-                        <div className="list-group list-group-flush">
-                          <div className="list-group-item border rounded mb-2 p-2">
-                            <div className="row align-items-center row-gap-3">
-                              <div className="col-md-7">
-                                <div className="todo-inbox-check d-flex align-items-center flex-wrap row-gap-3">
-                                  <span>
-                                    <i className="ti ti-grid-dots me-2" />
-                                  </span>
-                                  <div className="form-check form-check-md me-2">
-                                    <input
-                                      className="form-check-input"
-                                      type="checkbox"
-                                    />
-                                  </div>
-                                  <span className="me-2 d-flex align-items-center rating-select">
-                                    <i className="ti ti-star-filled filled" />
-                                  </span>
-                                  <div className="strike-info">
-                                    <h4 className="fs-14">
-                                      Patient appointment booking
-                                    </h4>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-md-5">
-                                <div className="d-flex align-items-center justify-content-md-end flex-wrap row-gap-3">
-                                  <span className="badge bg-soft-pink d-inline-flex align-items-center me-3">
-                                    <i className="fas fa-circle fs-6 me-1" />
-                                    Onhold
-                                  </span>
-                                  <div className="d-flex align-items-center">
-                                    <div className="avatar-list-stacked avatar-group-sm">
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-13.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-14.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-15.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                    </div>
-                                    <div className="dropdown ms-2">
-                                      <Link
-                                        to="#"
-                                        className="d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                      >
-                                        <i className="ti ti-dots-vertical" />
-                                      </Link>
-                                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#edit_todo"
-                                          >
-                                            <i className="ti ti-edit me-2" />
-                                            Edit
-                                          </Link>
-                                        </li>
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#delete_modal"
-                                          >
-                                            <i className="ti ti-trash me-2" />
-                                            Delete
-                                          </Link>
-                                        </li>
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#view_todo"
-                                          >
-                                            <i className="ti ti-eye me-2" />
-                                            View
-                                          </Link>
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="list-group-item border rounded mb-2 p-2">
-                            <div className="row align-items-center row-gap-3">
-                              <div className="col-md-7">
-                                <div className="todo-inbox-check d-flex align-items-center flex-wrap row-gap-3">
-                                  <span>
-                                    <i className="ti ti-grid-dots me-2" />
-                                  </span>
-                                  <div className="form-check form-check-md me-2">
-                                    <input
-                                      className="form-check-input"
-                                      type="checkbox"
-                                    />
-                                  </div>
-                                  <span className="me-2 rating-select d-flex align-items-center">
-                                    <i className="ti ti-star" />
-                                  </span>
-                                  <div className="strike-info">
-                                    <h4 className="fs-14">
-                                      Appointment booking with payment gateway
-                                    </h4>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-md-5">
-                                <div className="d-flex align-items-center justify-content-md-end flex-wrap row-gap-3">
-                                  <span className="badge bg-transparent-purple d-flex align-items-center me-3">
-                                    <i className="fas fa-circle fs-6 me-1" />
-                                    Inprogress
-                                  </span>
-                                  <div className="d-flex align-items-center">
-                                    <div className="avatar-list-stacked avatar-group-sm">
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-20.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-21.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                    </div>
-                                    <div className="dropdown ms-2">
-                                      <Link
-                                        to="#"
-                                        className="d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                      >
-                                        <i className="ti ti-dots-vertical" />
-                                      </Link>
-                                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#edit_todo"
-                                          >
-                                            <i className="ti ti-edit me-2" />
-                                            Edit
-                                          </Link>
-                                        </li>
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#delete_modal"
-                                          >
-                                            <i className="ti ti-trash me-2" />
-                                            Delete
-                                          </Link>
-                                        </li>
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#view_todo"
-                                          >
-                                            <i className="ti ti-eye me-2" />
-                                            View
-                                          </Link>
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="list-group-item border rounded mb-2 p-2">
-                            <div className="row align-items-center row-gap-3">
-                              <div className="col-md-7">
-                                <div className="todo-inbox-check d-flex align-items-center flex-wrap row-gap-3">
-                                  <span>
-                                    <i className="ti ti-grid-dots me-2" />
-                                  </span>
-                                  <div className="form-check form-check-md me-2">
-                                    <input
-                                      className="form-check-input"
-                                      type="checkbox"
-                                    />
-                                  </div>
-                                  <span className="me-2 rating-select d-flex align-items-center">
-                                    <i className="ti ti-star" />
-                                  </span>
-                                  <div className="strike-info">
-                                    <h4 className="fs-14">
-                                      Patient and Doctor video conferencing
-                                    </h4>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-md-5">
-                                <div className="d-flex align-items-center justify-content-md-end flex-wrap row-gap-3">
-                                  <span className="badge badge-soft-success align-items-center me-3">
-                                    <i className="fas fa-circle fs-6 me-1" />
-                                    Completed
-                                  </span>
-                                  <div className="d-flex align-items-center">
-                                    <div className="avatar-list-stacked avatar-group-sm">
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-28.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-29.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-24.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                    </div>
-                                    <div className="dropdown ms-2">
-                                      <Link
-                                        to="#"
-                                        className="d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                      >
-                                        <i className="ti ti-dots-vertical" />
-                                      </Link>
-                                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#edit_todo"
-                                          >
-                                            <i className="ti ti-edit me-2" />
-                                            Edit
-                                          </Link>
-                                        </li>
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#delete_modal"
-                                          >
-                                            <i className="ti ti-trash me-2" />
-                                            Delete
-                                          </Link>
-                                        </li>
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#view_todo"
-                                          >
-                                            <i className="ti ti-eye me-2" />
-                                            View
-                                          </Link>
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="list-group-item border rounded mb-2 p-2">
-                            <div className="row align-items-center row-gap-3">
-                              <div className="col-md-7">
-                                <div className="todo-inbox-check d-flex align-items-center flex-wrap row-gap-3 todo-strike-content">
-                                  <span>
-                                    <i className="ti ti-grid-dots me-2" />
-                                  </span>
-                                  <div className="form-check form-check-md me-2">
-                                    <input
-                                      className="form-check-input"
-                                      type="checkbox"
-                                      defaultChecked
-                                    />
-                                  </div>
-                                  <span className="me-2 rating-select d-flex align-items-center">
-                                    <i className="ti ti-star" />
-                                  </span>
-                                  <div className="strike-info">
-                                    <h4 className="fs-14">
-                                      Private chat module
-                                    </h4>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-md-5">
-                                <div className="d-flex align-items-center justify-content-md-end flex-wrap row-gap-3">
-                                  <span className="badge badge-secondary-transparent d-flex align-items-center me-3">
-                                    <i className="fas fa-circle fs-6 me-1" />
-                                    Pending
-                                  </span>
-                                  <div className="d-flex align-items-center">
-                                    <div className="avatar-list-stacked avatar-group-sm">
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-23.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-24.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-25.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                    </div>
-                                    <div className="dropdown ms-2">
-                                      <Link
-                                        to="#"
-                                        className="d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                      >
-                                        <i className="ti ti-dots-vertical" />
-                                      </Link>
-                                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#edit_todo"
-                                          >
-                                            <i className="ti ti-edit me-2" />
-                                            Edit
-                                          </Link>
-                                        </li>
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#delete_modal"
-                                          >
-                                            <i className="ti ti-trash me-2" />
-                                            Delete
-                                          </Link>
-                                        </li>
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#view_todo"
-                                          >
-                                            <i className="ti ti-eye me-2" />
-                                            View
-                                          </Link>
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="list-group-item border rounded mb-2 p-2">
-                            <div className="row align-items-center row-gap-3">
-                              <div className="col-md-7">
-                                <div className="todo-inbox-check d-flex align-items-center flex-wrap row-gap-3">
-                                  <span>
-                                    <i className="ti ti-grid-dots me-2" />
-                                  </span>
-                                  <div className="form-check form-check-md me-2">
-                                    <input
-                                      className="form-check-input"
-                                      type="checkbox"
-                                    />
-                                  </div>
-                                  <span className="me-2 rating-select d-flex align-items-center">
-                                    <i className="ti ti-star" />
-                                  </span>
-                                  <div className="strike-info">
-                                    <h4 className="fs-14">
-                                      Go-Live and Post-Implementation Support
-                                    </h4>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-md-5">
-                                <div className="d-flex align-items-center justify-content-md-end flex-wrap row-gap-3">
-                                  <span className="badge bg-transparent-purple d-flex align-items-center me-3">
-                                    <i className="fas fa-circle fs-6 me-1" />
-                                    Inprogress
-                                  </span>
-                                  <div className="d-flex align-items-center">
-                                    <div className="avatar-list-stacked avatar-group-sm">
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-28.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                      <span className="avatar avatar-rounded">
-                                        <ImageWithBasePath
-                                          className="border border-white"
-                                          src="assets/img/profiles/avatar-29.jpg"
-                                          alt="User Image"
-                                        />
-                                      </span>
-                                    </div>
-                                    <div className="dropdown ms-2">
-                                      <Link
-                                        to="#"
-                                        className="d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                      >
-                                        <i className="ti ti-dots-vertical" />
-                                      </Link>
-                                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#edit_todo"
-                                          >
-                                            <i className="ti ti-edit me-2" />
-                                            Edit
-                                          </Link>
-                                        </li>
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#delete_modal"
-                                          >
-                                            <i className="ti ti-trash me-2" />
-                                            Delete
-                                          </Link>
-                                        </li>
-                                        <li>
-                                          <Link
-                                            to="#"
-                                            className="dropdown-item rounded-1"
-                                            data-bs-toggle="modal"
-                                            data-inert={true}
-                                            data-bs-target="#view_todo"
-                                          >
-                                            <i className="ti ti-eye me-2" />
-                                            View
-                                          </Link>
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                    <button type="submit" className="btn btn-sm btn-primary px-3 py-2 mt-2">
+                      + Add task
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+
+
+            {/* Images Card — dynamic */}
+            <div className="card shadow-sm border-0 rounded-3 p-4 mb-4">
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <h5 className="fw-bold text-dark mb-0">Images</h5>
+                <label className="text-primary cursor-pointer hover-primary fs-13 mb-0" style={{ cursor: "pointer" }}>
+                  {fileUploading ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="ti ti-plus" />} Add New
+                  <input type="file" accept="image/*" className="d-none" onChange={handleFileUpload} />
+                </label>
+              </div>
+              {projectFiles.filter((f) => f.fileType === "image").length === 0 ? (
+                <p className="text-muted text-center py-3 mb-0 fs-13">No images uploaded yet.</p>
+              ) : (
+                <div className="row g-3">
+                  {projectFiles.filter((f) => f.fileType === "image").map((img) => (
+                    <div className="col-6 col-sm-4 col-md-3 col-lg-2" key={img.id}>
+                      <div className="border rounded overflow-hidden shadow-xs position-relative group-hover">
+                        <img
+                          src={getFileUrl(img.url)}
+                          alt={img.name}
+                          className="w-100"
+                          style={{ height: "80px", objectFit: "cover" }}
+                          onError={(e) => { (e.target as HTMLImageElement).src = "https://placehold.co/150x80/f3f4f6/374151?text=Image"; }}
+                        />
+                        <div className="position-absolute top-0 end-0 p-1">
                           <button
-                            className="btn bg-primary-transparent border-dashed border-primary w-100 text-start"
-                            data-bs-toggle="modal"
-                            data-inert={true}
-                            data-bs-target="#add_todo"
+                            className="btn btn-danger btn-xs p-0 px-1"
+                            style={{ fontSize: "10px" }}
+                            onClick={() => handleDeleteFile(img.id)}
+                            title="Delete image"
                           >
-                            <i className="ti ti-plus me-2" />
-                            New task
+                            <i className="ti ti-x" />
                           </button>
                         </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="accordion-item ">
-                    <div className="accordion-header" id="headingThree">
-                      <div className="accordion-button">
-                        <div className="d-flex align-items-center flex-fill">
-                          <h5>Images</h5>
-                          <div className=" ms-auto d-flex align-items-center">
-                            <Link
-                              to="#"
-                              className="btn btn-primary btn-xs d-inline-flex align-items-center me-3"
-                            >
-                              <i className="ti ti-square-rounded-plus-filled me-1" />
-                              Add New
-                            </Link>
-                            <Link
-                              to="#"
-                              className="d-flex align-items-center collapsed collapse-arrow"
-                              data-bs-toggle="collapse"
-                              data-bs-target="#primaryBorderThree"
-                              aria-expanded="false"
-                              aria-controls="primaryBorderThree"
-                            >
-                              <i className="ti ti-chevron-down fs-18" />
-                            </Link>
-                          </div>
+                        <div className="px-1 py-0.5 bg-white border-top">
+                          <span className="text-muted fs-10 text-truncate d-block" title={img.name}>{img.name}</span>
                         </div>
                       </div>
                     </div>
-                    <div
-                      id="primaryBorderThree"
-                      className="accordion-collapse collapse show border-top"
-                      aria-labelledby="headingThree"
-                      data-bs-parent="#accordionExample"
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Files Card — dynamic */}
+            <div className="card shadow-sm border-0 rounded-3 p-4 mb-4">
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <h5 className="fw-bold text-dark mb-0">Files</h5>
+                <label className="text-primary cursor-pointer hover-primary fs-13 mb-0" style={{ cursor: "pointer" }}>
+                  {fileUploading ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="ti ti-plus" />} Add New
+                  <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.zip,.txt,.csv,.ppt,.pptx" className="d-none" onChange={handleFileUpload} />
+                </label>
+              </div>
+              {projectFiles.filter((f) => f.fileType === "file").length === 0 ? (
+                <p className="text-muted text-center py-3 mb-0 fs-13">No files uploaded yet.</p>
+              ) : (
+                <div className="row g-3">
+                  {projectFiles.filter((f) => f.fileType === "file").map((file) => {
+                    const ext = file.name.split(".").pop()?.toLowerCase() || "";
+                    const iconMap: Record<string, string> = { pdf: "ti-file-description", doc: "ti-file-text", docx: "ti-file-text", xls: "ti-table", xlsx: "ti-table", zip: "ti-zip", txt: "ti-file" };
+                    const colorMap: Record<string, string> = { pdf: "danger", doc: "primary", docx: "primary", xls: "success", xlsx: "success", zip: "warning", txt: "secondary" };
+                    const icon = iconMap[ext] || "ti-file";
+                    const color = colorMap[ext] || "secondary";
+                    const sizeLabel = file.sizeBytes ? `${(file.sizeBytes / (1024 * 1024)).toFixed(1)} MB` : "Unknown";
+                    return (
+                      <div className="col-md-4" key={file.id}>
+                        <div className="border rounded p-3 bg-light-transparent position-relative">
+                          <div className="d-flex align-items-center gap-3">
+                            <div className={`avatar bg-${color}-transparent text-${color} rounded p-2`}>
+                              <i className={`ti ${icon} fs-20`} />
+                            </div>
+                            <div className="overflow-hidden">
+                              <h6 className="fw-bold text-dark mb-1 text-truncate" title={file.name}>{file.name}</h6>
+                              <span className="text-muted fs-11">{sizeLabel}</span>
+                            </div>
+                          </div>
+                          <div className="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                            <span className="text-muted fs-10">
+                              {new Date(file.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                            </span>
+                            <div className="d-flex gap-2">
+                              <a href={getFileUrl(file.url)} download={file.name} target="_blank" rel="noreferrer">
+                                <i className="ti ti-download text-muted cursor-pointer hover-primary" />
+                              </a>
+                              <i className="ti ti-trash text-muted cursor-pointer hover-danger" onClick={() => handleDeleteFile(file.id)} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Notes & Activity Layout */}
+            <div className="row">
+              {/* Notes Card — dynamic */}
+              <div className="col-md-6 mb-4">
+                <div className="card shadow-sm border-0 rounded-3 p-4 h-100">
+                  <div className="d-flex justify-content-between align-items-center mb-4">
+                    <h5 className="fw-bold text-dark mb-0">Notes</h5>
+                    <span
+                      className="text-primary cursor-pointer hover-primary fs-13"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setShowNoteForm((v) => !v)}
                     >
-                      <div className="accordion-body">
-                        <div className="media-images-slider owl-carousel">
-                          <Link
-                            to="assets/img/media/media-big-08.jpg"
-                            data-fancybox="gallery"
-                            className="gallery-item"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/media/media-08.jpg"
-                              className=" rounded"
-                              alt="User Image"
-                            />
-                            <div className="d-flex align-items-center hover-links">
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-maximize" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-link" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-trash" />
-                              </span>
-                            </div>
-                          </Link>
-                          <Link
-                            to="assets/img/media/media-big-09.jpg"
-                            data-fancybox="gallery"
-                            className="gallery-item"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/media/media-09.jpg"
-                              className="rounded"
-                              alt="User Image"
-                            />
-                            <div className="d-flex align-items-center hover-links">
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-maximize" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-link" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-trash" />
-                              </span>
-                            </div>
-                          </Link>
-                          <Link
-                            to="assets/img/media/media-big-10.jpg"
-                            data-fancybox="gallery"
-                            className="gallery-item"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/media/media-10.jpg"
-                              className="rounded"
-                              alt="User Image"
-                            />
-                            <div className="d-flex align-items-center hover-links">
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-maximize" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-link" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-trash" />
-                              </span>
-                            </div>
-                          </Link>
-                          <Link
-                            to="assets/img/media/media-big-11.jpg"
-                            data-fancybox="gallery"
-                            className="gallery-item"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/media/media-11.jpg"
-                              className="rounded"
-                              alt="User Image"
-                            />
-                            <div className="d-flex align-items-center hover-links">
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-maximize" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-link" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-trash" />
-                              </span>
-                            </div>
-                          </Link>
-                          <Link
-                            to="assets/img/media/media-big-12.jpg"
-                            data-fancybox="gallery"
-                            className="gallery-item"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/media/media-12.jpg"
-                              className="rounded"
-                              alt="User Image"
-                            />
-                            <div className="d-flex align-items-center hover-links">
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-maximize" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-link" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-trash" />
-                              </span>
-                            </div>
-                          </Link>
-                          <Link
-                            to="assets/img/media/media-big-13.jpg"
-                            data-fancybox="gallery"
-                            className="gallery-item"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/media/media-13.jpg"
-                              className="rounded"
-                              alt="User Image"
-                            />
-                            <div className="d-flex align-items-center hover-links">
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-maximize" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-link" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-trash" />
-                              </span>
-                            </div>
-                          </Link>
-                          <Link
-                            to="assets/img/media/media-big-14.jpg"
-                            data-fancybox="gallery"
-                            className="gallery-item"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/media/media-14.jpg"
-                              className="rounded"
-                              alt="User Image"
-                            />
-                            <div className="d-flex align-items-center hover-links">
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-maximize" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-link" />
-                              </span>
-                              <span className="avatar avatar-md avatar-rounded">
-                                <i className="ti ti-trash" />
-                              </span>
-                            </div>
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
+                      <i className="ti ti-plus" /> Add New
+                    </span>
                   </div>
-                  <div className="accordion-item">
-                    <div className="accordion-header" id="headingFour">
-                      <div className="accordion-button">
-                        <div className="d-flex align-items-center flex-fill">
-                          <h5>Files</h5>
-                          <div className=" ms-auto d-flex align-items-center">
-                            <Link
-                              to="#"
-                              className="btn btn-primary btn-xs d-inline-flex align-items-center me-3"
-                            >
-                              <i className="ti ti-square-rounded-plus-filled me-1" />
-                              Add New
-                            </Link>
-                            <Link
-                              to="#"
-                              className="d-flex align-items-center collapsed collapse-arrow"
-                              data-bs-toggle="collapse"
-                              data-bs-target="#primaryBorderFour"
-                              aria-expanded="false"
-                              aria-controls="primaryBorderFour"
-                            >
-                              <i className="ti ti-chevron-down fs-18" />
-                            </Link>
-                          </div>
-                        </div>
+
+                  {/* Add Note Form */}
+                  {showNoteForm && (
+                    <form onSubmit={handleAddNote} className="mb-4 border rounded p-3 bg-light-transparent">
+                      <div className="mb-2">
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          placeholder="Note title..."
+                          value={noteTitle}
+                          onChange={(e) => setNoteTitle(e.target.value)}
+                          required
+                        />
                       </div>
-                    </div>
-                    <div
-                      id="primaryBorderFour"
-                      className="accordion-collapse collapse show border-top"
-                      aria-labelledby="headingFour"
-                    >
-                      <div className="accordion-body">
-                        <div className="files-carousel owl-carousel">
-                          <div className="card shadow-none mb-0">
-                            <div className="card-body">
-                              <div className="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
-                                <div className="d-flex align-items-center">
-                                  <Link
-                                    to="#"
-                                    className="avatar avatar-md bg-light me-2"
-                                  >
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/file-02.svg"
-                                      className="w-auto h-auto"
-                                      alt="User Image"
-                                    />
-                                  </Link>
-                                  <div>
-                                    <h6 className="mb-1">Project_1.docx</h6>
-                                    <span>7.6 MB</span>
-                                  </div>
-                                </div>
-                                <div className="d-flex align-items-center">
-                                  <Link to="#" className="btn btn-sm btn-icon">
-                                    <i className="ti ti-download" />
-                                  </Link>
-                                  <Link to="#" className="btn btn-sm btn-icon">
-                                    <i className="ti ti-trash" />
-                                  </Link>
-                                </div>
-                              </div>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <p className="fw-medium mb-0">
-                                  15 May 2024, 6:53 PM
-                                </p>
-                                <span className="avatar avatar-sm avatar-rounded">
-                                  <ImageWithBasePath
-                                    src="assets/img/profiles/avatar-02.jpg"
-                                    alt="User Image"
-                                  />
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="card shadow-none mb-0">
-                            <div className="card-body">
-                              <div className="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
-                                <div className="d-flex align-items-center">
-                                  <Link
-                                    to="#"
-                                    className="avatar avatar-md bg-light me-2"
-                                  >
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/file-01.svg"
-                                      className="w-auto h-auto"
-                                      alt="User Image"
-                                    />
-                                  </Link>
-                                  <div>
-                                    <h6 className="mb-1">Proposal.pdf</h6>
-                                    <span>12.6 MB</span>
-                                  </div>
-                                </div>
-                                <div className="d-flex align-items-center">
-                                  <Link to="#" className="btn btn-sm btn-icon">
-                                    <i className="ti ti-download" />
-                                  </Link>
-                                  <Link to="#" className="btn btn-sm btn-icon">
-                                    <i className="ti ti-trash" />
-                                  </Link>
-                                </div>
-                              </div>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <p className="fw-medium mb-0">
-                                  15 May 2024, 6:53 PM
-                                </p>
-                                <span className="avatar avatar-sm avatar-rounded">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-19.jpg"
-                                    alt="User Image"
-                                  />
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="card shadow-none mb-0">
-                            <div className="card-body">
-                              <div className="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
-                                <div className="d-flex align-items-center">
-                                  <Link
-                                    to="#"
-                                    className="avatar avatar-md bg-light me-2"
-                                  >
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/file-04.svg"
-                                      className="w-auto h-auto"
-                                      alt="User Image"
-                                    />
-                                  </Link>
-                                  <div>
-                                    <h6 className="mb-1">Logo-Img.zip</h6>
-                                    <span>6.2 MB</span>
-                                  </div>
-                                </div>
-                                <div className="d-flex align-items-center">
-                                  <Link to="#" className="btn btn-sm btn-icon">
-                                    <i className="ti ti-download" />
-                                  </Link>
-                                  <Link to="#" className="btn btn-sm btn-icon">
-                                    <i className="ti ti-trash" />
-                                  </Link>
-                                </div>
-                              </div>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <p className="fw-medium mb-0">
-                                  15 May 2024, 6:53 PM
-                                </p>
-                                <span className="avatar avatar-sm avatar-rounded">
-                                  <ImageWithBasePath
-                                    src="assets/img/users/user-20.jpg"
-                                    alt="User Image"
-                                  />
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                      <div className="mb-2">
+                        <textarea
+                          className="form-control form-control-sm"
+                          rows={3}
+                          placeholder="Note content..."
+                          value={noteContent}
+                          onChange={(e) => setNoteContent(e.target.value)}
+                          required
+                        />
                       </div>
-                    </div>
+                      <div className="d-flex gap-2">
+                        <button type="submit" className="btn btn-sm btn-primary px-3">Save Note</button>
+                        <button type="button" className="btn btn-sm btn-light" onClick={() => setShowNoteForm(false)}>Cancel</button>
+                      </div>
+                    </form>
+                  )}
+
+                  <div className="d-flex flex-column gap-3">
+                    {notes.length === 0 ? (
+                      <p className="text-muted text-center py-3 mb-0 fs-13">No notes yet. Click "Add New" to add one.</p>
+                    ) : (
+                      notes.map((note) => (
+                        <div className="border rounded p-3 bg-light-transparent" key={note.id}>
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <span className="text-muted fs-11">
+                              {new Date(note.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                            </span>
+                            <i
+                              className="ti ti-trash text-muted cursor-pointer hover-danger fs-13"
+                              style={{ cursor: "pointer" }}
+                              onClick={() => handleDeleteNote(note.id)}
+                              title="Delete note"
+                            />
+                          </div>
+                          <h6 className="fw-bold text-dark mb-1 d-flex align-items-center gap-2">
+                            <span style={{ width: "8px", height: "8px", background: "#FF7300", borderRadius: "50%", flexShrink: 0 }} />
+                            {note.title}
+                          </h6>
+                          <p className="text-muted fs-12 mb-0" style={{ lineHeight: "1.5" }}>{note.content}</p>
+                          {note.createdBy && (
+                            <span className="text-muted fs-10 mt-1 d-block">
+                              By {note.createdBy.firstName} {note.createdBy.lastName}
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
-                  <div className="row">
-                    <div className="col-xl-6 d-flex">
-                      <div className="accordion-item flex-fill">
-                        <div className="accordion-header" id="headingFive">
-                          <div className="accordion-button">
-                            <div className="d-flex align-items-center flex-fill">
-                              <h5>Notes</h5>
-                              <div className=" ms-auto d-flex align-items-center">
-                                <Link
-                                  to="#"
-                                  className="btn btn-primary btn-xs d-inline-flex align-items-center me-3"
-                                >
-                                  <i className="ti ti-square-rounded-plus-filled me-1" />
-                                  Add New
-                                </Link>
-                                <Link
-                                  to="#"
-                                  className="d-flex align-items-center collapsed collapse-arrow"
-                                  data-bs-toggle="collapse"
-                                  data-bs-target="#primaryBorderFive"
-                                  aria-expanded="false"
-                                  aria-controls="primaryBorderFive"
-                                >
-                                  <i className="ti ti-chevron-down fs-18" />
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                </div>
+              </div>
+
+
+              {/* Activity Timeline Card */}
+              <div className="col-md-6 mb-4">
+                <div className="card shadow-sm border-0 rounded-3 p-4 h-100">
+                  <div className="d-flex justify-content-between align-items-center mb-4">
+                    <h5 className="fw-bold text-dark mb-0">Activity</h5>
+                    <span className="text-primary cursor-pointer hover-primary fs-13"><i className="ti ti-plus" /> Add New</span>
+                  </div>
+                  <div className="d-flex flex-column gap-4 position-relative ps-3 border-start">
+                    {[
+                      { user: "Andrew", action: "added a New Task", time: "15 May 2024, 6:53 PM", color: "primary" },
+                      { user: "Jermsi", action: 'Moved task "Private chat module"', statusBadge: "Completed", statusColor: "success", nextStatus: "Inprogress", nextColor: "purple", time: "15 May 2024, 6:53 PM", color: "warning" },
+                      { user: "Jermsi", action: 'Created task "Private chat module"', time: "15 May 2024, 6:53 PM", color: "purple" },
+                      { user: "Hendry", action: 'Updated Image "logo.jpg"', time: "15 May 2024, 6:53 PM", color: "info" },
+                    ].map((act, idx) => (
+                      <div className="position-relative" key={idx}>
+                        {/* Bullet point on timeline */}
                         <div
-                          id="primaryBorderFive"
-                          className="accordion-collapse collapse show border-top"
-                          aria-labelledby="headingFive"
-                        >
-                          <div className="accordion-body">
-                            <div className="card">
-                              <div className="card-body">
-                                <div className="d-flex align-items-center justify-content-between mb-2">
-                                  <h6 className="text-gray-5 fw-medium">
-                                    15 May 2025
-                                  </h6>
-                                  <div className="dropdown">
-                                    <Link
-                                      to="#"
-                                      className="d-inline-flex align-items-center"
-                                      data-bs-toggle="dropdown"
-                                      aria-expanded="false"
-                                    >
-                                      <i className="ti ti-dots-vertical" />
-                                    </Link>
-                                    <ul className="dropdown-menu dropdown-menu-end p-3">
-                                      <li>
-                                        <Link
-                                          to="#"
-                                          className="dropdown-item rounded-1"
-                                        >
-                                          <i className="ti ti-edit me-2" />
-                                          Edit
-                                        </Link>
-                                      </li>
-                                      <li>
-                                        <Link
-                                          to="#"
-                                          className="dropdown-item rounded-1"
-                                        >
-                                          <i className="ti ti-trash me-1" />
-                                          Delete
-                                        </Link>
-                                      </li>
-                                    </ul>
-                                  </div>
-                                </div>
-                                <h6 className="d-flex align-items-center mb-2">
-                                  <i className="ti ti-point-filled text-primary me-1" />
-                                  Changes &amp; design
-                                </h6>
-                                <p className="text-truncate line-clamb-3">
-                                  An office management app project streamlines
-                                  administrative tasks by integrating tools for
-                                  scheduling, communication, and task
-                                  management, enhancing overall productivity and
-                                  efficiency.
-                                </p>
-                              </div>
+                          className={`bg-${act.color} rounded-circle position-absolute`}
+                          style={{ width: "10px", height: "10px", left: "-21px", top: "5px" }}
+                        />
+                        <div className="fs-13">
+                          <span className="fw-bold text-dark">{act.user}</span> {act.action}
+                          {act.statusBadge && (
+                            <div className="d-flex align-items-center gap-1.5 mt-1.5 flex-wrap">
+                              <span className={`badge bg-${act.statusColor}-transparent text-${act.statusColor} fs-10 px-2 py-0.5`}>{act.statusBadge}</span>
+                              <i className="ti ti-arrow-right fs-10 text-muted" />
+                              <span className={`badge bg-${act.nextColor}-transparent text-${act.nextColor} fs-10 px-2 py-0.5`}>{act.nextStatus}</span>
                             </div>
-                            <div className="card mb-0">
-                              <div className="card-body">
-                                <div className="d-flex align-items-center justify-content-between mb-2">
-                                  <h6 className="text-gray-5 fw-medium">
-                                    15 May 2025
-                                  </h6>
-                                  <div className="dropdown">
-                                    <Link
-                                      to="#"
-                                      className="d-inline-flex align-items-center"
-                                      data-bs-toggle="dropdown"
-                                      aria-expanded="false"
-                                    >
-                                      <i className="ti ti-dots-vertical" />
-                                    </Link>
-                                    <ul className="dropdown-menu dropdown-menu-end p-3">
-                                      <li>
-                                        <Link
-                                          to="#"
-                                          className="dropdown-item rounded-1"
-                                        >
-                                          <i className="ti ti-edit me-2" />
-                                          Edit
-                                        </Link>
-                                      </li>
-                                      <li>
-                                        <Link
-                                          to="#"
-                                          className="dropdown-item rounded-1"
-                                        >
-                                          <i className="ti ti-trash me-1" />
-                                          Delete
-                                        </Link>
-                                      </li>
-                                    </ul>
-                                  </div>
-                                </div>
-                                <h6 className="d-flex align-items-center mb-2">
-                                  <i className="ti ti-point-filled text-primary me-1" />
-                                  Changes &amp; design
-                                </h6>
-                                <p className="text-truncate line-clamb-3">
-                                  An office management app project streamlines
-                                  administrative tasks by integrating tools for
-                                  scheduling, communication, and task
-                                  management, enhancing overall productivity and
-                                  efficiency.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
+                          )}
                         </div>
+                        <span className="text-muted fs-10 mt-1 d-block">{act.time}</span>
                       </div>
-                    </div>
-                    <div className="col-xl-6 d-flex">
-                      <div className="accordion-item flex-fill">
-                        <div className="accordion-header" id="headingSix">
-                          <div className="accordion-button">
-                            <div className="d-flex align-items-center flex-fill">
-                              <h5>Activity</h5>
-                              <div className=" ms-auto d-flex align-items-center">
-                                <Link
-                                  to="#"
-                                  className="btn btn-primary btn-xs d-inline-flex align-items-center me-3"
-                                >
-                                  <i className="ti ti-square-rounded-plus-filled me-1" />
-                                  Add New
-                                </Link>
-                                <Link
-                                  to="#"
-                                  className="d-flex align-items-center collapsed collapse-arrow"
-                                  data-bs-toggle="collapse"
-                                  data-bs-target="#primaryBorderSix"
-                                  aria-expanded="false"
-                                  aria-controls="primaryBorderSix"
-                                >
-                                  <i className="ti ti-chevron-down fs-18" />
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div
-                          id="primaryBorderSix"
-                          className="accordion-collapse collapse show border-top"
-                          aria-labelledby="headingSix"
-                        >
-                          <div className="accordion-body">
-                            <div className="notice-widget">
-                              <div className="d-flex align-items-center justify-content-between mb-4">
-                                <div className="d-flex overflow-hidden">
-                                  <span className="bg-info avatar avatar-md me-3 rounded-circle flex-shrink-0">
-                                    <i className="ti ti-checkup-list fs-16" />
-                                  </span>
-                                  <div className="overflow-hidden">
-                                    <p className="text-truncate mb-1">
-                                      <span className="text-gray-9 fw-medium">
-                                        Andrew
-                                      </span>
-                                      added a New Task
-                                    </p>
-                                    <p className="mb-1">15 May 2024, 6:53 PM</p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="d-flex align-items-center justify-content-between mb-4">
-                                <div className="d-flex overflow-hidden me-2">
-                                  <span className="bg-warning avatar avatar-md me-3 rounded-circle flex-shrink-0">
-                                    <i className="ti ti-circle-dot fs-16" />
-                                  </span>
-                                  <div className="overflow-hidden">
-                                    <p className="text-truncate mb-1">
-                                      <span className="text-gray-9 fw-medium">
-                                        Jermai{" "}
-                                      </span>
-                                      Moved task{" "}
-                                      <span className="text-gray-9 fw-medium">
-                                        {" "}
-                                        “Private chat module”
-                                      </span>
-                                    </p>
-                                    <p className="mb-1">15 May 2024, 6:53 PM</p>
-                                    <div className="d-flex align-items-center">
-                                      <span className="badge badge-success me-2">
-                                        <i className="ti ti-point-filled me-1" />
-                                        Completed
-                                      </span>
-                                      <span>
-                                        <i className="ti ti-arrows-left-right me-2" />
-                                      </span>
-                                      <span className="badge badge-purple">
-                                        <i className="ti ti-point-filled me-1" />
-                                        Inprogress
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="d-flex align-items-center justify-content-between mb-4">
-                                <div className="d-flex overflow-hidden me-2">
-                                  <span className="bg-purple avatar avatar-md me-3 rounded-circle flex-shrink-0">
-                                    <i className="ti ti-checkup-list fs-16" />
-                                  </span>
-                                  <div className="overflow-hidden">
-                                    <p className="text-truncate mb-1">
-                                      <span className="text-gray-9 fw-medium">
-                                        Jermai{" "}
-                                      </span>
-                                      Created task{" "}
-                                      <span className="text-gray-9 fw-medium">
-                                        {" "}
-                                        “Private chat module”
-                                      </span>
-                                    </p>
-                                    <p className="mb-1">15 May 2024, 6:53 PM</p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <div className="d-flex overflow-hidden">
-                                  <span className="bg-secondary avatar avatar-md me-3 rounded-circle flex-shrink-0">
-                                    <i className="ti ti-photo fs-16" />
-                                  </span>
-                                  <div className="overflow-hidden">
-                                    <p className="text-truncate mb-1">
-                                      <span className="text-gray-9 fw-medium">
-                                        Hendry
-                                      </span>{" "}
-                                      Updated Image{" "}
-                                      <span className="text-gray-9 fw-medium">
-                                        {" "}
-                                        “logo.jpg”{" "}
-                                      </span>
-                                    </p>
-                                    <p className="mb-1">15 May 2024, 6:53 PM</p>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="accordion-item">
-                    <div className="accordion-header" id="headingSeven">
-                      <div className="accordion-button">
-                        <h5>Invoices</h5>
-                        <div className=" ms-auto d-flex align-items-center">
-                          <Link
-                            to="#"
-                            className="d-flex align-items-center collapsed collapse-arrow"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#primaryBorderSeven"
-                            aria-expanded="false"
-                            aria-controls="primaryBorderSeven"
-                          >
-                            <i className="ti ti-chevron-down fs-18" />
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      id="primaryBorderSeven"
-                      className="accordion-collapse collapse show border-top"
-                      aria-labelledby="headingSeven"
-                      data-bs-parent="#accordionExample"
-                    >
-                      <div className="accordion-body">
-                        <div className="list-group list-group-flush">
-                          <div className="list-group-item border rounded mb-2 p-2">
-                            <div className="row align-items-center g-3">
-                              <div className="col-sm-6">
-                                <div className="d-flex align-items-center">
-                                  <span className="avatar avatar-lg bg-light flex-shrink-0 me-2">
-                                    <i className="ti ti-file-invoice text-dark fs-24" />
-                                  </span>
-                                  <div>
-                                    <h6 className="fw-medium mb-1">
-                                      Phase 2 Completion
-                                    </h6>
-                                    <p>
-                                      <Link to="#" className="text-info">
-                                        #INV-123{" "}
-                                      </Link>{" "}
-                                      11 Sep 2025, 05:35 pm
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-sm-3">
-                                <div>
-                                  <span>Amount</span>
-                                  <p className="text-dark">$6,598</p>
-                                </div>
-                              </div>
-                              <div className="col-sm-3">
-                                <div className="d-flex align-items-center justify-content-sm-end">
-                                  <span className="badge badge-soft-success d-inline-flex  align-items-center me-4">
-                                    <i className="ti ti-point-filled me-1" />
-                                    Paid
-                                  </span>
-                                  <Link to="#" className="btn btn-icon btn-sm">
-                                    <i className="ti ti-edit" />
-                                  </Link>
-                                  <Link to="#" className="btn btn-icon btn-sm ">
-                                    <i className="ti ti-trash" />
-                                  </Link>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="list-group-item border rounded mb-2 p-2">
-                            <div className="row align-items-center g-3">
-                              <div className="col-sm-6">
-                                <div className="d-flex align-items-center">
-                                  <span className="avatar avatar-lg bg-light flex-shrink-0 me-2">
-                                    <i className="ti ti-file-invoice text-dark fs-24" />
-                                  </span>
-                                  <div>
-                                    <h6 className="fw-medium mb-1">
-                                      Advance for Project
-                                    </h6>
-                                    <p>
-                                      <Link to="#" className="text-info">
-                                        #INV-124{" "}
-                                      </Link>{" "}
-                                      14 Sep 2025, 05:35 pm
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-sm-3">
-                                <div>
-                                  <span>Amount</span>
-                                  <p className="text-dark">$3312</p>
-                                </div>
-                              </div>
-                              <div className="col-sm-3">
-                                <div className="d-flex align-items-center justify-content-sm-end">
-                                  <span className="badge badge-soft-success d-inline-flex  align-items-center me-4">
-                                    <i className="ti ti-point-filled me-1" />
-                                    Hold
-                                  </span>
-                                  <Link to="#" className="btn btn-icon btn-sm">
-                                    <i className="ti ti-edit" />
-                                  </Link>
-                                  <Link to="#" className="btn btn-icon btn-sm ">
-                                    <i className="ti ti-trash" />
-                                  </Link>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="list-group-item border rounded mb-2 p-2">
-                            <div className="row align-items-center g-3">
-                              <div className="col-sm-6">
-                                <div className="d-flex align-items-center">
-                                  <span className="avatar avatar-lg bg-light flex-shrink-0 me-2">
-                                    <i className="ti ti-file-invoice text-dark fs-24" />
-                                  </span>
-                                  <div>
-                                    <h6 className="fw-medium mb-1">
-                                      Changes &amp; design Alignments
-                                    </h6>
-                                    <p>
-                                      <Link to="#" className="text-info">
-                                        #INV-125{" "}
-                                      </Link>{" "}
-                                      15 Sep 2025, 05:35 pm
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-sm-3">
-                                <div>
-                                  <span>Amount</span>
-                                  <p className="text-dark">$4154</p>
-                                </div>
-                              </div>
-                              <div className="col-sm-3">
-                                <div className="d-flex align-items-center justify-content-sm-end">
-                                  <span className="badge badge-soft-success d-inline-flex  align-items-center me-4">
-                                    <i className="ti ti-point-filled me-1" />
-                                    Paid
-                                  </span>
-                                  <Link to="#" className="btn btn-icon btn-sm">
-                                    <i className="ti ti-edit" />
-                                  </Link>
-                                  <Link to="#" className="btn btn-icon btn-sm ">
-                                    <i className="ti ti-trash" />
-                                  </Link>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="list-group-item border rounded mb-2 p-2">
-                            <div className="row align-items-center g-3">
-                              <div className="col-sm-6">
-                                <div className="d-flex align-items-center">
-                                  <span className="avatar avatar-lg bg-light flex-shrink-0 me-2">
-                                    <i className="ti ti-file-invoice text-dark fs-24" />
-                                  </span>
-                                  <div>
-                                    <h6 className="fw-medium mb-1">
-                                      Added New Functionality
-                                    </h6>
-                                    <p>
-                                      <Link to="#" className="text-info">
-                                        #INV-126{" "}
-                                      </Link>{" "}
-                                      16 Sep 2025, 05:35 pm
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-sm-3">
-                                <div>
-                                  <span>Amount</span>
-                                  <p className="text-dark">$658</p>
-                                </div>
-                              </div>
-                              <div className="col-sm-3">
-                                <div className="d-flex align-items-center justify-content-sm-end">
-                                  <span className="badge badge-soft-success d-inline-flex  align-items-center me-4">
-                                    <i className="ti ti-point-filled me-1" />
-                                    Paid
-                                  </span>
-                                  <Link to="#" className="btn btn-icon btn-sm">
-                                    <i className="ti ti-edit" />
-                                  </Link>
-                                  <Link to="#" className="btn btn-icon btn-sm ">
-                                    <i className="ti ti-trash" />
-                                  </Link>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="list-group-item border rounded p-2">
-                            <div className="row align-items-center g-3">
-                              <div className="col-sm-6">
-                                <div className="d-flex align-items-center">
-                                  <span className="avatar avatar-lg bg-light flex-shrink-0 me-2">
-                                    <i className="ti ti-file-invoice text-dark fs-24" />
-                                  </span>
-                                  <div>
-                                    <h6 className="fw-medium mb-1">
-                                      Phase 1 Completion
-                                    </h6>
-                                    <p>
-                                      <Link to="#" className="text-info">
-                                        #INV-127{" "}
-                                      </Link>{" "}
-                                      17 Sep 2025, 05:35 pm
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-sm-3">
-                                <div>
-                                  <span>Amount</span>
-                                  <p className="text-dark">$1259</p>
-                                </div>
-                              </div>
-                              <div className="col-sm-3">
-                                <div className="d-flex align-items-center justify-content-sm-end">
-                                  <span className="badge badge-soft-danger d-inline-flex  align-items-center me-4">
-                                    <i className="ti ti-point-filled me-1" />
-                                    Unpaid
-                                  </span>
-                                  <Link to="#" className="btn btn-icon btn-sm">
-                                    <i className="ti ti-edit" />
-                                  </Link>
-                                  <Link to="#" className="btn btn-icon btn-sm ">
-                                    <i className="ti ti-trash" />
-                                  </Link>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
-                <div className="text-end mb-4">
-                  <div className="dropdown">
-                    <Link
-                      to="#"
-                      className="d-inline-flex align-items-center avatar avatar-lg avatar-rounded bg-primary"
-                      data-bs-toggle="dropdown"
-                    >
-                      <i className="ti ti-plus fs-24 text-white" />
-                    </Link>
-                    <ul className="dropdown-menu dropdown-menu-end bg-gray-900 dropdown-menu-md dropdown-menu-dark p-3">
-                      <li>
-                        <Link
-                          to="#"
-                          className="dropdown-item rounded-1 d-flex align-items-center"
-                        >
-                          <span className="avatar avatar-md bg-gray-800 flex-shrink-0 me-2">
-                            <i className="ti ti-basket-code" />
+              </div>
+            </div>
+
+            {/* Invoices List Card */}
+            <div className="card shadow-sm border-0 rounded-3 p-4">
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <h5 className="fw-bold text-dark mb-0">Invoices</h5>
+                <i className="ti ti-chevron-down text-muted" />
+              </div>
+              <div className="table-responsive">
+                <table className="table table-hover align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th className="fs-12 text-muted">Invoice Name</th>
+                      <th className="fs-12 text-muted">Invoice No</th>
+                      <th className="fs-12 text-muted">Amount</th>
+                      <th className="fs-12 text-muted text-center">Status</th>
+                      <th className="fs-12 text-muted text-end">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { name: "Phase 2 Completion", no: "#INV-123", date: "15 Sep 2025, 05:35 pm", amount: "$4,596", status: "Paid", badge: "success" },
+                      { name: "Advance for Project", no: "#INV-124", date: "14 Sep 2025, 03:20 pm", amount: "$3,012", status: "Paid", badge: "success" },
+                      { name: "Changes & design Alignments", no: "#INV-125", date: "15 Sep 2025, 05:35 pm", amount: "$4,154", status: "Paid", badge: "success" },
+                      { name: "Added New Functionality", no: "#INV-126", date: "16 Sep 2025, 05:35 pm", amount: "$658", status: "Paid", badge: "success" },
+                      { name: "Phase 1 Completion", no: "#INV-127", date: "17 Sep 2025, 05:35 pm", amount: "$1,259", status: "Unpaid", badge: "danger" },
+                    ].map((inv, idx) => (
+                      <tr key={idx}>
+                        <td>
+                          <div className="d-flex align-items-center gap-3">
+                            <div className="avatar avatar-sm bg-light text-muted rounded p-1.5">
+                              <i className="ti ti-file-text fs-16" />
+                            </div>
+                            <div>
+                              <h6 className="fw-bold text-dark mb-0.5 fs-13">{inv.name}</h6>
+                              <span className="text-muted fs-10">{inv.date}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="fw-semibold text-primary fs-13">{inv.no}</td>
+                        <td className="fw-bold text-dark fs-13">{inv.amount}</td>
+                        <td className="text-center">
+                          <span className={`badge bg-${inv.badge}-transparent text-${inv.badge} px-2.5 py-1 rounded fs-11`}>
+                            {inv.status}
                           </span>
-                          <div>
-                            <h6 className="fw-medium text-white mb-1">
-                              Add a Task
-                            </h6>
-                            <p className="text-white">
-                              Create a new Priority tasks{" "}
-                            </p>
+                        </td>
+                        <td className="text-end">
+                          <div className="d-flex justify-content-end gap-2 text-muted">
+                            <i className="ti ti-edit cursor-pointer hover-primary" />
+                            <i className="ti ti-trash cursor-pointer hover-danger" />
                           </div>
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
-                          to="#"
-                          className="dropdown-item rounded-1 d-flex align-items-center"
-                        >
-                          <span className="avatar avatar-md bg-gray-800 flex-shrink-0 me-2">
-                            <i className="ti ti-file-invoice" />
-                          </span>
-                          <div>
-                            <h6 className="fw-medium text-white mb-1">
-                              Add Invoice
-                            </h6>
-                            <p className="text-white">Create a new Billing</p>
-                          </div>
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
-                          to="#"
-                          className="dropdown-item rounded-1 d-flex align-items-center"
-                        >
-                          <span className="avatar avatar-md bg-gray-800 flex-shrink-0 me-2">
-                            <i className="ti ti-file-description" />
-                          </span>
-                          <div>
-                            <h6 className="fw-medium text-white mb-1">Notes</h6>
-                            <p className="text-white">
-                              Create new note for you &amp; team
-                            </p>
-                          </div>
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
-                          to="#"
-                          className="dropdown-item rounded-1 d-flex align-items-center"
-                        >
-                          <span className="avatar avatar-md bg-gray-800 flex-shrink-0 me-2">
-                            <i className="ti ti-folder-open" />
-                          </span>
-                          <div>
-                            <h6 className="fw-medium text-white mb-1">
-                              Add Files
-                            </h6>
-                            <p className="text-white">
-                              Upload New files for this Client
-                            </p>
-                          </div>
-                        </Link>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-          <p className="mb-0">2014 - 2026 © SmartHR.</p>
-          <p>
-            Designed &amp; Developed By{" "}
-            <Link to="#" className="text-primary">
-              Dreams
-            </Link>
-          </p>
-        </div>
-      </div>
-      {/* /Page Wrapper */}
-      {/* Add Project */}
-      <div className="modal fade" id="add_project" role="dialog">
-        <div className="modal-dialog modal-dialog-centered modal-lg">
-          <div className="modal-content">
-            <div className="modal-header header-border align-items-center justify-content-between">
-              <div className="d-flex align-items-center">
-                <h5 className="modal-title me-2">Add Project </h5>
-                <p className="text-dark">Project ID : PRO-0004</p>
-              </div>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <div className="add-info-fieldset ">
-              <div className="contact-grids-tab p-3 pb-0">
-                <ul className="nav nav-underline" id="myTab" role="tablist">
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link active"
-                      id="basic-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#basic-info"
-                      type="button"
-                      role="tab"
-                      aria-selected="true"
-                    >
-                      Basic Information
-                    </button>
-                  </li>
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link"
-                      id="member-tab"
-                      data-bs-toggle="tab"
-                      data-bs-target="#member"
-                      type="button"
-                      role="tab"
-                      aria-selected="false"
-                    >
-                      Members
-                    </button>
-                  </li>
-                </ul>
-              </div>
-              <div className="tab-content" id="myTabContent">
-                <div
-                  className="tab-pane fade show active"
-                  id="basic-info"
-                  role="tabpanel"
-                  aria-labelledby="basic-tab"
-                  tabIndex={0}
-                >
-                  <form>
-                    <div className="modal-body">
-                      <div className="row">
-                        <div className="col-md-12">
-                          <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
-                            <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                              <i className="ti ti-photo text-gray-2 fs-16" />
-                            </div>
-                            <div className="profile-upload">
-                              <div className="mb-2">
-                                <h6 className="mb-1">Upload Project Logo</h6>
-                                <p className="fs-12">
-                                  Image should be below 4 mb
-                                </p>
-                              </div>
-                              <div className="profile-uploader d-flex align-items-center">
-                                <div className="drag-upload-btn btn btn-sm btn-primary me-2">
-                                  Upload
-                                  <input
-                                    type="file"
-                                    className="form-control image-sign"
-                                    multiple
-                                  />
-                                </div>
-                                <Link to="#" className="btn btn-light btn-sm">
-                                  Cancel
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label">Project Name</label>
-                            <input type="text" className="form-control" />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label">Client</label>
-                            <CommonSelect
-                              className="select"
-                              options={clientChoose}
-                              defaultValue={clientChoose[0]}
-                            />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="row">
-                            <div className="col-md-6">
-                              <div className="mb-3">
-                                <label className="form-label">Start Date</label>
-                                <div className="input-icon-end position-relative">
-                                  <DatePicker
-                                    className="form-control datetimepicker"
-                                    format={{
-                                      format: "DD-MM-YYYY",
-                                      type: "mask",
-                                    }}
-                                    getPopupContainer={getModalContainer}
-                                    placeholder="DD-MM-YYYY"
-                                  />
-                                  <span className="input-icon-addon">
-                                    <i className="ti ti-calendar text-gray-7" />
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="col-md-6">
-                              <div className="mb-3">
-                                <label className="form-label">End Date</label>
-                                <div className="input-icon-end position-relative">
-                                  <DatePicker
-                                    className="form-control datetimepicker"
-                                    format={{
-                                      format: "DD-MM-YYYY",
-                                      type: "mask",
-                                    }}
-                                    getPopupContainer={getModalContainer}
-                                    placeholder="DD-MM-YYYY"
-                                  />
-                                  <span className="input-icon-addon">
-                                    <i className="ti ti-calendar text-gray-7" />
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="col-md-4">
-                              <div className="mb-3">
-                                <label className="form-label">Priority</label>
-                                <CommonSelect
-                                  className="select"
-                                  options={priorityChoose}
-                                  defaultValue={priorityChoose[0]}
-                                />
-                              </div>
-                            </div>
-                            <div className="col-md-4">
-                              <div className="mb-3">
-                                <label className="form-label">
-                                  Project Value
-                                </label>
-                                <input
-                                  type="text"
-                                  className="form-control"
-                                  defaultValue="$"
-                                />
-                              </div>
-                            </div>
-                            <div className="col-md-4">
-                              <div className="mb-3">
-                                <label className="form-label">Price Type</label>
-                                <input
-                                  type="text"
-                                  className="form-control"
-                                  defaultValue=""
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label">Description</label>
-                            <CommonTextEditor />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="input-block mb-0">
-                            <label className="form-label">Upload Files</label>
-                            <input className="form-control" type="file" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="modal-footer">
-                      <div className="d-flex align-items-center justify-content-end">
-                        <button
-                          type="button"
-                          className="btn btn-outline-light border me-2"
-                          data-bs-dismiss="modal"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          className="btn btn-primary"
-                          type="button"
-                          data-bs-dismiss="modal"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-                </div>
-                <div
-                  className="tab-pane fade"
-                  id="member"
-                  role="tabpanel"
-                  aria-labelledby="member-tab"
-                  tabIndex={0}
-                >
-                  <form>
-                    <div className="modal-body">
-                      <div className="row">
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label me-2">
-                              Team Members
-                            </label>
-                            <TagInput
-                              initialTags={tags}
-                              onTagsChange={handleTagsChange}
-                            />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label me-2">
-                              Team Leader
-                            </label>
-                            <TagInput
-                              initialTags={tags2}
-                              onTagsChange={handleTagsChange2}
-                            />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label me-2">
-                              Project Manager
-                            </label>
-                            <TagInput
-                              initialTags={tags2}
-                              onTagsChange={handleTagsChange2}
-                            />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div>
-                            <label className="form-label">Tags</label>
-                            <TagInput
-                              initialTags={tags3}
-                              onTagsChange={handleTagsChange3}
-                            />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label">Status</label>
-                            <CommonSelect
-                              className="select"
-                              options={statusChoose}
-                              defaultValue={statusChoose[0]}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="modal-footer">
-                      <div className="d-flex align-items-center justify-content-end">
-                        <button
-                          type="button"
-                          className="btn btn-outline-light border me-2"
-                          data-bs-dismiss="modal"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          className="btn btn-primary"
-                          type="button"
-                          data-bs-toggle="modal"
-                          data-inert={true}
-                          data-bs-target="#success_modal"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-                </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         </div>
       </div>
-      {/* /Add Project */}
-      {/* Edit Project */}
-      <div className="modal fade" id="edit_project" role="dialog">
-        <div className="modal-dialog modal-dialog-centered modal-lg">
-          <div className="modal-content">
-            <div className="modal-header header-border align-items-center justify-content-between">
-              <div className="d-flex align-items-center">
-                <h5 className="modal-title me-2">Edit Project </h5>
-                <p className="text-dark">Project ID : PRO-0004</p>
-              </div>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <div className="add-info-fieldset ">
-              <div className="contact-grids-tab p-3 pb-0">
-                <ul className="nav nav-underline" id="myTab1" role="tablist">
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link active"
-                      id="basic-tab1"
-                      data-bs-toggle="tab"
-                      data-bs-target="#basic-info1"
-                      type="button"
-                      role="tab"
-                      aria-selected="true"
-                    >
-                      Basic Information
-                    </button>
-                  </li>
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link"
-                      id="member-tab1"
-                      data-bs-toggle="tab"
-                      data-bs-target="#member1"
-                      type="button"
-                      role="tab"
-                      aria-selected="false"
-                    >
-                      Members
-                    </button>
-                  </li>
-                </ul>
-              </div>
-              <div className="tab-content" id="myTabContent1">
-                <div
-                  className="tab-pane fade show active"
-                  id="basic-info1"
-                  role="tabpanel"
-                  aria-labelledby="basic-tab1"
-                  tabIndex={0}
-                >
-                  <form>
-                    <div className="modal-body">
-                      <div className="row">
-                        <div className="col-md-12">
-                          <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
-                            <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                              <i className="ti ti-photo text-gray-2 fs-16" />
-                            </div>
-                            <div className="profile-upload">
-                              <div className="mb-2">
-                                <h6 className="mb-1">Upload Project Logo</h6>
-                                <p className="fs-12">
-                                  Image should be below 4 mb
-                                </p>
-                              </div>
-                              <div className="profile-uploader d-flex align-items-center">
-                                <div className="drag-upload-btn btn btn-sm btn-primary me-2">
-                                  Upload
-                                  <input
-                                    type="file"
-                                    className="form-control image-sign"
-                                    multiple
-                                  />
-                                </div>
-                                <Link to="#" className="btn btn-light btn-sm">
-                                  Cancel
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label">Project Name</label>
-                            <input
-                              type="text"
-                              className="form-control"
-                              defaultValue="Office Management"
-                            />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label">Client</label>
-                            <CommonSelect
-                              className="select"
-                              options={clientChoose}
-                              defaultValue={clientChoose[1]}
-                            />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="row">
-                            <div className="col-md-6">
-                              <div className="mb-3">
-                                <label className="form-label">Start Date</label>
-                                <div className="input-icon-end position-relative">
-                                  <DatePicker
-                                    className="form-control datetimepicker"
-                                    format={{
-                                      format: "DD-MM-YYYY",
-                                      type: "mask",
-                                    }}
-                                    getPopupContainer={getModalContainer}
-                                    placeholder="DD-MM-YYYY"
-                                  />
-                                  <span className="input-icon-addon">
-                                    <i className="ti ti-calendar text-gray-7" />
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="col-md-6">
-                              <div className="mb-3">
-                                <label className="form-label">End Date</label>
-                                <div className="input-icon-end position-relative">
-                                  <DatePicker
-                                    className="form-control datetimepicker"
-                                    format={{
-                                      format: "DD-MM-YYYY",
-                                      type: "mask",
-                                    }}
-                                    getPopupContainer={getModalContainer}
-                                    placeholder="DD-MM-YYYY"
-                                  />
-                                  <span className="input-icon-addon">
-                                    <i className="ti ti-calendar text-gray-7" />
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="col-md-4">
-                              <div className="mb-3">
-                                <label className="form-label">Priority</label>
-                                <CommonSelect
-                                  className="select"
-                                  options={priorityChoose}
-                                  defaultValue={priorityChoose[1]}
-                                />
-                              </div>
-                            </div>
-                            <div className="col-md-4">
-                              <div className="mb-3">
-                                <label className="form-label">
-                                  Project Value
-                                </label>
-                                <input
-                                  type="text"
-                                  className="form-control"
-                                  defaultValue="$"
-                                />
-                              </div>
-                            </div>
-                            <div className="col-md-4">
-                              <div className="mb-3">
-                                <label className="form-label">Price Type</label>
-                                <input
-                                  type="text"
-                                  className="form-control"
-                                  defaultValue=""
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label">Description</label>
-                            <CommonTextEditor />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="input-block mb-0">
-                            <label className="form-label">Upload Files</label>
-                            <input className="form-control" type="file" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="modal-footer">
-                      <div className="d-flex align-items-center justify-content-end">
-                        <button
-                          type="button"
-                          className="btn btn-outline-light border me-2"
-                          data-bs-dismiss="modal"
-                        >
-                          Cancel
-                        </button>
-                        <button className="btn btn-primary" type="submit">
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-                </div>
-                <div
-                  className="tab-pane fade"
-                  id="member1"
-                  role="tabpanel"
-                  aria-labelledby="member-tab1"
-                  tabIndex={0}
-                >
-                  <form>
-                    <div className="modal-body">
-                      <div className="row">
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label me-2">
-                              Team Members
-                            </label>
-                            <TagInput
-                              initialTags={tags}
-                              onTagsChange={handleTagsChange}
-                            />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label me-2">
-                              Team Leader
-                            </label>
-                            <TagInput
-                              initialTags={tags1}
-                              onTagsChange={handleTagsChange1}
-                            />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label me-2">
-                              Project Manager
-                            </label>
-                            <TagInput
-                              initialTags={tags2}
-                              onTagsChange={handleTagsChange2}
-                            />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div>
-                            <label className="form-label">Tags</label>
-                            <TagInput
-                              initialTags={tags3}
-                              onTagsChange={handleTagsChange3}
-                            />
-                          </div>
-                        </div>
-                        <div className="col-md-12">
-                          <div className="mb-3">
-                            <label className="form-label">Status</label>
-                            <CommonSelect
-                              className="select"
-                              options={statusChoose}
-                              defaultValue={statusChoose[1]}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="modal-footer">
-                      <div className="d-flex align-items-center justify-content-end">
-                        <button
-                          type="button"
-                          className="btn btn-outline-light border me-2"
-                          data-bs-dismiss="modal"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          className="btn btn-primary"
-                          type="button"
-                          data-bs-toggle="modal"
-                          data-inert={true}
-                          data-bs-target="#success_modal"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* /Edit Project */}
-      {/* Add Project Success */}
-      <div className="modal fade" id="success_modal" role="dialog">
-        <div className="modal-dialog modal-dialog-centered modal-sm">
-          <div className="modal-content">
-            <div className="modal-body">
-              <div className="text-center p-3">
-                <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
-                  <i className="ti ti-check fs-24" />
-                </span>
-                <h5 className="mb-2">Project Added Successfully</h5>
-                <p className="mb-3">
-                  Stephan Peralt has been added with Client ID :{" "}
-                  <span className="text-primary">#pro - 0004</span>
-                </p>
-                <div>
-                  <div className="row g-2">
-                    <div className="col-6">
-                      <Link
-                        to={all_routes.projectlist}
-                        className="btn btn-dark w-100"
-                      >
-                        Back to List
-                      </Link>
-                    </div>
-                    <div className="col-6">
-                      <Link
-                        to={all_routes.projectdetails}
-                        className="btn btn-primary w-100"
-                      >
-                        Detail Page
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* /Add Project Success */}
-      {/* Edit Todo */}
-      <div className="modal fade" id="edit_todo">
-        <div className="modal-dialog modal-dialog-centered">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title">Edit Todo</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <form >
-              <div className="modal-body">
-                <div className="row">
-                  <div className="col-12">
-                    <div className="mb-3">
-                      <label className="form-label">Todo Title</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue="Update calendar and schedule"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-6">
-                    <div className="mb-3">
-                      <label className="form-label">Tag</label>
-                      <CommonSelect
-                        className="select"
-                        options={tagChoose}
-                        defaultValue={tagChoose[0]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-6">
-                    <div className="mb-3">
-                      <label className="form-label">Priority</label>
-                      <CommonSelect
-                        className="select"
-                        options={priorityChoose}
-                        defaultValue={priorityChoose[0]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-lg-12">
-                    <div className="mb-3">
-                      <label className="form-label">Descriptions</label>
-                      <CommonTextEditor />
-                    </div>
-                  </div>
-                  <div className="col-12">
-                    <div className="mb-3">
-                      <label className="form-label">Add Assignee</label>
-                      <select className="select">
-                        <option>Select</option>
-                        <option>Sophie</option>
-                        <option>Cameron</option>
-                        <option>Doris</option>
-                        <option>Rufana</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="col-12">
-                    <div className="mb-0">
-                      <label className="form-label">Status</label>
-                      <select className="select">
-                        <option>Select</option>
-                        <option>Completed</option>
-                        <option>Pending</option>
-                        <option>Onhold</option>
-                        <option>Inprogress</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-light me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Submit
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      {/* /Edit Todo */}
-      {/* Todo Details */}
-      <div className="modal fade" id="view_todo">
-        <div className="modal-dialog modal-dialog-centered">
-          <div className="modal-content">
-            <div className="modal-header bg-dark">
-              <h4 className="modal-title text-white">
-                Respond to any pending messages
-              </h4>
-              <span className="badge badge-danger d-inline-flex align-items-center">
-                <i className="ti ti-square me-1" />
-                Urgent
-              </span>
-              <span>
-                <i className="ti ti-star-filled text-warning" />
-              </span>
-              <Link to="#">
-                <i className="ti ti-trash text-white" />
-              </Link>
-              <button
-                type="button"
-                className="btn-close custom-btn-close bg-transparent fs-16 text-white position-static"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <div className="modal-body">
-              <h5 className="mb-2">Task Details</h5>
-              <div className="border rounded mb-3 p-2">
-                <div className="row row-gap-3">
-                  <div className="col-md-4">
-                    <div className="text-center">
-                      <span className="d-block mb-1">Created On</span>
-                      <p className="text-dark">22 July 2025</p>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="text-center">
-                      <span className="d-block mb-1">Due Date</span>
-                      <p className="text-dark">22 July 2025</p>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="text-center">
-                      <span className="d-block mb-1">Status</span>
-                      <span className="badge badge-soft-success d-inline-flex align-items-center">
-                        <i className="fas fa-circle fs-6 me-1" />
-                        Completed
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="mb-3">
-                <h5 className="mb-2">Description</h5>
-                <p>
-                  Hiking is a long, vigorous walk, usually on trails or
-                  footpaths in the countryside. Walking for pleasure developed
-                  in Europe during the eighteenth century. Religious pilgrimages
-                  have existed much longer but they involve walking long
-                  distances for a spiritual purpose associated with specific
-                  religions and also we achieve inner peace while we hike at a
-                  local park.
-                </p>
-              </div>
-              <div className="mb-3">
-                <h5 className="mb-2">Tags</h5>
-                <div className="d-flex align-items-center">
-                  <span className="badge badge-danger me-2">Internal</span>
-                  <span className="badge badge-success me-2">Projects</span>
-                  <span className="badge badge-secondary">Reminder</span>
-                </div>
-              </div>
-              <div>
-                <h5 className="mb-2">Assignee</h5>
-                <div className="avatar-list-stacked avatar-group-sm">
-                  <span className="avatar avatar-rounded">
-                    <ImageWithBasePath
-                      className="border border-white"
-                      src="assets/img/profiles/avatar-23.jpg"
-                      alt="User Image"
-                    />
-                  </span>
-                  <span className="avatar avatar-rounded">
-                    <ImageWithBasePath
-                      className="border border-white"
-                      src="assets/img/profiles/avatar-24.jpg"
-                      alt="User Image"
-                    />
-                  </span>
-                  <span className="avatar avatar-rounded">
-                    <ImageWithBasePath
-                      className="border border-white"
-                      src="assets/img/profiles/avatar-25.jpg"
-                      alt="User Image"
-                    />
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* /Todo Details */}
-      {/* Add Todo */}
-      <div className="modal fade" id="add_todo">
-        <div className="modal-dialog modal-dialog-centered">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title">Add New Todo</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <form>
-              <div className="modal-body">
-                <div className="row">
-                  <div className="col-12">
-                    <div className="mb-3">
-                      <label className="form-label">Todo Title</label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-6">
-                    <div className="mb-3">
-                      <label className="form-label">Tag</label>
-                      <CommonSelect
-                        className="select"
-                        options={tagChoose}
-                        defaultValue={tagChoose[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-6">
-                    <div className="mb-3">
-                      <label className="form-label">Priority</label>
-                      <CommonSelect
-                        className="select"
-                        options={priorityChoose}
-                        defaultValue={priorityChoose[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-lg-12">
-                    <div className="mb-3">
-                      <label className="form-label">Descriptions</label>
-                      <CommonTextEditor />
-                    </div>
-                  </div>
-                  <div className="col-12">
-                    <div className="mb-3">
-                      <label className="form-label">Add Assignee</label>
-                      <CommonSelect
-                        className="select"
-                        options={assigneeChoose}
-                        defaultValue={assigneeChoose[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-12">
-                    <div className="mb-0">
-                      <label className="form-label">Status</label>
-                      <CommonSelect
-                        className="select"
-                        options={status1choose}
-                        defaultValue={status1choose[1]}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-light me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  data-bs-dismiss="modal"
-                  className="btn btn-primary"
-                >
-                  Add New Todo
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      {/* /Add Todo */}
-    </>
+    </div>
   );
 };
 
