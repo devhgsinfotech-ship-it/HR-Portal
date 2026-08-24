@@ -462,7 +462,7 @@ const Header = React.memo(() => {
       <div className="header">
         <div className="main-header">
           <div className="header-left">
-            <Link to={routes.adminDashboard} className="logo d-flex align-items-center gap-2">
+            <Link to={routes.adminDashboard} className="logo">
               {companyLogo || user?.companyLogoUrl ? (
                 <img
                   src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiUrl || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
@@ -473,7 +473,7 @@ const Header = React.memo(() => {
                 <ImageWithBasePath src="assets/img/logo.svg" alt="Logo" />
               )}
             </Link>
-            <Link to={routes.adminDashboard} className="dark-logo d-flex align-items-center gap-2">
+            <Link to={routes.adminDashboard} className="dark-logo">
               {companyLogo || user?.companyLogoUrl ? (
                 <img
                   src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiUrl || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
