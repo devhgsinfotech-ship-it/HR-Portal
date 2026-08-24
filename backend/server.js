@@ -7,18 +7,57 @@ const path = require('path');
 
 const app = express();
 
+// Parse allowed origins dynamically from environment variables
+const allowedOriginsEnv = process.env.ALLOWED_ORIGINS || process.env.FRONTEND_DOMAIN || '';
+const allowedOrigins = allowedOriginsEnv
+    .split(',')
+    .map(originStr => originStr.trim())
+    .filter(Boolean)
+    .map(originStr => {
+        if (originStr.includes('://')) {
+            try {
+                return new URL(originStr).hostname;
+            } catch (e) {
+                return originStr.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+            }
+        }
+        return originStr.split('/')[0].split(':')[0];
+    });
+
 app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (like curl, Postman, mobile apps)
         if (!origin) return callback(null, true);
 
-        // Allow localhost for development
-        if (origin.includes('localhost')) return callback(null, true);
+        try {
+            const originUrl = new URL(origin);
+            const originHostname = originUrl.hostname;
 
-        // Allow the production domain
-        const liveDomain = process.env.FRONTEND_DOMAIN || 'aaups.com';
-        if (origin.includes(liveDomain)) {
-            return callback(null, true);
+            // In development, automatically allow localhost and local IPs
+            if (process.env.NODE_ENV !== 'production') {
+                if (
+                    originHostname === 'localhost' ||
+                    originHostname === '127.0.0.1' ||
+                    originHostname.endsWith('.localhost')
+                ) {
+                    return callback(null, true);
+                }
+            }
+
+            // Check against allowed origins list from environment variables
+            const isAllowed = allowedOrigins.some(targetDomain => {
+                return originHostname === targetDomain || originHostname.endsWith('.' + targetDomain);
+            });
+
+            if (isAllowed) {
+                return callback(null, true);
+            }
+        } catch (err) {
+            // Safe fallback if origin is in clean domain env list
+            const cleanOrigin = origin.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+            if (allowedOrigins.includes(cleanOrigin)) {
+                return callback(null, true);
+            }
         }
 
         callback(new Error('Not allowed by CORS'));
