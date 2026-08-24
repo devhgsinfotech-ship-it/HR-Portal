@@ -7,8 +7,8 @@ const path = require('path');
 
 const app = express();
 
-// Parse allowed origins dynamically from environment variables
-const allowedOriginsEnv = process.env.ALLOWED_ORIGINS || process.env.FRONTEND_DOMAIN || '';
+// Parse allowed origins dynamically from environment variables (with fallback for aaups.com)
+const allowedOriginsEnv = process.env.ALLOWED_ORIGINS || process.env.FRONTEND_DOMAIN || 'aaups.com';
 const allowedOrigins = allowedOriginsEnv
     .split(',')
     .map(originStr => originStr.trim())
@@ -60,6 +60,7 @@ app.use(cors({
             }
         }
 
+        console.error(`[CORS BLOCKED] Origin: "${origin}" | Allowed:`, allowedOrigins);
         callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
