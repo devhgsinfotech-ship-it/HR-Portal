@@ -54,16 +54,21 @@ const getRouteRoles = (path: string | undefined): Role[] => {
   // 2. Employee Self-Service routes (Accessible by all)
   const employeeAllowedPrefixes = [
     "/employee-dashboard", "/attendance-employee", "/leaves-employee",
-    "/pages/profile", "/hrm/holidays", "/payslip", "/application"
+    "/pages/profile", "/hrm/holidays", "/application",
+    "/projects", "/tasks", "/task-board", "/clients"
   ];
   if (employeeAllowedPrefixes.some(prefix => p.startsWith(prefix))) {
+    return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+  
+  if (p === "/payslip" || p.startsWith("/payslip/")) {
     return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
 
   // 3. Manager & HR Approvals
   const adminApprovalPrefixes = [
     "/leaves", "/attendance-admin", "/timesheet", "/performance", "/training",
-    "/projects", "/tasks", "/clients", "/tickets"
+    "/tickets"
   ];
   if (adminApprovalPrefixes.some(prefix => p.startsWith(prefix))) {
     return ["SUPER_ADMIN", "HR", "MANAGER"];

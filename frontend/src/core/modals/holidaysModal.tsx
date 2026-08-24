@@ -1,18 +1,36 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import CommonSelect from "../common/commonSelect";
 import { DatePicker } from "antd";
 import apiClient from "../utils/apiClient";
+import dayjs from "dayjs";
 
 interface HolidaysModalProps {
+  selectedHoliday?: any;
   onAddSuccess?: () => void;
 }
 
-const HolidaysModal: React.FC<HolidaysModalProps> = ({ onAddSuccess }) => {
+const HolidaysModal: React.FC<HolidaysModalProps> = ({ selectedHoliday, onAddSuccess }) => {
     const [title, setTitle] = useState('');
     const [holidayDate, setHolidayDate] = useState<any>(null);
     const [description, setDescription] = useState('');
     const [isNational, setIsNational] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
+
+    const [editTitle, setEditTitle] = useState('');
+    const [editHolidayDate, setEditHolidayDate] = useState<any>(null);
+    const [editDescription, setEditDescription] = useState('');
+    const [editIsNational, setEditIsNational] = useState(false);
+    const [editErrorMsg, setEditErrorMsg] = useState('');
+
+    useEffect(() => {
+      if (selectedHoliday) {
+        setEditTitle(selectedHoliday.Title || '');
+        setEditHolidayDate(selectedHoliday.rawDate ? dayjs(selectedHoliday.rawDate) : null);
+        setEditDescription(selectedHoliday.Description || '');
+        setEditIsNational(selectedHoliday.Status === 'National');
+        setEditErrorMsg('');
+      }
+    }, [selectedHoliday]);
 
     const status = [
         { value: "Public", label: "Public" },
@@ -48,6 +66,27 @@ const HolidaysModal: React.FC<HolidaysModalProps> = ({ onAddSuccess }) => {
         if (onAddSuccess) onAddSuccess();
       } catch (err: any) {
         setErrorMsg(err.response?.data?.message || 'Error adding holiday');
+      }
+    };
+
+    const handleEditHoliday = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!selectedHoliday) return;
+      try {
+        await apiClient.put(`/holidays/${selectedHoliday.key}`, {
+          title: editTitle,
+          holidayDate: editHolidayDate ? editHolidayDate.format('YYYY-MM-DD') : null,
+          description: editDescription,
+          isNational: editIsNational
+        });
+        
+        // Close modal and refresh
+        const closeBtn = document.querySelector('#edit_holiday .btn-close') as HTMLButtonElement;
+        if (closeBtn) closeBtn.click();
+        
+        if (onAddSuccess) onAddSuccess();
+      } catch (err: any) {
+        setEditErrorMsg(err.response?.data?.message || 'Error updating holiday');
       }
     };
 
@@ -152,8 +191,9 @@ const HolidaysModal: React.FC<HolidaysModalProps> = ({ onAddSuccess }) => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form>
+            <form onSubmit={handleEditHoliday}>
               <div className="modal-body pb-0">
+                {editErrorMsg && <div className="alert alert-danger">{editErrorMsg}</div>}
                 <div className="row">
                   <div className="col-md-12">
                     <div className="mb-3">
@@ -161,7 +201,9 @@ const HolidaysModal: React.FC<HolidaysModalProps> = ({ onAddSuccess }) => {
                       <input
                         type="text"
                         className="form-control"
-                        defaultValue="New Year"
+                        required
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
                       />
                     </div>
                   </div>
@@ -171,12 +213,11 @@ const HolidaysModal: React.FC<HolidaysModalProps> = ({ onAddSuccess }) => {
                       <div className="input-icon-end position-relative">
                       <DatePicker
                           className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
+                          format="DD-MM-YYYY"
                           getPopupContainer={getModalContainer}
                           placeholder="DD-MM-YYYY"
+                          value={editHolidayDate}
+                          onChange={(date) => setEditHolidayDate(date)}
                         />
                         <span className="input-icon-addon">
                           <i className="ti ti-calendar text-gray-7" />
@@ -190,7 +231,8 @@ const HolidaysModal: React.FC<HolidaysModalProps> = ({ onAddSuccess }) => {
                       <textarea
                         className="form-control"
                         rows={3}
-                        defaultValue={"First day of the new year"}
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
                       />
                     </div>
                   </div>
@@ -198,9 +240,11 @@ const HolidaysModal: React.FC<HolidaysModalProps> = ({ onAddSuccess }) => {
                     <div className="mb-3">
                       <label className="form-label">Status</label>
                       <CommonSelect
+                        key={String(editIsNational)}
                         className="select"
                         options={status}
-                        defaultValue={status[1]}
+                        defaultValue={editIsNational ? status[1] : status[0]}
+                        onChange={(opt) => setEditIsNational(opt?.value === 'National')}
                       />
                     </div>
                   </div>
@@ -214,7 +258,7 @@ const HolidaysModal: React.FC<HolidaysModalProps> = ({ onAddSuccess }) => {
                 >
                   Cancel
                 </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                <button type="submit" className="btn btn-primary">
                   Save Changes
                 </button>
               </div>

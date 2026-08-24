@@ -4,17 +4,23 @@ import { all_routes } from "../../router/all_routes";
 import Table from "../../core/common/dataTable/index";
 import HolidaysModal from "../../core/modals/holidaysModal";
 import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 import apiClient from "../../core/utils/apiClient";
 
 const Holidays = () => {
   const routes = all_routes;
   const [dbHolidays, setDbHolidays] = useState<any[]>([]);
+  const [selectedHoliday, setSelectedHoliday] = useState<any>(null);
+  
+  const userRole = useSelector((state: any) => state.auth.user?.role);
+  const canManageHolidays = userRole === 'HR' || userRole === 'SUPER_ADMIN' || userRole === 'Admin';
 
   const fetchHolidays = async () => {
     try {
       const res = await apiClient.get('/holidays');
       const mapped = res.data.map((h: any) => ({
         key: h.id,
+        rawDate: h.holidayDate,
         Title: h.title,
         Date: new Date(h.holidayDate).toLocaleDateString(),
         Description: h.description || '',
@@ -65,13 +71,14 @@ const Holidays = () => {
     {
       title: "",
       dataIndex: "actions",
-      render: () => (
+      render: (_: any, record: any) => (
         <div className="action-icon d-inline-flex">
           <Link
             to="#"
             className="me-2"
             data-bs-toggle="modal" data-inert={true}
             data-bs-target="#edit_holiday"
+            onClick={() => setSelectedHoliday(record)}
           >
             <i className="ti ti-edit" />
           </Link>
@@ -86,6 +93,9 @@ const Holidays = () => {
       ),
     },
   ];
+
+  // If user cannot manage holidays, remove the actions column
+  const displayColumns = canManageHolidays ? columns : columns.filter(col => col.dataIndex !== 'actions');
 
   return (
     <>
@@ -112,15 +122,17 @@ const Holidays = () => {
             </div>
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
               <div className="mb-2">
-                <Link
-                  to="#"
-                  data-bs-toggle="modal" data-inert={true}
-                  data-bs-target="#add_holiday"
-                  className="btn btn-primary d-flex align-items-center"
-                >
-                  <i className="ti ti-circle-plus me-2" />
-                  Add Holiday
-                </Link>
+                {canManageHolidays && (
+                  <Link
+                    to="#"
+                    data-bs-toggle="modal" data-inert={true}
+                    data-bs-target="#add_holiday"
+                    className="btn btn-primary d-flex align-items-center"
+                  >
+                    <i className="ti ti-circle-plus me-2" />
+                    Add Holiday
+                  </Link>
+                )}
               </div>
               <div className="head-icons ms-2">
                 <CollapseHeader />
@@ -133,12 +145,12 @@ const Holidays = () => {
               <h5>Holidays List</h5>
             </div>
             <div className="card-body p-0">
-              <Table dataSource={dbHolidays} columns={columns} Selection={true} />
+              <Table dataSource={dbHolidays} columns={displayColumns} Selection={true} />
             </div>
           </div>
         </div>
       </div>
-      <HolidaysModal onAddSuccess={fetchHolidays} />
+      <HolidaysModal selectedHoliday={selectedHoliday} onAddSuccess={fetchHolidays} />
     </>
   );
 };

@@ -7,6 +7,7 @@ import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 
 interface Employee {
   id: number;
+  userId?: number;
   firstName: string;
   lastName: string;
   profilePhotoUrl?: string;
@@ -48,6 +49,14 @@ interface BoardData {
 const TaskBoard = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
   const isCompanyAdmin = currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "HR";
+
+  const canEditTask = (task: TaskItem) => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR' || currentUser.role === 'MANAGER' || currentUser.role === 'EMPLOYEE') {
+      return true;
+    }
+    return task.assignedTo?.userId === currentUser.id;
+  };
 
   // Board Data & Lists
   const [boardData, setBoardData] = useState<BoardData>({
@@ -174,6 +183,17 @@ const TaskBoard = () => {
     if (!taskIdStr) return;
 
     const taskId = parseInt(taskIdStr, 10);
+
+    // Find target task to check permissions before making changes
+    let targetTask: TaskItem | null = null;
+    Object.values(boardData).flat().forEach(t => {
+      if (t.id === taskId) targetTask = t;
+    });
+
+    if (targetTask && !canEditTask(targetTask)) {
+      setErrorMsg("You do not have permission to update this task's status.");
+      return;
+    }
 
     try {
       // Find task to update status locally first (optimistic UI)
@@ -317,6 +337,10 @@ const TaskBoard = () => {
   // Toggle subtask status in modal
   const handleToggleSubtask = async (subtaskId: number) => {
     if (!activeTask) return;
+    if (!canEditTask(activeTask)) {
+      setErrorMsg("You do not have permission to update this task.");
+      return;
+    }
     try {
       const res = await apiClient.patch(`/api/tasks/subtasks/${subtaskId}/toggle`);
       if (res.data?.success) {
@@ -752,9 +776,9 @@ const TaskBoard = () => {
 
                         return (
                           <div
-                            className="card border shadow-xs bg-white cursor-grab hover-lift-effect"
+                            className={`card border shadow-xs bg-white ${canEditTask(task) ? 'cursor-grab hover-lift-effect' : ''}`}
                             key={task.id}
-                            draggable
+                            draggable={canEditTask(task)}
                             onDragStart={(e) => handleDragStart(e, task.id)}
                             onClick={() => {
                               setActiveTask(task);
