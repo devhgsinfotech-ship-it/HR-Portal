@@ -7,6 +7,7 @@ import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 
 interface Employee {
   id: number;
+  userId?: number;
   firstName: string;
   lastName: string;
   profilePhotoUrl?: string;
@@ -54,6 +55,14 @@ interface TaskItem {
 const Task = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
   const isCompanyAdmin = currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "HR";
+
+  const canEditTask = (task: TaskItem) => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR' || currentUser.role === 'MANAGER' || currentUser.role === 'EMPLOYEE') {
+      return true;
+    }
+    return task.assignedTo?.userId === currentUser.id;
+  };
 
   // Data lists
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -573,9 +582,10 @@ const Task = () => {
                           {/* Status changer select input */}
                           <select
                             className={`form-select form-select-xs border-0 fw-semibold rounded-pill py-1 px-3 ${getStatusBadgeClass(task.status)}`}
-                            style={{ width: "120px", cursor: "pointer" }}
+                            style={{ width: "120px", cursor: canEditTask(task) ? "pointer" : "not-allowed" }}
                             value={task.status}
                             onChange={(e) => handleUpdateStatus(task.id, e.target.value)}
+                            disabled={!canEditTask(task)}
                           >
                             <option value="TODO">To Do</option>
                             <option value="PENDING">Pending</option>

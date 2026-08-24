@@ -30,7 +30,7 @@ const getTasks = async (req, res) => {
     const tasks = await prisma.task.findMany({
       where,
       include: {
-        assignedTo: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true } },
+        assignedTo: { select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true } },
         project: { select: { id: true, name: true, projectCode: true } },
         milestone: { select: { id: true, name: true } },
         subTasks: true,
@@ -66,7 +66,7 @@ const getTaskBoard = async (req, res) => {
     const tasks = await prisma.task.findMany({
       where,
       include: {
-        assignedTo: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true } },
+        assignedTo: { select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true } },
         project: { select: { id: true, name: true } },
         subTasks: true,
       },
