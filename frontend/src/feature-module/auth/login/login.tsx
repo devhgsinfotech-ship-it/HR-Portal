@@ -1,6 +1,7 @@
 import { getSubdomain } from '../../../core/utils/apiClient';
 import { useState, useEffect } from "react";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
+import { APP_CONFIG } from "../../../environment";
 import { Link, useNavigate } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import apiClient from "../../../core/utils/apiClient";
@@ -12,6 +13,7 @@ const Login = () => {
   const routes = all_routes;
   const navigation = useNavigate();
   const dispatch = useAppDispatch();
+  const apiUrl = APP_CONFIG.getBackendUrl();
 
   const subdomain = getSubdomain();
 
@@ -147,13 +149,12 @@ const Login = () => {
                       {!!(resolvedLogo && !logoError) ? (
                         <div className="d-flex flex-column align-items-center gap-2">
                           <img
-                            src={resolvedLogo.startsWith("http") ? resolvedLogo : `${apiClient.defaults.baseURL || "http://localhost:5000"}${resolvedLogo}`}
+                            src={resolvedLogo.startsWith("http") ? resolvedLogo : `${apiUrl}${resolvedLogo}`}
                             alt={resolvedCompanyName || "Company Logo"}
                             className="img-fluid border rounded p-1 bg-white shadow-xs"
                             style={{ maxHeight: "60px", maxWidth: "180px", objectFit: "contain" }}
                             onError={() => setLogoError(true)}
                           />
-                          {resolvedCompanyName && <h5 className="fw-bold text-dark mb-0 fs-14">{resolvedCompanyName}</h5>}
                         </div>
                       ) : !!(resolvedCompanyName || subdomain) ? (
                         <div className="d-flex flex-column align-items-center justify-content-center border rounded px-4 py-2 bg-light shadow-xs" style={{ minHeight: "55px", minWidth: "180px" }}>
