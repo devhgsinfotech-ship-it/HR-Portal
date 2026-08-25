@@ -1,5 +1,5 @@
 import { getSubdomain } from '../../../core/utils/apiClient';
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { Link, useNavigate } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
@@ -23,7 +23,7 @@ const Login = () => {
   const [logoError, setLogoError] = useState(false);
 
   // Auto-resolve logo by subdomain on mount
-  useState(() => {
+  useEffect(() => {
     const fetchSubdomainLogo = async () => {
       if (!subdomain) return;
       try {
@@ -38,7 +38,7 @@ const Login = () => {
       }
     };
     fetchSubdomainLogo();
-  });
+  }, [subdomain]);
 
   // Resolve logo by email domain on blur
   const handleEmailBlur = async () => {
@@ -144,7 +144,7 @@ const Login = () => {
                 <form className="vh-100" onSubmit={handleLogin}>
                   <div className="vh-100 d-flex flex-column justify-content-between p-4 pb-0">
                     <div className="mx-auto mb-5 text-center" style={{ minHeight: "60px", display: "flex", justifyContent: "center", alignItems: "center" }}>
-                      {(resolvedLogo && !logoError) ? (
+                      {!!(resolvedLogo && !logoError) ? (
                         <div className="d-flex flex-column align-items-center gap-2">
                           <img
                             src={resolvedLogo.startsWith("http") ? resolvedLogo : `${apiClient.defaults.baseURL || "http://localhost:5000"}${resolvedLogo}`}
@@ -155,15 +155,15 @@ const Login = () => {
                           />
                           {resolvedCompanyName && <h5 className="fw-bold text-dark mb-0 fs-14">{resolvedCompanyName}</h5>}
                         </div>
-                      ) : (resolvedCompanyName || subdomain) ? (
+                      ) : !!(resolvedCompanyName || subdomain) ? (
                         <div className="d-flex flex-column align-items-center justify-content-center border rounded px-4 py-2 bg-light shadow-xs" style={{ minHeight: "55px", minWidth: "180px" }}>
                           <h4 className="fw-bold text-primary mb-0 text-uppercase" style={{ letterSpacing: "1px", fontSize: "16px" }}>
                             {resolvedCompanyName || subdomain}
                           </h4>
                         </div>
                       ) : (
-                        <ImageWithBasePath
-                          src="assets/img/hgs-logo-HR.webp"
+                        <img
+                          src="/assets/img/hgs-logo-HR.webp"
                           className="img-fluid"
                           alt="HGS Logo"
                           style={{ maxHeight: "60px", maxWidth: "200px", objectFit: "contain" }}
