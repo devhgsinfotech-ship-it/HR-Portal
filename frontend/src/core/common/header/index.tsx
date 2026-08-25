@@ -470,7 +470,7 @@ const Header = React.memo(() => {
                   style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
                 />
               ) : (
-                <ImageWithBasePath src="assets/img/logo.svg" alt="Logo" />
+                <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
               )}
             </Link>
             <Link to={routes.adminDashboard} className="dark-logo">
@@ -481,7 +481,7 @@ const Header = React.memo(() => {
                   style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
                 />
               ) : (
-                <ImageWithBasePath src="assets/img/logo-white.svg" alt="Logo" />
+                <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
               )}
             </Link>
           </div>
