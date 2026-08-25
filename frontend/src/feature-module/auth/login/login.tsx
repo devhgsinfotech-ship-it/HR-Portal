@@ -20,14 +20,16 @@ const Login = () => {
   const [error, setError] = useState("");
   const [resolvedLogo, setResolvedLogo] = useState<string | null>(null);
   const [resolvedCompanyName, setResolvedCompanyName] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState(false);
 
   // Auto-resolve logo by subdomain on mount
   useState(() => {
     const fetchSubdomainLogo = async () => {
       if (!subdomain) return;
       try {
+        setLogoError(false);
         const res = await apiClient.get(`/auth/company-logo?subdomain=${subdomain}`);
-        if (res.data?.success && res.data.logoUrl) {
+        if (res.data?.success) {
           setResolvedLogo(res.data.logoUrl);
           setResolvedCompanyName(res.data.companyName);
         }
@@ -48,8 +50,9 @@ const Login = () => {
     if (publicDomains.includes(domain)) return;
 
     try {
+      setLogoError(false);
       const res = await apiClient.get(`/auth/company-logo?emailDomain=${domain}`);
-      if (res.data?.success && res.data.logoUrl) {
+      if (res.data?.success) {
         setResolvedLogo(res.data.logoUrl);
         setResolvedCompanyName(res.data.companyName);
       }
@@ -140,22 +143,30 @@ const Login = () => {
               <div className="col-md-7 mx-auto vh-100">
                 <form className="vh-100" onSubmit={handleLogin}>
                   <div className="vh-100 d-flex flex-column justify-content-between p-4 pb-0">
-                    <div className="mx-auto mb-5 text-center" style={{ minHeight: "60px" }}>
-                      {resolvedLogo ? (
+                    <div className="mx-auto mb-5 text-center" style={{ minHeight: "60px", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                      {(resolvedLogo && !logoError) ? (
                         <div className="d-flex flex-column align-items-center gap-2">
                           <img
                             src={resolvedLogo.startsWith("http") ? resolvedLogo : `${apiClient.defaults.baseURL || "http://localhost:5000"}${resolvedLogo}`}
                             alt={resolvedCompanyName || "Company Logo"}
                             className="img-fluid border rounded p-1 bg-white shadow-xs"
                             style={{ maxHeight: "60px", maxWidth: "180px", objectFit: "contain" }}
+                            onError={() => setLogoError(true)}
                           />
                           {resolvedCompanyName && <h5 className="fw-bold text-dark mb-0 fs-14">{resolvedCompanyName}</h5>}
+                        </div>
+                      ) : (resolvedCompanyName || subdomain) ? (
+                        <div className="d-flex flex-column align-items-center justify-content-center border rounded px-4 py-2 bg-light shadow-xs" style={{ minHeight: "55px", minWidth: "180px" }}>
+                          <h4 className="fw-bold text-primary mb-0 text-uppercase" style={{ letterSpacing: "1px", fontSize: "16px" }}>
+                            {resolvedCompanyName || subdomain}
+                          </h4>
                         </div>
                       ) : (
                         <ImageWithBasePath
                           src="assets/img/hgs-logo-HR.webp"
                           className="img-fluid"
-                          alt="Smarthr logo"
+                          alt="HGS Logo"
+                          style={{ maxHeight: "60px", maxWidth: "200px", objectFit: "contain" }}
                         />
                       )}
                     </div>
