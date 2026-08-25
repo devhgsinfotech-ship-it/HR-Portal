@@ -156,10 +156,10 @@ const Login = () => {
                             onError={() => setLogoError(true)}
                           />
                         </div>
-                      ) : !!(resolvedCompanyName || subdomain) ? (
+                      ) : !!resolvedCompanyName ? (
                         <div className="d-flex flex-column align-items-center justify-content-center border rounded px-4 py-2 bg-light shadow-xs" style={{ minHeight: "55px", minWidth: "180px" }}>
                           <h4 className="fw-bold text-primary mb-0 text-uppercase" style={{ letterSpacing: "1px", fontSize: "16px" }}>
-                            {resolvedCompanyName || subdomain}
+                            {resolvedCompanyName}
                           </h4>
                         </div>
                       ) : (
