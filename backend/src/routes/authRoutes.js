@@ -6,8 +6,12 @@ const path = require('path');
 const fs = require('fs');
 const { login, register, verifyEmail, acceptInvite, resendVerification, forgotPassword, resetPassword, getCompanyLogo } = require('../controllers/authController');
 
-// Ensure uploads/logos directory exists
-const logoDir = path.resolve('uploads', 'logos');
+// Use persistent upload directory configured in env (falls back to local uploads folder)
+const UPLOAD_BASE = process.env.UPLOAD_PATH 
+    ? path.resolve(process.env.UPLOAD_PATH) 
+    : path.resolve('uploads');
+
+const logoDir = path.join(UPLOAD_BASE, 'logos');
 if (!fs.existsSync(logoDir)) {
     fs.mkdirSync(logoDir, { recursive: true });
 }
