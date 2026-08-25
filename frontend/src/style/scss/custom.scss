@@ -2043,22 +2043,26 @@ span.p-dropdown-label.p-inputtext span {
   border: 1px solid variables.$gray-200;
   height: 40px;
   border-radius: 5px;
+
   .input-icon-addon {
     top: -2px;
   }
 }
 
-  .p-datepicker {
-    border-radius: 6px;
-  }
+.p-datepicker {
+  border-radius: 6px;
+}
+
 .p-datepicker-monthpicker {
   .p-datepicker-header {
-      padding: 6px;
+    padding: 6px;
   }
+
   .p-monthpicker {
     .p-monthpicker-month {
       padding: 6px;
       border-radius: 6px;
+
       &:hover {
         background: variables.$primary;
         color: #fff;
@@ -2074,6 +2078,7 @@ span.p-dropdown-label.p-inputtext span {
 .ant-picker-dropdown .ant-picker-cell-in-view.ant-picker-cell-selected:not(.ant-picker-cell-disabled) .ant-picker-cell-inner {
   background: variables.$primary;
 }
+
 .ant-picker-dropdown .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner::before {
   border-color: variables.$primary;
 }
@@ -2214,12 +2219,14 @@ span.p-dropdown-label.p-inputtext span {
 
   &.scroll-left {
     direction: rtl;
-    > * {
+
+    >* {
       direction: ltr;
       text-align: left;
     }
   }
 }
+
 .simplebar-scrollable-y-size {
   overflow-y: scroll;
 
@@ -2288,3 +2295,14 @@ span.p-dropdown-label.p-inputtext span {
   display: none !important;
 }
 
+// Global rule to replace '2014 - 2026 © SmartHR.' copyright text with 'HGS HR PORTAL'
+.footer p.mb-0 {
+  font-size: 0 !important;
+}
+
+.footer p.mb-0::after {
+  content: "@Hr Portal By HGSInfotech" !important;
+  font-size: 0.875rem !important;
+  font-weight: 800 !important;
+  color: #6B7280 !important;
+}
