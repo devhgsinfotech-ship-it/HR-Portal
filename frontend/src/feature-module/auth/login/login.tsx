@@ -141,24 +141,24 @@ const Login = () => {
                 <form className="vh-100" onSubmit={handleLogin}>
                   <div className="vh-100 d-flex flex-column justify-content-between p-4 pb-0">
                     <div className="mx-auto mb-5 text-center" style={{ minHeight: "60px" }}>
-                       {resolvedLogo ? (
-                         <div className="d-flex flex-column align-items-center gap-2">
-                           <img
-                             src={resolvedLogo.startsWith("http") ? resolvedLogo : `${apiClient.defaults.baseURL || "http://localhost:5000"}${resolvedLogo}`}
-                             alt={resolvedCompanyName || "Company Logo"}
-                             className="img-fluid border rounded p-1 bg-white shadow-xs"
-                             style={{ maxHeight: "60px", maxWidth: "180px", objectFit: "contain" }}
-                           />
-                           {resolvedCompanyName && <h5 className="fw-bold text-dark mb-0 fs-14">{resolvedCompanyName}</h5>}
-                         </div>
-                       ) : (
-                         <ImageWithBasePath
-                           src="assets/img/logo.svg"
-                           className="img-fluid"
-                           alt="Smarthr logo"
-                         />
-                       )}
-                     </div>
+                      {resolvedLogo ? (
+                        <div className="d-flex flex-column align-items-center gap-2">
+                          <img
+                            src={resolvedLogo.startsWith("http") ? resolvedLogo : `${apiClient.defaults.baseURL || "http://localhost:5000"}${resolvedLogo}`}
+                            alt={resolvedCompanyName || "Company Logo"}
+                            className="img-fluid border rounded p-1 bg-white shadow-xs"
+                            style={{ maxHeight: "60px", maxWidth: "180px", objectFit: "contain" }}
+                          />
+                          {resolvedCompanyName && <h5 className="fw-bold text-dark mb-0 fs-14">{resolvedCompanyName}</h5>}
+                        </div>
+                      ) : (
+                        <ImageWithBasePath
+                          src="assets/img/hgs-logo-HR.webp"
+                          className="img-fluid"
+                          alt="Smarthr logo"
+                        />
+                      )}
+                    </div>
                     <div className="">
                       <div className="text-center mb-3">
                         <h2 className="mb-2">Sign In</h2>
@@ -289,7 +289,7 @@ const Login = () => {
                       </div>
                     </div>
                     <div className="mt-5 pb-4 text-center">
-                      <p className="mb-0 text-gray-9">Copyright © 2024 - Smarthr</p>
+                      <p className="mb-0 text-gray-9">HR Portal by HGSInfotech</p>
                     </div>
                   </div>
                 </form>

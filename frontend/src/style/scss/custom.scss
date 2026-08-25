@@ -2282,3 +2282,9 @@ span.p-dropdown-label.p-inputtext span {
   scrollbar-color: #FE9F43 transparent;
 }
 
+// Global rule to hide 'Designed & Developed By Dreams' credits from all footers
+.footer p:not(.mb-0),
+.footer p:nth-child(2) {
+  display: none !important;
+}
+
