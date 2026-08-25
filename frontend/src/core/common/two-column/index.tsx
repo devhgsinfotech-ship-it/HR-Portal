@@ -93,10 +93,10 @@ const TwoColumnSidebar = () => {
                 <div className="sidebar-right">
                     <div className="sidebar-logo mb-4">
                         <Link to={routes.adminDashboard} className="logo logo-normal">
-                            <ImageWithBasePath src="assets/img/logo.svg" alt="Logo" />
+                            <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
                         </Link>
                         <Link to={routes.adminDashboard} className="dark-logo">
-                            <ImageWithBasePath src="assets/img/logo-white.svg" alt="Logo" />
+                            <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
                         </Link>
                     </div>
                     <div className="sidebar-scroll">

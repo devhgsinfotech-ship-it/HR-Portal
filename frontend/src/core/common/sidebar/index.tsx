@@ -395,7 +395,7 @@ const Sidebar = React.memo(() => {
               style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
             />
           ) : (
-            <ImageWithBasePath src="assets/img/logo.svg" alt="Logo" />
+            <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
           )}
         </Link>
         <Link to={all_routes.adminDashboard} className="logo-small">
@@ -406,7 +406,7 @@ const Sidebar = React.memo(() => {
               style={{ maxHeight: "25px", maxWidth: "25px", objectFit: "contain", borderRadius: "4px" }}
             />
           ) : (
-            <ImageWithBasePath src="assets/img/logo-small.svg" alt="Logo" />
+            <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "25px", maxWidth: "25px", objectFit: "contain", borderRadius: "4px" }} />
           )}
         </Link>
         <Link to={all_routes.adminDashboard} className="dark-logo">
@@ -417,7 +417,7 @@ const Sidebar = React.memo(() => {
               style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
             />
           ) : (
-            <ImageWithBasePath src="assets/img/logo-white.svg" alt="Logo" />
+            <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
           )}
         </Link>
       </div>
