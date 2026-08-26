@@ -1,6 +1,5 @@
 // backend/src/middleware/projectPermission.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 
 /**
  * Check if user has a required system role (SUPER_ADMIN, HR, MANAGER, EMPLOYEE)

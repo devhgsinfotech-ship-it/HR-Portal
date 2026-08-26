@@ -1,6 +1,5 @@
 // backend/src/controllers/taskController.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 
 const generateTaskCode = async (companyId) => {
   const count = await prisma.task.count({ where: { companyId } });
