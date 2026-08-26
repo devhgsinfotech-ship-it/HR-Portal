@@ -1,6 +1,5 @@
 // backend/src/controllers/rolePermissionController.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 
 // All modules available in the system
 const AVAILABLE_MODULES = [
