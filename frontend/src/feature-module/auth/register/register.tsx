@@ -515,7 +515,7 @@ const Register = () => {
 
                 <div className="mt-4 pb-3 text-center">
                   <p className="mb-0 text-muted small">
-                    Copyright © 2024 - HRMS Portal
+                    @HGS HR Management
                   </p>
                 </div>
               </div>
