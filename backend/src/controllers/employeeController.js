@@ -165,12 +165,14 @@ async function createEmployee(req, res) {
         const baseDomain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
         const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
         const workspaceUrl = company.subdomain ? `${protocol}://${company.subdomain}.${baseDomain}` : `${protocol}://${baseDomain}`;
+        const logoUrl = company.logoUrl ? (company.logoUrl.startsWith('http') ? company.logoUrl : `https://api.aaups.com${company.logoUrl}`) : null;
         emailService.sendEmployeeInviteEmail(
             email, 
             inviteToken, 
             company.name, 
             firstName, 
-            workspaceUrl
+            workspaceUrl,
+            logoUrl
         ).catch(err => console.error("Failed to send invite email:", err));
 
         res.status(201).json(newEmployee);
@@ -748,13 +750,15 @@ async function resendInvite(req, res) {
         const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
         const company = employee.user.company;
         const workspaceUrl = company.subdomain ? `${protocol}://${company.subdomain}.${baseDomain}` : `${protocol}://${baseDomain}`;
+        const logoUrl = company.logoUrl ? (company.logoUrl.startsWith('http') ? company.logoUrl : `https://api.aaups.com${company.logoUrl}`) : null;
         
         emailService.sendEmployeeInviteEmail(
             employee.user.email,
             inviteToken,
             company.name,
             employee.firstName,
-            workspaceUrl
+            workspaceUrl,
+            logoUrl
         ).catch(err => console.error("Failed to resend invite email:", err));
 
         res.json({ message: 'Invite resent successfully!' });

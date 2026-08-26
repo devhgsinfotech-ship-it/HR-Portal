@@ -107,7 +107,7 @@ async function sendVerificationEmail(toEmail, token, companyName, workspaceUrl) 
 /**
  * Sends an invitation email to a new employee.
  */
-async function sendEmployeeInviteEmail(toEmail, token, companyName, employeeName, workspaceUrl) {
+async function sendEmployeeInviteEmail(toEmail, token, companyName, employeeName, workspaceUrl, logoUrl = null) {
     try {
         const transporter = await getTransporter();
 
@@ -116,10 +116,17 @@ async function sendEmployeeInviteEmail(toEmail, token, companyName, employeeName
         const mailOptions = {
             from: `"HGS HR Support" <${process.env.SMTP_USER || 'noreply@aaups.com'}>`,
             to: toEmail,
-            subject: `You have been invited to join ${companyName} on SmartHR`,
+            subject: `You have been invited to join ${companyName} on HGS-HRMS`,
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                    <h2 style="color: #333;">Welcome, ${employeeName}!</h2>
+                    ${logoUrl ? `
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <img src="${logoUrl}" alt="${companyName}" style="max-height: 60px; object-fit: contain;" />
+                    </div>
+                    ` : `
+                    <h2 style="color: #ff5722; text-align: center; margin-bottom: 20px;">${companyName}</h2>
+                    `}
+                    <h3 style="color: #333;">Welcome, ${employeeName}!</h3>
                     <p style="color: #555; font-size: 16px;">
                         You have been invited to join <strong>${companyName}</strong>'s HR portal.
                         Please click the button below to set up your account password and complete your onboarding profile.
@@ -155,21 +162,28 @@ async function sendEmployeeInviteEmail(toEmail, token, companyName, employeeName
     }
 }
 
-async function sendPasswordResetEmail(toEmail, token, workspaceUrl, userName) {
+async function sendPasswordResetEmail(toEmail, token, workspaceUrl, userName, companyName = null, logoUrl = null) {
     try {
         const transporter = await getTransporter();
 
         const resetLink = `${workspaceUrl}/reset-password?token=${token}`;
 
         const mailOptions = {
-            from: `"SmartHR Support" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
+            from: `"${companyName || 'HGS-HRMS'} Support" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
             to: toEmail,
-            subject: 'Reset your SmartHR Password',
+            subject: `Reset your ${companyName || 'HGS-HRMS'} Password`,
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                    <h2 style="color: #333;">Hello, ${userName || 'User'}!</h2>
+                    ${logoUrl ? `
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <img src="${logoUrl}" alt="${companyName || 'HGS-HRMS'}" style="max-height: 60px; object-fit: contain;" />
+                    </div>
+                    ` : `
+                    <h2 style="color: #ff5722; text-align: center; margin-bottom: 20px;">${companyName || 'SmartHR'}</h2>
+                    `}
+                    <h3 style="color: #333;">Hello, ${userName || 'User'}!</h3>
                     <p style="color: #555; font-size: 16px;">
-                        We received a request to reset your password. If you didn't make this request, you can safely ignore this email.
+                        We received a request to reset your password for your <strong>${companyName || 'SmartHR'}</strong> account. If you didn't make this request, you can safely ignore this email.
                         Otherwise, click the button below to choose a new password.
                     </p>
                     <div style="text-align: center; margin: 30px 0;">
