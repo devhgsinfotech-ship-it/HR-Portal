@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
@@ -11,6 +11,27 @@ const ForgotPassword = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const subdomain = getSubdomain();
+
+  const [resolvedLogo, setResolvedLogo] = useState<string | null>(null);
+  const [resolvedCompanyName, setResolvedCompanyName] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState(false);
+
+  useEffect(() => {
+    const fetchSubdomainLogo = async () => {
+      if (!subdomain) return;
+      try {
+        setLogoError(false);
+        const res = await apiClient.get(`/auth/company-logo?subdomain=${subdomain}`);
+        if (res.data?.success) {
+          setResolvedLogo(res.data.logoUrl);
+          setResolvedCompanyName(res.data.companyName);
+        }
+      } catch (err) {
+        console.error("Failed to fetch subdomain logo:", err);
+      }
+    };
+    fetchSubdomainLogo();
+  }, [subdomain]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault(); // Prevent page reload
@@ -64,11 +85,19 @@ const ForgotPassword = () => {
                 <form className="vh-100" onSubmit={handleSubmit}>
                   <div className="vh-100 d-flex flex-column justify-content-between p-4 pb-0">
                     <div className="mx-auto mb-5 text-center">
-                      <ImageWithBasePath
-                        src="assets/img/logo.svg"
-                        className="img-fluid"
-                        alt="Smarthr logo"
-                      />
+                      {resolvedLogo && !logoError ? (
+                        <img 
+                          src={resolvedLogo.startsWith('http') ? resolvedLogo : `${apiClient.defaults.baseURL || 'https://api.aaups.com'}${resolvedLogo}`} 
+                          alt={resolvedCompanyName || "Logo"} 
+                          className="img-fluid" 
+                          style={{ maxHeight: '60px', width: 'auto', objectFit: 'contain' }}
+                          onError={() => setLogoError(true)}
+                        />
+                      ) : (
+                        <h2 className="mb-0 text-primary fw-bold" style={{ letterSpacing: '0.5px' }}>
+                          {resolvedCompanyName || "HGS-HRMS"}
+                        </h2>
+                      )}
                     </div>
                     <div>
                       <div className="text-center mb-3">
@@ -115,7 +144,7 @@ const ForgotPassword = () => {
                       </div>
                     </div>
                     <div className="mt-5 pb-4 text-center">
-                      <p className="mb-0 text-gray-9">Copyright © 2024 - Smarthr</p>
+                      <p className="mb-0 text-gray-9">@HGS HR Management</p>
                     </div>
                   </div>
                 </form>

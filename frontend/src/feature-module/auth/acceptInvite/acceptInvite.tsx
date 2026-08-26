@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { all_routes } from '../../../router/all_routes';
 import ImageWithBasePath from '../../../core/common/imageWithBasePath';
 import { APP_CONFIG } from '../../../environment';
+import apiClient, { getSubdomain } from '../../../core/utils/apiClient';
 
 const AcceptInvite = () => {
   const { token } = useParams();
@@ -13,6 +14,28 @@ const AcceptInvite = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const subdomain = getSubdomain();
+  const [resolvedLogo, setResolvedLogo] = useState<string | null>(null);
+  const [resolvedCompanyName, setResolvedCompanyName] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState(false);
+
+  useEffect(() => {
+    const fetchSubdomainLogo = async () => {
+      if (!subdomain) return;
+      try {
+        setLogoError(false);
+        const res = await apiClient.get(`/auth/company-logo?subdomain=${subdomain}`);
+        if (res.data?.success) {
+          setResolvedLogo(res.data.logoUrl);
+          setResolvedCompanyName(res.data.companyName);
+        }
+      } catch (err) {
+        console.error("Failed to fetch subdomain logo:", err);
+      }
+    };
+    fetchSubdomainLogo();
+  }, [subdomain]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +88,19 @@ const AcceptInvite = () => {
                   <form onSubmit={handleSubmit} className="vh-100">
                     <div className="vh-100 d-flex flex-column justify-content-between p-4 pb-0">
                       <div className="mx-auto mb-5 text-center">
-                        <ImageWithBasePath src="assets/img/logo.svg" className="img-fluid" alt="Logo" />
+                        {resolvedLogo && !logoError ? (
+                          <img 
+                            src={resolvedLogo.startsWith('http') ? resolvedLogo : `${apiClient.defaults.baseURL || 'https://api.aaups.com'}${resolvedLogo}`} 
+                            alt={resolvedCompanyName || "Logo"} 
+                            className="img-fluid" 
+                            style={{ maxHeight: '60px', width: 'auto', objectFit: 'contain' }}
+                            onError={() => setLogoError(true)}
+                          />
+                        ) : (
+                          <h2 className="mb-0 text-primary fw-bold" style={{ letterSpacing: '0.5px' }}>
+                            {resolvedCompanyName || "HGS-HRMS"}
+                          </h2>
+                        )}
                       </div>
                       <div>
                         <div className="text-center mb-3">
@@ -106,7 +141,7 @@ const AcceptInvite = () => {
                         </div>
                       </div>
                       <div className="mt-5 pb-4 text-center">
-                        <p className="mb-0 text-gray-9">Copyright © {new Date().getFullYear()} SmartHR. All Rights Reserved.</p>
+                        <p className="mb-0 text-gray-9">@HGS HR Management</p>
                       </div>
                     </div>
                   </form>

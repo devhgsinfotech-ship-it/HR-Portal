@@ -124,7 +124,7 @@ const EmailVerification = () => {
               )}
 
               <div className="mt-4">
-                <p className="mb-0 text-muted small">Copyright © 2024 - HRMS Portal</p>
+                <p className="mb-0 text-muted small">@HGS HR Management</p>
               </div>
             </div>
           </div>

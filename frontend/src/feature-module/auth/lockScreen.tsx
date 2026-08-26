@@ -87,7 +87,7 @@ const LockScreen = () => {
                   </Link>
                 </div>
                 <div className="p-2 text-center">
-                  <p className="mb-0 text-gray-9">Copyright © 2024 - SmartHR</p>
+                  <p className="mb-0 text-gray-9">@HGS HR Management</p>
                 </div>
               </div>
             </div>
