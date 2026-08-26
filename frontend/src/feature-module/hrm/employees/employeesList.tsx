@@ -236,13 +236,33 @@ const EmployeeList = () => {
 
   const fetchData = async () => {
     try {
-      const [empRes, deptRes, desigRes, rolesRes] = await Promise.all([
-        apiClient.get('/employees'),
-        apiClient.get('/departments'),
-        apiClient.get('/designations'),
-        apiClient.get('/api/roles')
-      ]);
-      const mappedEmployees = empRes.data.map((emp: any) => ({
+      let empRes, deptRes, desigRes, rolesRes;
+      
+      try {
+        empRes = await apiClient.get('/employees');
+      } catch (e) {
+        console.error('Employees fetch failed:', e);
+      }
+      
+      try {
+        deptRes = await apiClient.get('/departments');
+      } catch (e) {
+        console.error('Departments fetch failed:', e);
+      }
+      
+      try {
+        desigRes = await apiClient.get('/designations');
+      } catch (e) {
+        console.error('Designations fetch failed:', e);
+      }
+      
+      try {
+        rolesRes = await apiClient.get('/api/roles');
+      } catch (e) {
+        console.error('Roles fetch failed:', e);
+      }
+
+      const mappedEmployees = empRes?.data ? empRes.data.map((emp: any) => ({
         key: emp.id,
         id: emp.id,
         EmpId: emp.employeeCode || emp.employeeId || 'N/A',
@@ -259,11 +279,16 @@ const EmployeeList = () => {
         panPath: emp.panPath,
         resumePath: emp.resumePath,
         raw: emp
-      }));
+      })) : [];
+
       setDbEmployees(mappedEmployees);
-      setDbDepartments(deptRes.data.map((d: any) => ({ value: d.id, label: d.name })));
-      setDbDesignations(desigRes.data.map((d: any) => ({ value: d.id, label: d.name })));
-      if (rolesRes.data?.success) {
+      if (deptRes?.data) {
+        setDbDepartments(deptRes.data.map((d: any) => ({ value: d.id, label: d.name })));
+      }
+      if (desigRes?.data) {
+        setDbDesignations(desigRes.data.map((d: any) => ({ value: d.id, label: d.name })));
+      }
+      if (rolesRes?.data?.success) {
         setDbRoles(rolesRes.data.data.map((r: any) => ({ value: r.id, label: r.name })));
       }
     } catch (err) {
