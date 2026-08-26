@@ -64,14 +64,14 @@ async function createEmployee(req, res) {
         }
 
         // Enforce Email Domain Restriction based on company emailDomain or subdomain
-        const allowedDomain = (company.emailDomain || (company.subdomain ? `${company.subdomain}.com` : null))?.toLowerCase();
-        const employeeDomain = email.split('@')[1]?.toLowerCase();
+        // const allowedDomain = (company.emailDomain || (company.subdomain ? `${company.subdomain}.com` : null))?.toLowerCase();
+        // const employeeDomain = email.split('@')[1]?.toLowerCase();
 
-        if (allowedDomain && employeeDomain !== allowedDomain) {
-            return res.status(400).json({ 
-                message: `Employees must have an email ending with @${allowedDomain}` 
-            });
-        }
+        // if (allowedDomain && employeeDomain !== allowedDomain) {
+        //     return res.status(400).json({ 
+        //         message: `Employees must have an email ending with @${allowedDomain}` 
+        //     });
+        // }
 
         // Check if user exists
         const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -317,14 +317,14 @@ async function updateEmployee(req, res) {
             userUpdateData.password = await bcrypt.hash(password, 10);
         }
         if (email && email !== existing.user.email) {
-            const company = await prisma.company.findUnique({ where: { id: companyId } });
-            const allowedDomain = (company?.emailDomain || (company?.subdomain ? `${company.subdomain}.com` : null))?.toLowerCase();
-            const employeeDomain = email.split('@')[1]?.toLowerCase();
-            if (allowedDomain && employeeDomain !== allowedDomain) {
-                return res.status(400).json({ 
-                    message: `Employees must have an email ending with @${allowedDomain}` 
-                });
-            }
+            // const company = await prisma.company.findUnique({ where: { id: companyId } });
+            // const allowedDomain = (company?.emailDomain || (company?.subdomain ? `${company.subdomain}.com` : null))?.toLowerCase();
+            // const employeeDomain = email.split('@')[1]?.toLowerCase();
+            // if (allowedDomain && employeeDomain !== allowedDomain) {
+            //     return res.status(400).json({ 
+            //         message: `Employees must have an email ending with @${allowedDomain}` 
+            //     });
+            // }
             const emailInUse = await prisma.user.findUnique({ where: { email } });
             if (emailInUse) {
                 return res.status(409).json({ message: 'An account with this email already exists' });
