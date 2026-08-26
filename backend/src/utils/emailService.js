@@ -32,7 +32,7 @@ async function getTransporter() {
 
     console.log('Generating Ethereal test account for email service...');
     const testAccount = await nodemailer.createTestAccount();
-    
+
     cachedTransporter = nodemailer.createTransport({
         host: "smtp.ethereal.email",
         port: 587,
@@ -90,7 +90,7 @@ async function sendVerificationEmail(toEmail, token, companyName, workspaceUrl) 
         };
 
         const info = await transporter.sendMail(mailOptions);
-        
+
         console.log('--------------------------------------------------');
         console.log('Email sent: %s', info.messageId);
         // This is crucial for local testing: it prints a URL where you can view the sent email!
@@ -114,7 +114,7 @@ async function sendEmployeeInviteEmail(toEmail, token, companyName, employeeName
         const inviteLink = `${workspaceUrl}/invite/${token}`;
 
         const mailOptions = {
-            from: `"SmartHR Support" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
+            from: `"HGS HR Support" <${process.env.SMTP_USER || 'noreply@aaups.com'}>`,
             to: toEmail,
             subject: `You have been invited to join ${companyName} on SmartHR`,
             html: `
@@ -142,9 +142,9 @@ async function sendEmployeeInviteEmail(toEmail, token, companyName, employeeName
         };
 
         const info = await transporter.sendMail(mailOptions);
-        
+
         console.log('--------------------------------------------------');
-        console.log('Employee Invite Email sent: %s', info.messageId);
+        console.log('Employee Invite Email sent: %s', info.messageId, 'Send Email to: %s', toEmail);
         console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
         console.log('--------------------------------------------------');
 
@@ -190,7 +190,7 @@ async function sendPasswordResetEmail(toEmail, token, workspaceUrl, userName) {
         };
 
         const info = await transporter.sendMail(mailOptions);
-        
+
         console.log('--------------------------------------------------');
         console.log('Password Reset Email sent: %s', info.messageId);
         console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
