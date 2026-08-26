@@ -16,10 +16,10 @@ async function login(req, res) {
         // 1. Find user with companyRole permissions
         const user = await prisma.user.findUnique({
             where: { email },
-            include: { 
+            include: {
                 company: true,
                 employee: {
-                    include: { 
+                    include: {
                         companyRole: {
                             include: {
                                 permissions: true
@@ -143,7 +143,7 @@ async function register(req, res) {
         if (!emailDomain) {
             return res.status(400).json({ message: 'Invalid email address' });
         }
-        
+
         const publicDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com', 'icloud.com'];
         if (publicDomains.includes(emailDomain)) {
             return res.status(400).json({ message: 'Please register with your corporate email address. Public domains are not allowed.' });
@@ -439,15 +439,18 @@ async function forgotPassword(req, res) {
         const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
         const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
         const protocol = domain.includes('localhost') ? 'http' : 'https';
-        
+
         let workspaceUrl = '';
+        const companyName = user.company ? user.company.name : 'HGS-HRMS';
+        const logoUrl = user.company?.logoUrl ? (user.company.logoUrl.startsWith('http') ? user.company.logoUrl : `https://api.aaups.com${user.company.logoUrl}`) : null;
+
         if (user.company && user.company.subdomain) {
             workspaceUrl = `${protocol}://${user.company.subdomain}.${domain}`;
         } else {
             workspaceUrl = `${protocol}://${domain}`;
         }
 
-        await emailService.sendPasswordResetEmail(email, resetToken, workspaceUrl, user.name);
+        await emailService.sendPasswordResetEmail(email, resetToken, workspaceUrl, user.name, companyName, logoUrl);
 
         res.json({ message: 'If your email is registered, a password reset link has been sent.' });
     } catch (error) {
@@ -548,11 +551,11 @@ async function getCompanyLogo(req, res) {
     }
 }
 
-module.exports = { 
-    login, 
-    register, 
-    verifyEmail, 
-    acceptInvite, 
+module.exports = {
+    login,
+    register,
+    verifyEmail,
+    acceptInvite,
     resendVerification,
     forgotPassword,
     resetPassword,
