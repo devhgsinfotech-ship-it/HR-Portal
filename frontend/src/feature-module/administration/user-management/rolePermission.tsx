@@ -34,7 +34,7 @@ const RolesPermission = () => {
     const fetchRoles = async () => {
         try {
             setLoading(true);
-            const response = await apiClient.get('/api/roles');
+            const response = await apiClient.get('/api/roles/');
             if (response.data?.success) {
                 setRoles(response.data.data);
             }
@@ -54,7 +54,7 @@ const RolesPermission = () => {
         e.preventDefault();
         if (!newRoleName) return;
         try {
-            const response = await apiClient.post('/api/roles', {
+            const response = await apiClient.post('/api/roles/', {
                 name: newRoleName,
                 description: newRoleDesc
             });

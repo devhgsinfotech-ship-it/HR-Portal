@@ -257,7 +257,7 @@ const EmployeeList = () => {
       }
       
       try {
-        rolesRes = await apiClient.get('/api/roles');
+        rolesRes = await apiClient.get('/api/roles/');
       } catch (e) {
         console.error('Roles fetch failed:', e);
       }
