@@ -75,6 +75,14 @@ export const DashboardChunk = {
     () =>
       import("../feature-module/mainMenu/employeeDashboard/employee-dashboard")
   ),
+  EmployeeMe: lazy(() => import("../feature-module/mainMenu/employeeDashboard/employeeMe")),
+  EmployeeInbox: lazy(() => import("../feature-module/mainMenu/employeeDashboard/employeeInbox")),
+  EmployeeMyTeam: lazy(() => import("../feature-module/mainMenu/employeeDashboard/employeeMyTeam")),
+  EmployeeMyFinances: lazy(() => import("../feature-module/mainMenu/employeeDashboard/employeeMyFinances")),
+  EmployeeOrg: lazy(() => import("../feature-module/mainMenu/employeeDashboard/employeeOrg")),
+  EmployeeEngage: lazy(() => import("../feature-module/mainMenu/employeeDashboard/employeeEngage")),
+  EmployeeHelpdesk: lazy(() => import("../feature-module/mainMenu/employeeDashboard/employeeHelpdesk")),
+  EmployeePerformance: lazy(() => import("../feature-module/mainMenu/employeeDashboard/employeePerformance")),
   LeadsDasboard: lazy(
     () => import("../feature-module/mainMenu/leadsDashboard")
   ),

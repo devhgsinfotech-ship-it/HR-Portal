@@ -90,6 +90,8 @@ enum NotificationType {
   ANNOUNCEMENT
   ASSET_ASSIGNED
   DOCUMENT_VERIFIED
+  POST_LIKE
+  POST_COMMENT
 }
 
 enum ProjectStatus {
@@ -156,6 +158,7 @@ model Company {
   tasks            Task[]
   timeLogs         TimeLog[]
   companyRoles     CompanyRole[]
+  posts            Post[]
 
   @@map("companies")
 }
@@ -273,6 +276,11 @@ model Employee {
   managedProjects     Project[]           @relation("ProjectManager")
   createdNotes        ProjectNote[]       @relation("NoteCreator")
   uploadedFiles       ProjectFile[]       @relation("FileUploader")
+
+  posts               Post[]              @relation("PostAuthor")
+  postMentions        PostMention[]
+  postLikes           PostLike[]
+  postComments        PostComment[]
 
   @@map("employees")
 }
@@ -620,6 +628,7 @@ model Notification {
   type       NotificationType
   title      String
   message    String
+  referenceId Int?            // ID of the related entity (e.g. postId)
   isRead     Boolean          @default(false)
   createdAt  DateTime         @default(now())
 
@@ -1006,4 +1015,75 @@ model RolePermission {
 
   @@unique([companyRoleId, module])
   @@map("role_permissions")
+}
+
+// ============================================================
+// SOCIAL ORGANIZATION POSTS
+// ============================================================
+
+model Post {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  authorId    Int
+  author      Employee @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  content     String   @db.Text
+  postType    String   @default("GENERAL") // GENERAL, POLL, BIRTHDAY, ANNIVERSARY
+  status      String   @default("PUBLISHED") // PUBLISHED, DRAFT, SCHEDULED
+  attachments PostAttachment[]
+  mentions    PostMention[]
+  likes       PostLike[]
+  comments    PostComment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("posts")
+}
+
+model PostAttachment {
+  id          Int      @id @default(autoincrement())
+  postId      Int
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  fileUrl     String
+  fileType    String   @default("image") // image, video, document
+  fileName    String?
+  createdAt   DateTime @default(now())
+
+  @@map("post_attachments")
+}
+
+model PostMention {
+  id          Int      @id @default(autoincrement())
+  postId      Int
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  employeeId  Int
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@map("post_mentions")
+}
+
+model PostLike {
+  id          Int      @id @default(autoincrement())
+  postId      Int
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  employeeId  Int
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([postId, employeeId])
+  @@map("post_likes")
+}
+
+model PostComment {
+  id          Int      @id @default(autoincrement())
+  postId      Int
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId    Int
+  author      Employee @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("post_comments")
 }
