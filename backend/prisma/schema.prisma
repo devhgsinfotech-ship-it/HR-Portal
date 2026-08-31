@@ -57,6 +57,12 @@ enum LeaveStatus {
   CANCELLED
 }
 
+enum LeaveSession {
+  FULL_DAY
+  FIRST_HALF
+  SECOND_HALF
+}
+
 enum AttendanceStatus {
   PRESENT
   ABSENT
@@ -126,6 +132,7 @@ enum TaskStatus {
 model Company {
   id              Int       @id @default(autoincrement())
   name            String
+  posts            Post[]
   email           String    @unique
   phone           String?
   subdomain       String    @unique
@@ -273,6 +280,10 @@ model Employee {
   managedProjects     Project[]           @relation("ProjectManager")
   createdNotes        ProjectNote[]       @relation("NoteCreator")
   uploadedFiles       ProjectFile[]       @relation("FileUploader")
+  posts               Post[]
+  postLikes           PostLike[]
+  postComments        PostComment[]
+  commentLikes        CommentLike[]
 
   @@map("employees")
 }
@@ -348,7 +359,8 @@ model LeaveRequest {
   leaveType    LeaveType   @relation(fields: [leaveTypeId], references: [id])
   startDate    DateTime
   endDate      DateTime
-  totalDays    Decimal     @default(1) @db.Decimal(5, 1)
+  totalDays    Decimal       @default(1) @db.Decimal(5, 1)
+  leaveSession LeaveSession  @default(FULL_DAY)
   reason       String?
   status       LeaveStatus @default(PENDING)
   reviewedById Int?
@@ -1006,4 +1018,66 @@ model RolePermission {
 
   @@unique([companyRoleId, module])
   @@map("role_permissions")
+}
+
+
+// ============================================================
+// SOCIAL FEED WIDGETS
+// ============================================================
+
+model Post {
+  id          Int           @id @default(autoincrement())
+  companyId   Int
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employeeId  Int
+  employee    Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  content     String        @db.Text
+  image       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  likes       PostLike[]
+  comments    PostComment[]
+
+  @@map("posts")
+}
+
+model PostLike {
+  id          Int      @id @default(autoincrement())
+  postId      Int
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  employeeId  Int
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([postId, employeeId])
+  @@map("post_likes")
+}
+
+model PostComment {
+  id          Int           @id @default(autoincrement())
+  postId      Int
+  post        Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  employeeId  Int
+  employee    Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  content     String        @db.Text
+  parentId    Int?
+  parent      PostComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     PostComment[] @relation("CommentReplies")
+  createdAt   DateTime      @default(now())
+  likes       CommentLike[]
+
+  @@map("post_comments")
+}
+
+model CommentLike {
+  id          Int         @id @default(autoincrement())
+  commentId   Int
+  comment     PostComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  employeeId  Int
+  employee    Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+
+  @@unique([commentId, employeeId])
+  @@map("comment_likes")
 }

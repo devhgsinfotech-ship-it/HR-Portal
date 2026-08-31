@@ -93,7 +93,7 @@ const LeaveAdmin = () => {
         endDate: newLeave.endDate.format('YYYY-MM-DD'),
         reason: newLeave.reason
       });
-      const closeBtn = document.querySelector('#add_leaves .btn-close') as HTMLButtonElement;
+      const closeBtn = document.querySelector('#add_admin_leaves .btn-close') as HTMLButtonElement;
       if (closeBtn) closeBtn.click();
       fetchLeaveData();
       setNewLeave({ employeeId: '', leaveTypeId: '', startDate: null, endDate: null, reason: '' });
@@ -280,7 +280,7 @@ const LeaveAdmin = () => {
                 <Link
                   to="#"
                   data-bs-toggle="modal" data-inert={true}
-                  data-bs-target="#add_leaves"
+                  data-bs-target="#add_admin_leaves"
                   className="btn btn-primary d-flex align-items-center"
                 >
                   <i className="ti ti-circle-plus me-2" />
@@ -489,7 +489,7 @@ const LeaveAdmin = () => {
       </div>
       {/* /Page Wrapper */}
       {/* Add Leaves */}
-      <div className="modal fade" id="add_leaves">
+      <div className="modal fade" id="add_admin_leaves">
         <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
@@ -596,7 +596,7 @@ const LeaveAdmin = () => {
       </div>
       {/* /Add Leaves */}
       {/* Edit Leaves */}
-      <div className="modal fade" id="edit_leaves">
+      <div className="modal fade" id="edit_admin_leaves">
         <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">

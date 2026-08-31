@@ -15,7 +15,9 @@ const UPLOAD_BASE = process.env.UPLOAD_PATH
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         let dir = path.join(UPLOAD_BASE, 'profiles');
-        if (file.fieldname !== 'profileImage') {
+        if (file.fieldname === 'postImage') {
+            dir = path.join(UPLOAD_BASE, 'posts');
+        } else if (file.fieldname !== 'profileImage') {
             dir = path.join(UPLOAD_BASE, 'documents');
         }
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -58,6 +60,20 @@ router.put('/me', upload.single('profileImage'), employeeController.updateMe);
 // Employees can view employees, but only HR/Admin can modify
 router.get('/', employeeController.getEmployees);
 router.get('/:id', employeeController.getEmployeeById);
+
+// Dynamic Social Feed and Event routes for dashboard
+router.get('/dashboard/events', employeeController.getCompanyEvents);
+router.get('/dashboard/posts', employeeController.getPosts);
+router.post('/dashboard/posts', upload.single('postImage'), employeeController.createPost);
+router.post('/dashboard/posts/:id/like', employeeController.toggleLikePost);
+router.post('/dashboard/posts/:id/comment', employeeController.addCommentPost);
+router.put('/dashboard/posts/:id', upload.single('postImage'), employeeController.editPost);
+router.delete('/dashboard/posts/:id', employeeController.deletePost);
+router.put('/dashboard/comments/:id', employeeController.editComment);
+router.delete('/dashboard/comments/:id', employeeController.deleteComment);
+router.post('/dashboard/comments/:id/like', employeeController.toggleLikeComment);
+router.get('/dashboard/on-leave-today', employeeController.getOnLeaveToday);
+router.get('/dashboard/next-holiday', employeeController.getNextHoliday);
 
 // HR only routes
 router.use(requireRole('HR', 'SUPER_ADMIN'));

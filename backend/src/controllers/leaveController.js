@@ -98,7 +98,7 @@ async function getLeaveRequests(req, res) {
 async function applyLeave(req, res) {
     try {
         const userId = req.user.id;
-        const { leaveTypeId, startDate, endDate, reason, employeeId } = req.body;
+        const { leaveTypeId, startDate, endDate, reason, employeeId, leaveSession } = req.body;
 
         if (!leaveTypeId || !startDate || !endDate) {
             return res.status(400).json({ message: 'Leave type, start date, and end date are required' });
@@ -137,7 +137,13 @@ async function applyLeave(req, res) {
         const start = new Date(startDate);
         const end = new Date(endDate);
         const diffTime = Math.abs(end - start);
-        const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        let totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+        // For half-day leaves, count as 0.5 days
+        const session = leaveSession || 'FULL_DAY';
+        if (session === 'FIRST_HALF' || session === 'SECOND_HALF') {
+            totalDays = 0.5;
+        }
 
         if (totalDays <= 0) {
             return res.status(400).json({ message: 'End date must be after or equal to start date' });
@@ -150,6 +156,7 @@ async function applyLeave(req, res) {
                 startDate: start,
                 endDate: end,
                 totalDays: totalDays,
+                leaveSession: session,
                 reason,
                 status: 'PENDING'
             },
@@ -576,11 +583,67 @@ async function getLeaveAdminSummary(req, res) {
     }
 }
 
+async function updateLeaveRequest(req, res) {
+    try {
+        const userId = req.user.id;
+        const requestId = parseInt(req.params.id, 10);
+        const { leaveTypeId, startDate, endDate, reason, leaveSession } = req.body;
+
+        // Find the employee
+        const employee = await prisma.employee.findUnique({ where: { userId } });
+        if (!employee) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+
+        // Find the leave request and verify ownership
+        const existing = await prisma.leaveRequest.findUnique({ where: { id: requestId } });
+        if (!existing) {
+            return res.status(404).json({ message: 'Leave request not found' });
+        }
+        if (existing.employeeId !== employee.id) {
+            return res.status(403).json({ message: 'You can only edit your own leave requests' });
+        }
+        if (existing.status !== 'PENDING') {
+            return res.status(400).json({ message: 'Only pending leave requests can be edited' });
+        }
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        let totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+        // For half-day leaves, count as 0.5 days
+        const session = leaveSession || 'FULL_DAY';
+        if (session === 'FIRST_HALF' || session === 'SECOND_HALF') {
+            totalDays = 0.5;
+        }
+
+        const updated = await prisma.leaveRequest.update({
+            where: { id: requestId },
+            data: {
+                leaveTypeId: parseInt(leaveTypeId, 10),
+                startDate: start,
+                endDate: end,
+                totalDays,
+                leaveSession: session,
+                reason
+            },
+            include: { leaveType: true }
+        });
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Update Leave Request Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     getLeaveTypes,
     createLeaveType,
     getLeaveRequests,
     applyLeave,
+    updateLeaveRequest,
     updateLeaveStatus,
     getLeaveBalances,
     updateLeaveType,
