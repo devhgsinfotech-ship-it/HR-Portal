@@ -593,6 +593,15 @@ export const SidebarDataTest = [
     separateRoute: false,
     submenuItems: [
       {
+        label: 'Org',
+        link: routes.org,
+        submenu: false,
+        showSubRoute: false,
+        icon: 'building',
+        base: routes.org,
+        materialicons: 'domain',
+      },
+      {
         label: 'Employees',
         link: routes.employeeList,
         submenu: true,

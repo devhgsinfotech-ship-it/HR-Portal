@@ -378,6 +378,7 @@ aiConfiguration:"/ai-configuration",
   activities: "/",
 
   //HRM
+  org: "/org",
   employeeList: "/employees",
   employeeGrid: "/employees-grid",
   departments: "/departments",

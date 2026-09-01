@@ -1,6 +1,7 @@
 import { Navigate, Route } from "react-router";
 import { all_routes } from "./all_routes";
 import TestTheme from "../test-theme";
+import OrgDirectory from "../feature-module/hrm/employees/OrgDirectory";
 
 // Import all lazy-loaded components
 import {
@@ -1537,6 +1538,11 @@ export const publicRoutes = [
   {
     path: routes.employeeList,
     element: <EmployeeList />,
+    route: Route,
+  },
+  {
+    path: routes.org,
+    element: <OrgDirectory />,
     route: Route,
   },
   {

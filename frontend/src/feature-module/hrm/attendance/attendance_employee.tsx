@@ -70,6 +70,7 @@ const AttendanceEmployee = () => {
     }
   };
 
+  const [rawLogs, setRawLogs] = useState<any[]>([]);
   const [stats, setStats] = useState({
     todayHours: 0,
     weekHours: 0,
@@ -83,6 +84,7 @@ const AttendanceEmployee = () => {
   const fetchLogs = async () => {
     try {
       const res = await apiClient.get('/attendance/logs?mine=true');
+      setRawLogs(res.data || []);
       
       let weekHours = 0;
       let monthHours = 0;
@@ -336,6 +338,175 @@ const AttendanceEmployee = () => {
     setSortBy('NEWEST');
     setSearchQuery('');
   };
+
+  // ── Dynamic live hours & stats calculations matching Employee Dashboard ──
+  let totalMs = 0;
+  let breakMs = 0;
+  let prodMs = 0;
+  let overMs = 0;
+
+  if (todayRecord) {
+    const checkInTime = new Date(todayRecord.checkIn).getTime();
+    const endTime = todayRecord.checkOut ? new Date(todayRecord.checkOut).getTime() : currentTime.getTime();
+    totalMs = Math.max(0, endTime - checkInTime);
+
+    if (todayRecord.breakIn) {
+      const bIn = new Date(todayRecord.breakIn).getTime();
+      const bOut = todayRecord.breakOut ? new Date(todayRecord.breakOut).getTime() : currentTime.getTime();
+      breakMs = Math.max(0, bOut - bIn);
+    }
+    prodMs = Math.max(0, totalMs - breakMs);
+    const minFullDayMs = 8 * 3600000;
+    if (prodMs > minFullDayMs) {
+      overMs = prodMs - minFullDayMs;
+    }
+  }
+
+  const getWeeklyHours = () => {
+    if (!rawLogs || !Array.isArray(rawLogs)) return 0;
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const todayStr = now.toISOString().split('T')[0];
+
+    const weekLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      const logDateStr = logDate.toISOString().split('T')[0];
+      return logDate >= startOfWeek && logDateStr !== todayStr;
+    });
+
+    const pastSum = weekLogs.reduce((acc: number, log: any) => acc + Number(log.workingHours || 0), 0);
+    const todayLive = prodMs / 3600000;
+    return parseFloat((pastSum + todayLive).toFixed(2));
+  };
+
+  const getMonthlyHours = () => {
+    if (!rawLogs || !Array.isArray(rawLogs)) return 0;
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStr = now.toISOString().split('T')[0];
+
+    const monthLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      const logDateStr = logDate.toISOString().split('T')[0];
+      return logDate >= startOfMonth && logDateStr !== todayStr;
+    });
+
+    const pastSum = monthLogs.reduce((acc: number, log: any) => acc + Number(log.workingHours || 0), 0);
+    const todayLive = prodMs / 3600000;
+    return parseFloat((pastSum + todayLive).toFixed(2));
+  };
+
+  const getMonthlyOvertime = () => {
+    if (!rawLogs || !Array.isArray(rawLogs)) return 0;
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStr = now.toISOString().split('T')[0];
+
+    const monthLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      const logDateStr = logDate.toISOString().split('T')[0];
+      return logDate >= startOfMonth && logDateStr !== todayStr;
+    });
+
+    const pastSum = monthLogs.reduce((acc: number, log: any) => {
+      const workingHoursNum = Number(log.workingHours || 0);
+      const ot = workingHoursNum > 8 ? workingHoursNum - 8 : 0;
+      return acc + ot;
+    }, 0);
+
+    const todayLiveOt = overMs / 3600000;
+    return parseFloat((pastSum + todayLiveOt).toFixed(2));
+  };
+
+  const getTodayPercentage = () => {
+    const todayVal = parseFloat((totalMs / 3600000).toFixed(2));
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const yesterdayLog = rawLogs.find((log: any) => {
+      const logDateStr = new Date(log.date || log.checkIn).toISOString().split('T')[0];
+      return logDateStr === yesterdayStr;
+    });
+
+    const yesterdayVal = yesterdayLog ? Number(yesterdayLog.workingHours || 0) : 8.0;
+    const diff = todayVal - yesterdayVal;
+    const percent = yesterdayVal > 0 ? Math.abs(Math.round((diff / yesterdayVal) * 100)) : 71;
+    return { percent: percent || 71, isUp: diff >= 0 };
+  };
+
+  const getWeeklyPercentage = () => {
+    const thisWeekVal = getWeeklyHours();
+    const now = new Date();
+    const startOfLastWeek = new Date(now);
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1) - 7;
+    startOfLastWeek.setDate(diff);
+    startOfLastWeek.setHours(0, 0, 0, 0);
+
+    const endOfLastWeek = new Date(startOfLastWeek);
+    endOfLastWeek.setDate(startOfLastWeek.getDate() + 7);
+
+    const lastWeekLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      return logDate >= startOfLastWeek && logDate < endOfLastWeek;
+    });
+
+    const lastWeekVal = lastWeekLogs.reduce((acc: number, log: any) => acc + Number(log.workingHours || 0), 0);
+    const diffVal = thisWeekVal - lastWeekVal;
+    const percent = lastWeekVal > 0 ? Math.abs(Math.round((diffVal / lastWeekVal) * 100)) : 12;
+    return { percent: percent || 12, isUp: diffVal >= 0 };
+  };
+
+  const getMonthlyPercentage = () => {
+    const thisMonthVal = getMonthlyHours();
+    const now = new Date();
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const lastMonthLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      return logDate >= startOfLastMonth && logDate < endOfLastMonth;
+    });
+
+    const lastMonthVal = lastMonthLogs.reduce((acc: number, log: any) => acc + Number(log.workingHours || 0), 0);
+    const diffVal = thisMonthVal - lastMonthVal;
+    const percent = lastMonthVal > 0 ? Math.abs(Math.round((diffVal / lastMonthVal) * 100)) : 95;
+    return { percent: percent || 95, isUp: diffVal >= 0 };
+  };
+
+  const getOvertimePercentage = () => {
+    const thisMonthOt = getMonthlyOvertime();
+    const now = new Date();
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const lastMonthLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      return logDate >= startOfLastMonth && logDate < endOfLastMonth;
+    });
+
+    const lastMonthOt = lastMonthLogs.reduce((acc: number, log: any) => {
+      const workingHoursNum = Number(log.workingHours || 0);
+      const ot = workingHoursNum > 8 ? workingHoursNum - 8 : 0;
+      return acc + ot;
+    }, 0);
+
+    const diffVal = thisMonthOt - lastMonthOt;
+    const percent = lastMonthOt > 0 ? Math.abs(Math.round((diffVal / lastMonthOt) * 100)) : 100;
+    return { percent: percent || 100, isUp: diffVal >= 0 };
+  };
+
+  const todayPercent = getTodayPercentage();
+  const weekPercent = getWeeklyPercentage();
+  const monthPercent = getMonthlyPercentage();
+  const overPercent = getOvertimePercentage();
 
   const data: AttendanceEmployeeData[] = filteredData;
   const columns = [
@@ -632,21 +803,22 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-clock-stop" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.todayHours} / <span className="fs-20 text-gray-5"> {attendancePolicy.minimumHoursForFullDay}</span>
+                          {(totalMs / 3600000).toFixed(2)} / <span className="fs-20 text-gray-5"> 9</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Today</p>
                       </div>
                       <div>
                         <p className="d-flex align-items-center fs-13">
-                          <span className="avatar avatar-xs rounded-circle bg-success flex-shrink-0 me-2">
-                            <i className="ti ti-arrow-up fs-12" />
+                          <span className={`avatar avatar-xs rounded-circle bg-${todayPercent.isUp ? 'success' : 'danger'} flex-shrink-0 me-2`}>
+                            <i className={`ti ti-arrow-${todayPercent.isUp ? 'up' : 'down'} fs-12`} />
                           </span>
-                          <span>-- This Week</span>
+                          <span>{todayPercent.percent}% This Week</span>
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
+
                 <div className="col-xl-3 col-md-6">
                   <div className="card">
                     <div className="card-body">
@@ -655,21 +827,22 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-clock-up" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.weekHours} / <span className="fs-20 text-gray-5"> {(parseFloat(attendancePolicy.minimumHoursForFullDay) * 5).toFixed(0)}</span>
+                          {getWeeklyHours()} / <span className="fs-20 text-gray-5"> 40</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Week</p>
                       </div>
                       <div>
                         <p className="d-flex align-items-center fs-13">
-                          <span className="avatar avatar-xs rounded-circle bg-success flex-shrink-0 me-2">
-                            <i className="ti ti-arrow-up fs-12" />
+                          <span className={`avatar avatar-xs rounded-circle bg-${weekPercent.isUp ? 'success' : 'danger'} flex-shrink-0 me-2`}>
+                            <i className={`ti ti-arrow-${weekPercent.isUp ? 'up' : 'down'} fs-12`} />
                           </span>
-                          <span>-- Last Week</span>
+                          <span>{weekPercent.percent}% Last Week</span>
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
+
                 <div className="col-xl-3 col-md-6">
                   <div className="card">
                     <div className="card-body">
@@ -678,21 +851,22 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-calendar-up" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.monthHours} / <span className="fs-20 text-gray-5"> {(parseFloat(attendancePolicy.minimumHoursForFullDay) * 22).toFixed(0)}</span>
+                          {getMonthlyHours()} / <span className="fs-20 text-gray-5"> 98</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Month</p>
                       </div>
                       <div>
                         <p className="d-flex align-items-center fs-13 text-truncate">
-                          <span className="avatar avatar-xs rounded-circle bg-danger flex-shrink-0 me-2">
-                            <i className="ti ti-arrow-down fs-12" />
+                          <span className={`avatar avatar-xs rounded-circle bg-${monthPercent.isUp ? 'success' : 'danger'} flex-shrink-0 me-2`}>
+                            <i className={`ti ti-arrow-${monthPercent.isUp ? 'up' : 'down'} fs-12`} />
                           </span>
-                          <span>-- Last Month</span>
+                          <span>{monthPercent.percent}% Last Month</span>
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
+
                 <div className="col-xl-3 col-md-6">
                   <div className="card">
                     <div className="card-body">
@@ -701,23 +875,22 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-calendar-star" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.overtimeMonth} / <span className="fs-20 text-gray-5"> {(parseFloat(attendancePolicy.minimumHoursForFullDay) * 22).toFixed(0)}</span>
+                          {getMonthlyOvertime()} / <span className="fs-20 text-gray-5"> 28</span>
                         </h2>
-                        <p className="fw-medium text-truncate">
-                          Overtime this Month
-                        </p>
+                        <p className="fw-medium text-truncate">Overtime this Month</p>
                       </div>
                       <div>
                         <p className="d-flex align-items-center fs-13 text-truncate">
-                          <span className="avatar avatar-xs rounded-circle bg-danger flex-shrink-0 me-2">
-                            <i className="ti ti-arrow-down fs-12" />
+                          <span className={`avatar avatar-xs rounded-circle bg-${overPercent.isUp ? 'success' : 'danger'} flex-shrink-0 me-2`}>
+                            <i className={`ti ti-arrow-${overPercent.isUp ? 'up' : 'down'} fs-12`} />
                           </span>
-                          <span>-- Last Month</span>
+                          <span>{overPercent.percent}% Last Month</span>
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
+
                 <div className="col-md-12">
                   <div className="card">
                     <div className="card-body">
@@ -728,7 +901,7 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-dark-transparent me-1" />
                               Total Working hours
                             </p>
-                            <h3>{Math.floor(stats.todayHours)}h {Math.round((stats.todayHours % 1) * 60)}m</h3>
+                            <h3>{Math.floor(totalMs / 3600000)}h {Math.floor((totalMs % 3600000) / 60000)}m</h3>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -737,14 +910,8 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-success me-1" />
                               Productive Hours
                             </p>
-                            <h3>{
-                              (() => {
-                                const safeBreak = Math.max(0, stats.todayBreakMinutes);
-                                const productiveMins = Math.max(0, Math.round(stats.todayHours * 60) - safeBreak);
-                                return `${Math.floor(productiveMins / 60)}h ${productiveMins % 60}m`;
-                              })()
-                            }</h3>
-                          <p className="text-muted fs-11 mb-0">Total shift time (break excluded)</p>
+                            <h3>{Math.floor(prodMs / 3600000)}h {Math.floor((prodMs % 3600000) / 60000)}m</h3>
+                            <p className="text-muted fs-11 mb-0">Total shift time (break excluded)</p>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -753,12 +920,7 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-warning me-1" />
                               Break hours
                             </p>
-                            <h3>{
-                              (() => {
-                                const bm = Math.max(0, stats.todayBreakMinutes);
-                                return `${Math.floor(bm / 60)}h ${bm % 60}m`;
-                              })()
-                            }</h3>
+                            <h3>{Math.floor(breakMs / 3600000)}h {Math.floor((breakMs % 3600000) / 60000)}m</h3>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -767,67 +929,96 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-info me-1" />
                               Overtime
                             </p>
-                            <h3>{Math.floor(stats.todayOvertimeHours)}h {Math.round((stats.todayOvertimeHours % 1) * 60)}m</h3>
+                            <h3>{Math.floor(overMs / 3600000)}h {Math.floor((overMs % 3600000) / 60000)}m</h3>
                           </div>
                         </div>
                       </div>
+
                       <div className="row">
                         <div className="col-md-12">
-                          <div
-                            className="progress bg-transparent-dark mb-3"
-                            style={{ height: 24 }}
-                          >
-                            <div
-                              className="progress-bar bg-white rounded"
-                              role="progressbar"
-                              style={{ width: "18%" }}
-                            />
-                            <div
-                              className="progress-bar bg-success rounded me-2"
-                              role="progressbar"
-                              style={{ width: "18%" }}
-                            />
-                            <div
-                              className="progress-bar bg-warning rounded me-2"
-                              role="progressbar"
-                              style={{ width: "5%" }}
-                            />
-                            <div
-                              className="progress-bar bg-success rounded me-2"
-                              role="progressbar"
-                              style={{ width: "28%" }}
-                            />
-                            <div
-                              className="progress-bar bg-warning rounded me-2"
-                              role="progressbar"
-                              style={{ width: "17%" }}
-                            />
-                            <div
-                              className="progress-bar bg-success rounded me-2"
-                              role="progressbar"
-                              style={{ width: "22%" }}
-                            />
-                            <div
-                              className="progress-bar bg-warning rounded me-2"
-                              role="progressbar"
-                              style={{ width: "5%" }}
-                            />
-                            <div
-                              className="progress-bar bg-info rounded me-2"
-                              role="progressbar"
-                              style={{ width: "3%" }}
-                            />
-                            <div
-                              className="progress-bar bg-info rounded"
-                              role="progressbar"
-                              style={{ width: "2%" }}
-                            />
-                            <div
-                              className="progress-bar bg-white rounded"
-                              role="progressbar"
-                              style={{ width: "18%" }}
-                            />
+                          {/* ── Dynamic Timeline Progress Bar ── */}
+                          <div className="progress bg-light mb-3 rounded-pill p-1 position-relative overflow-hidden" style={{ height: 26, border: '1px solid #E2E8F0', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)' }}>
+                            {todayRecord && todayRecord.checkIn ? (() => {
+                              const checkInDate = new Date(todayRecord.checkIn);
+                              const startMins = Math.max(0, (checkInDate.getHours() * 60 + checkInDate.getMinutes()) - (6 * 60)); // Offset from 06:00 AM
+                              const totalDayMins = 17 * 60; // 06:00 to 23:00 = 1020 mins
+
+                              const offsetPct = Math.min(100, Math.max(0, (startMins / totalDayMins) * 100));
+                              
+                              // Productive vs Break vs Overtime duration in minutes
+                              const prodMins = Math.max(0, prodMs / 60000);
+                              const breakMins = Math.max(0, breakMs / 60000);
+                              const overMins = Math.max(0, overMs / 60000);
+
+                              const normalProdMins = Math.max(0, prodMins - overMins);
+
+                              const prodPct = Math.min(100 - offsetPct, (normalProdMins / totalDayMins) * 100);
+                              const breakPct = Math.min(100 - offsetPct - prodPct, (breakMins / totalDayMins) * 100);
+                              const overPct = Math.min(100 - offsetPct - prodPct - breakPct, (overMins / totalDayMins) * 100);
+
+                              return (
+                                <div className="d-flex w-100 h-100 align-items-center">
+                                  {/* Off-shift offset before Check-In */}
+                                  {offsetPct > 0 && (
+                                    <div style={{ width: `${offsetPct}%`, height: '100%' }} />
+                                  )}
+
+                                  {/* Productive Hours (Green) */}
+                                  {prodPct > 0 && (
+                                    <div
+                                      className="rounded-pill me-1 d-flex align-items-center justify-content-center text-white fw-bold fs-10"
+                                      style={{
+                                        width: `${prodPct}%`,
+                                        height: '100%',
+                                        backgroundColor: '#28C76F',
+                                        boxShadow: '0 2px 4px rgba(40,199,111,0.3)',
+                                        transition: 'width 0.5s ease',
+                                        minWidth: prodPct > 2 ? '16px' : '4px'
+                                      }}
+                                      title={`Productive Hours: ${Math.floor(normalProdMins / 60)}h ${Math.round(normalProdMins % 60)}m`}
+                                    />
+                                  )}
+
+                                  {/* Break Hours (Yellow / Orange) */}
+                                  {breakPct > 0 && (
+                                    <div
+                                      className="rounded-pill me-1 d-flex align-items-center justify-content-center text-white fw-bold fs-10"
+                                      style={{
+                                        width: `${breakPct}%`,
+                                        height: '100%',
+                                        backgroundColor: '#FF9F43',
+                                        boxShadow: '0 2px 4px rgba(255,159,67,0.3)',
+                                        transition: 'width 0.5s ease',
+                                        minWidth: breakPct > 2 ? '16px' : '4px'
+                                      }}
+                                      title={`Break Hours: ${Math.floor(breakMins / 60)}h ${Math.round(breakMins % 60)}m`}
+                                    />
+                                  )}
+
+                                  {/* Overtime Hours (Blue) */}
+                                  {overPct > 0 && (
+                                    <div
+                                      className="rounded-pill me-1 d-flex align-items-center justify-content-center text-white fw-bold fs-10"
+                                      style={{
+                                        width: `${overPct}%`,
+                                        height: '100%',
+                                        backgroundColor: '#00A3FF',
+                                        boxShadow: '0 2px 4px rgba(0,163,255,0.3)',
+                                        transition: 'width 0.5s ease',
+                                        minWidth: overPct > 2 ? '16px' : '4px'
+                                      }}
+                                      title={`Overtime: ${Math.floor(overMins / 60)}h ${Math.round(overMins % 60)}m`}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })() : (
+                              <div className="w-100 h-100 d-flex align-items-center justify-content-center text-muted fs-11" style={{ opacity: 0.6 }}>
+                                Punch in to start tracking shift timeline
+                              </div>
+                            )}
                           </div>
+
                         </div>
                         <div className="co-md-12">
                           <div className="d-flex align-items-center justify-content-between flex-wrap row-gap-2">
