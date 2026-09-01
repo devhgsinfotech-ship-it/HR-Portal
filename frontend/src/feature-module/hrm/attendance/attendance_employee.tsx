@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import type { AppRootState as RootState } from '../../../core/data/redux/store';
 import { all_routes } from '../../../router/all_routes';
@@ -20,6 +20,9 @@ interface AttendanceEmployeeData {
   Overtime: string;
   ProductionHours: string;
   key?: number;
+  rawCheckIn?: string;
+  rawCheckOut?: string;
+  rawDate?: string;
 }
 
 const AttendanceEmployee = () => {
@@ -37,6 +40,12 @@ const AttendanceEmployee = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [incompleteYesterday, setIncompleteYesterday] = useState<any>(null);
   const [showIncompletePopup, setShowIncompletePopup] = useState(false);
+
+  // Table Filters State
+  const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [sortBy, setSortBy] = useState<string>('NEWEST');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const user = useSelector((state: RootState) => state.auth.user);
 
@@ -138,7 +147,10 @@ const AttendanceEmployee = () => {
         Break: rec.breakMinutes ? `${rec.breakMinutes} Min` : '0 Min',
         Late: rec.lateMinutes ? `${rec.lateMinutes} Min` : '0 Min',
         Overtime: formatHrs(rec.overtimeHours),
-        ProductionHours: formatHrs(rec.workingHours)
+        ProductionHours: formatHrs(rec.workingHours),
+        rawCheckIn: rec.checkIn,
+        rawCheckOut: rec.checkOut,
+        rawDate: rec.date
       }));
       setDbLogs(mapped);
     } catch (err) {
@@ -251,8 +263,81 @@ const AttendanceEmployee = () => {
     }
   };
 
-  // ALWAYS use real API data — empty means no records yet (never fall back to fake JSON)
-  const data: AttendanceEmployeeData[] = dbLogs;
+  // Opens the regularize modal pre-filled with the selected attendance record
+  const handleRegularizeClick = (record: AttendanceEmployeeData) => {
+    setSelectedRecord(record);
+    setRegularizeIn(record.rawCheckIn ? toDatetimeLocal(record.rawCheckIn) : '');
+    setRegularizeOut(record.rawCheckOut ? toDatetimeLocal(record.rawCheckOut) : '');
+    setRegularizeReason('');
+    setRegularizeBreakDurationHours('');
+    setRegularizeBreakDurationMins('');
+  };
+
+  // Dynamic Filtering & Sorting for Attendance Table
+  const filteredData = useMemo(() => {
+    let list = [...dbLogs];
+
+    // 1. Date Range Filter
+    if (dateRange.start && dateRange.end) {
+      const s = new Date(dateRange.start);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(dateRange.end);
+      e.setHours(23, 59, 59, 999);
+
+      list = list.filter((item: any) => {
+        const itemDate = new Date(item.rawDate || item.Date);
+        return itemDate >= s && itemDate <= e;
+      });
+    }
+
+    // 2. Status Filter
+    if (statusFilter !== 'ALL') {
+      list = list.filter((item: any) => item.Status === statusFilter);
+    }
+
+    // 3. Search Query Filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((item: any) =>
+        item.Date?.toLowerCase().includes(q) ||
+        item.Status?.toLowerCase().includes(q) ||
+        item.CheckIn?.toLowerCase().includes(q) ||
+        item.CheckOut?.toLowerCase().includes(q) ||
+        item.ProductionHours?.toLowerCase().includes(q)
+      );
+    }
+
+    // 4. Sort By Filter
+    if (sortBy === 'LAST_7_DAYS') {
+      const now = new Date();
+      const sevenDaysAgo = new Date(now);
+      sevenDaysAgo.setDate(now.getDate() - 7);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+      list = list.filter((item: any) => new Date(item.rawDate || item.Date) >= sevenDaysAgo);
+    } else if (sortBy === 'LAST_MONTH') {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(now.getDate() - 30);
+      thirtyDaysAgo.setHours(0, 0, 0, 0);
+      list = list.filter((item: any) => new Date(item.rawDate || item.Date) >= thirtyDaysAgo);
+    } else if (sortBy === 'ASCENDING') {
+      list.sort((a: any, b: any) => new Date(a.rawDate || a.Date).getTime() - new Date(b.rawDate || b.Date).getTime());
+    } else {
+      // NEWEST / DESCENDING (default)
+      list.sort((a: any, b: any) => new Date(b.rawDate || b.Date).getTime() - new Date(a.rawDate || a.Date).getTime());
+    }
+
+    return list;
+  }, [dbLogs, dateRange, statusFilter, sortBy, searchQuery]);
+
+  const resetFilters = () => {
+    setDateRange({ start: null, end: null });
+    setStatusFilter('ALL');
+    setSortBy('NEWEST');
+    setSearchQuery('');
+  };
+
+  const data: AttendanceEmployeeData[] = filteredData;
   const columns = [
     {
       title: "Date",
@@ -276,7 +361,7 @@ const AttendanceEmployee = () => {
         return (
           <span className={`badge ${badgeClass} d-inline-flex align-items-center`}>
             <i className="ti ti-point-filled me-1" />
-            {text}
+            {text === 'MISSING_PUNCH' ? 'MISSING PUNCH' : text}
           </span>
         );
       },
@@ -320,18 +405,25 @@ const AttendanceEmployee = () => {
     },
     {
       title: "Action",
-      render: (_text: string, record: AttendanceEmployeeData) => (
-        (record.Status === 'MISSING_PUNCH' || record.Status === 'IRREGULAR' || record.Status === 'HALF_DAY') ? (
+      render: (_text: string, record: AttendanceEmployeeData) => {
+        const todayStr = new Date().toLocaleDateString();
+        const isPastRecord = record.Date !== todayStr;
+        const isMissingCheckOut = record.CheckOut === 'N/A' || !record.CheckOut;
+        const isMissingCheckIn = record.CheckIn === 'N/A' || !record.CheckIn;
+        const isSpecialStatus = record.Status === 'MISSING_PUNCH' || record.Status === 'IRREGULAR' || record.Status === 'HALF_DAY';
+        const showRegularize = isSpecialStatus || (isPastRecord && (isMissingCheckOut || isMissingCheckIn));
+
+        return showRegularize ? (
           <button
             className="btn btn-sm btn-primary"
             data-bs-toggle="modal"
             data-bs-target="#regularize_modal"
-            onClick={() => setSelectedRecord(record)}
+            onClick={() => handleRegularizeClick(record)}
           >
             Regularize
           </button>
-        ) : null
-      )
+        ) : null;
+      }
     }
   ];
 
@@ -768,26 +860,51 @@ const AttendanceEmployee = () => {
           </div>
           <div className="card">
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-              <h5>Employee Attendance</h5>
+              <div className="d-flex align-items-center gap-3">
+                <h5 className="mb-0">Employee Attendance</h5>
+                {(dateRange.start || statusFilter !== 'ALL' || sortBy !== 'NEWEST' || searchQuery) && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1 fs-12 py-1 px-2"
+                    onClick={resetFilters}
+                  >
+                    <i className="ti ti-rotate" /> Reset Filters
+                  </button>
+                )}
+              </div>
               <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+                {/* Date Range Picker */}
                 <div className="me-3">
                   <div className="input-icon position-relative">
-                    <PredefinedDateRanges />
+                    <PredefinedDateRanges onDateRangeChange={(start, end) => setDateRange({ start, end })} />
                   </div>
                 </div>
+
+                {/* Select Status Dropdown */}
                 <div className="dropdown me-3">
                   <button
                     type="button"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
+                    className={`dropdown-toggle btn d-inline-flex align-items-center ${statusFilter !== 'ALL' ? 'btn-primary text-white' : 'btn-white'}`}
                     data-bs-toggle="dropdown"
                   >
-                    Select Status
+                    <i className="ti ti-filter me-1" />
+                    {statusFilter === 'ALL' ? 'Select Status' : statusFilter === 'MISSING_PUNCH' ? 'Status: Missing Punch' : `Status: ${statusFilter.replace('_', ' ')}`}
                   </button>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
+                  <ul className="dropdown-menu dropdown-menu-end p-2">
                     <li>
                       <button
                         type="button"
-                        className="dropdown-item rounded-1"
+                        className={`dropdown-item rounded-1 ${statusFilter === 'ALL' ? 'active' : ''}`}
+                        onClick={() => setStatusFilter('ALL')}
+                      >
+                        All Statuses
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        className={`dropdown-item rounded-1 ${statusFilter === 'PRESENT' ? 'active' : ''}`}
+                        onClick={() => setStatusFilter('PRESENT')}
                       >
                         Present
                       </button>
@@ -795,60 +912,83 @@ const AttendanceEmployee = () => {
                     <li>
                       <button
                         type="button"
-                        className="dropdown-item rounded-1"
+                        className={`dropdown-item rounded-1 ${statusFilter === 'HALF_DAY' ? 'active' : ''}`}
+                        onClick={() => setStatusFilter('HALF_DAY')}
                       >
-                        Absent
+                        Half Day
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        className={`dropdown-item rounded-1 ${statusFilter === 'MISSING_PUNCH' ? 'active' : ''}`}
+                        onClick={() => setStatusFilter('MISSING_PUNCH')}
+                      >
+                        Missing Punch
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        className={`dropdown-item rounded-1 ${statusFilter === 'IRREGULAR' ? 'active' : ''}`}
+                        onClick={() => setStatusFilter('IRREGULAR')}
+                      >
+                        Irregular
                       </button>
                     </li>
                   </ul>
                 </div>
+
+                {/* Sort By Dropdown */}
                 <div className="dropdown">
                   <button
                     type="button"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
+                    className={`dropdown-toggle btn d-inline-flex align-items-center ${sortBy !== 'NEWEST' ? 'btn-primary text-white' : 'btn-white'}`}
                     data-bs-toggle="dropdown"
                   >
-                    Sort By : Last 7 Days
+                    <i className="ti ti-sort-descending me-1" />
+                    Sort By : {
+                      sortBy === 'NEWEST' ? 'Recently Added' :
+                      sortBy === 'ASCENDING' ? 'Ascending (Oldest)' :
+                      sortBy === 'LAST_7_DAYS' ? 'Last 7 Days' :
+                      sortBy === 'LAST_MONTH' ? 'Last Month' : 'Recently Added'
+                    }
                   </button>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
+                  <ul className="dropdown-menu dropdown-menu-end p-2">
                     <li>
                       <button
                         type="button"
-                        className="dropdown-item rounded-1"
+                        className={`dropdown-item rounded-1 ${sortBy === 'NEWEST' ? 'active' : ''}`}
+                        onClick={() => setSortBy('NEWEST')}
                       >
-                        Recently Added
+                        Recently Added (Newest First)
                       </button>
                     </li>
                     <li>
                       <button
                         type="button"
-                        className="dropdown-item rounded-1"
+                        className={`dropdown-item rounded-1 ${sortBy === 'ASCENDING' ? 'active' : ''}`}
+                        onClick={() => setSortBy('ASCENDING')}
                       >
-                        Ascending
+                        Ascending (Oldest First)
                       </button>
                     </li>
                     <li>
                       <button
                         type="button"
-                        className="dropdown-item rounded-1"
-                      >
-                        Descending
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        type="button"
-                        className="dropdown-item rounded-1"
-                      >
-                        Last Month
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        type="button"
-                        className="dropdown-item rounded-1"
+                        className={`dropdown-item rounded-1 ${sortBy === 'LAST_7_DAYS' ? 'active' : ''}`}
+                        onClick={() => setSortBy('LAST_7_DAYS')}
                       >
                         Last 7 Days
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        className={`dropdown-item rounded-1 ${sortBy === 'LAST_MONTH' ? 'active' : ''}`}
+                        onClick={() => setSortBy('LAST_MONTH')}
+                      >
+                        Last Month
                       </button>
                     </li>
                   </ul>
@@ -859,6 +999,7 @@ const AttendanceEmployee = () => {
               <Table dataSource={data} columns={columns} Selection={false} />
             </div>
           </div>
+
         </div>
         <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
           <p className="mb-0">2014 - 2026 © SmartHR.</p>

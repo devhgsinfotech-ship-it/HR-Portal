@@ -47,6 +47,7 @@ const EmployeeDashboard = () => {
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [onLeaveToday, setOnLeaveToday] = useState<any[]>([]);
   const [nextHoliday, setNextHoliday] = useState<any>(null);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
   const apiUrl = APP_CONFIG.getBackendUrl();
 
   const [activeTab, setActiveTab] = useState<'birthdays' | 'anniversaries' | 'joinees'>('anniversaries');
@@ -224,7 +225,7 @@ const EmployeeDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [empRes, statusRes, logsRes, balancesRes, requestsRes, eventsRes, postsRes, onLeaveRes, holidayRes] = await Promise.all([
+      const [empRes, statusRes, logsRes, balancesRes, requestsRes, eventsRes, postsRes, onLeaveRes, holidayRes, announceRes] = await Promise.all([
         apiClient.get('/employees/me').catch(() => ({ data: null })),
         apiClient.get('/attendance/today').catch(() => ({ data: null })),
         apiClient.get('/attendance/logs?mine=true').catch(() => ({ data: [] })),
@@ -233,7 +234,8 @@ const EmployeeDashboard = () => {
         apiClient.get('/employees/dashboard/events').catch(() => ({ data: { birthdays: { today: [], upcoming: [] }, anniversaries: [], joinees: [] } })),
         apiClient.get('/employees/dashboard/posts').catch(() => ({ data: [] })),
         apiClient.get('/employees/dashboard/on-leave-today').catch(() => ({ data: [] })),
-        apiClient.get('/employees/dashboard/next-holiday').catch(() => ({ data: null }))
+        apiClient.get('/employees/dashboard/next-holiday').catch(() => ({ data: null })),
+        apiClient.get('/announcements').catch(() => ({ data: [] }))
       ]);
       setEmployeeData(empRes.data);
       setAttendanceStatus(statusRes.data);
@@ -244,6 +246,7 @@ const EmployeeDashboard = () => {
       setPosts(postsRes.data || []);
       setOnLeaveToday(onLeaveRes.data || []);
       setNextHoliday(holidayRes.data || null);
+      setAnnouncements(announceRes.data || []);
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
     }
@@ -1013,7 +1016,7 @@ const EmployeeDashboard = () => {
 
             </div>
             <div className="col-xxl-8 col-xl-12">
-              <div className="row flex-fill">
+              <div className="row flex-fill d-none m-0">
                 <div className="col-xl-3 col-md-6">
                   <div className="card">
                     <div className="card-body">
@@ -1183,20 +1186,58 @@ const EmployeeDashboard = () => {
                   {/* ANNOUNCEMENTS CARD */}
                   <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px', backgroundColor: '#F4F7FB' }}>
                     <div className="card-body p-3">
-                      <div className="d-flex align-items-center justify-content-between">
+                      <div className="d-flex align-items-center justify-content-between mb-2">
                         <div className="d-flex align-items-center gap-3">
-                          <span className="d-inline-flex align-items-center justify-content-center rounded-circle" style={{ width: '40px', height: '40px', color: '#00BCD4', backgroundColor: '#E0F7FA' }}>
+                          <span className="d-inline-flex align-items-center justify-content-center rounded-circle flex-shrink-0" style={{ width: '40px', height: '40px', color: '#00BCD4', backgroundColor: '#E0F7FA' }}>
                             <i className="ti ti-megaphone-filled fs-20" />
                           </span>
                           <div>
                             <h6 className="fw-semibold text-gray-9 mb-0 fs-14">Announcements</h6>
-                            <p className="text-gray-5 fs-12 mb-0">No new announcements today</p>
+                            <p className="text-gray-5 fs-12 mb-0">
+                              {announcements.length > 0 ? `${announcements.length} active ${announcements.length === 1 ? 'announcement' : 'announcements'}` : 'No new announcements today'}
+                            </p>
                           </div>
                         </div>
-                        <button type="button" className="btn btn-icon rounded-circle d-inline-flex align-items-center justify-content-center text-white" style={{ width: '32px', height: '32px', backgroundColor: '#162E5B' }}>
+                        <Link to={all_routes.announcements} className="btn btn-icon rounded-circle d-inline-flex align-items-center justify-content-center text-white" style={{ width: '32px', height: '32px', backgroundColor: '#162E5B' }} title="Manage Announcements">
                           <i className="ti ti-plus fs-16" />
-                        </button>
+                        </Link>
                       </div>
+
+                      {/* Announcement Items List */}
+                      {announcements.length > 0 && (
+                        <div className="mt-3 d-flex flex-column gap-2" style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                          {announcements.map((a: any) => (
+                            <div key={a.id} className="p-3 bg-white rounded-3 border border-light-subtle shadow-xs">
+                              <div className="d-flex align-items-center justify-content-between mb-1">
+                                <span className="fw-bold text-gray-9 fs-13">{a.title}</span>
+                                <span className="text-gray-4 fs-11 ms-2 flex-shrink-0">
+                                  {formatPostTime(a.publishedAt || a.createdAt)}
+                                </span>
+                              </div>
+                              <p className="text-gray-6 fs-12 mb-2" style={{ whiteSpace: 'pre-line', lineHeight: '1.4' }}>
+                                {a.content}
+                              </p>
+                              {a.imageUrl && (
+                                <div className="mb-2">
+                                  <img
+                                    src={a.imageUrl.startsWith('http') ? a.imageUrl : `${apiUrl}${a.imageUrl}`}
+                                    alt="Attachment"
+                                    className="rounded-2"
+                                    style={{ maxHeight: '120px', maxWidth: '100%', objectFit: 'cover' }}
+                                  />
+                                </div>
+                              )}
+                              {a.createdBy && (
+                                <div className="d-flex align-items-center gap-1 text-gray-5 fs-11">
+                                  <i className="ti ti-user fs-12" />
+                                  <span>{a.createdBy.firstName} {a.createdBy.lastName}</span>
+                                  {a.createdBy.designation?.name && <span>· {a.createdBy.designation.name}</span>}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 

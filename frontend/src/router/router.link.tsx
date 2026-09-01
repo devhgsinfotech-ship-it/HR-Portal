@@ -101,6 +101,7 @@ import {
   TicketGrid,
   TicketDetails,
   Holidays,
+  Announcements,
   PerformanceIndicator,
   PerformanceReview,
   PerformanceAppraisal,
@@ -983,6 +984,11 @@ export const publicRoutes = [
   {
     path: routes.holidays,
     element: <Holidays />,
+    route: Route,
+  },
+  {
+    path: routes.announcements,
+    element: <Announcements />,
     route: Route,
   },
   {

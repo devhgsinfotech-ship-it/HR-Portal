@@ -331,11 +331,25 @@ async function getAttendanceLogs(req, res) {
         const officeStartTime = settings?.officeStartTime || "09:00";
         const gracePeriod = policy?.lateGracePeriod || 15;
 
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
         // Add dynamic Keka-style calculations
         const enrichedRecords = records.map(record => {
             let lateMinutes = 0;
             let overtimeHours = 0;
             let breakMinutes = 0;
+            let status = record.status;
+            let workingHours = record.workingHours || 0;
+
+            // Keka HRMS Rule: If record is from a past day and employee punched in but NEVER punched out,
+            // treat it as MISSING_PUNCH (incomplete attendance) instead of assuming a full Present day.
+            const recordDate = new Date(record.date);
+            recordDate.setHours(0, 0, 0, 0);
+            if (recordDate < todayStart && record.checkIn && !record.checkOut) {
+                status = 'MISSING_PUNCH';
+                workingHours = 0;
+            }
 
             // Calculate Late
             if (record.checkIn && officeStartTime) {
@@ -361,8 +375,8 @@ async function getAttendanceLogs(req, res) {
             }
 
             // Calculate Overtime
-            if (record.workingHours && record.workingHours > minFullDay) {
-                overtimeHours = parseFloat((record.workingHours - minFullDay).toFixed(2));
+            if (workingHours && workingHours > minFullDay) {
+                overtimeHours = parseFloat((workingHours - minFullDay).toFixed(2));
             }
 
             // Calculate Break (if they took a break today and ended it)
@@ -377,6 +391,8 @@ async function getAttendanceLogs(req, res) {
 
             return {
                 ...record,
+                status,
+                workingHours,
                 lateMinutes,
                 overtimeHours,
                 breakMinutes

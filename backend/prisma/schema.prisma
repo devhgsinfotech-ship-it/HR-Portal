@@ -284,6 +284,7 @@ model Employee {
   postLikes           PostLike[]
   postComments        PostComment[]
   commentLikes        CommentLike[]
+  announcementsCreated Announcement[] @relation("AnnouncementsCreated")
 
   @@map("employees")
 }
@@ -643,12 +644,20 @@ model Notification {
 // ============================================================
 
 model Announcement {
-  id        Int      @id @default(autoincrement())
-  companyId Int
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  title     String
-  content   String   @db.Text
-  createdAt DateTime @default(now())
+  id                   Int         @id @default(autoincrement())
+  companyId            Int
+  company              Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdByEmployeeId  Int?
+  createdBy            Employee?   @relation("AnnouncementsCreated", fields: [createdByEmployeeId], references: [id], onDelete: SetNull)
+  title                String
+  content              String      @db.Text
+  imageUrl             String?
+  targetType           String      @default("ALL")
+  targetDepartmentId   Int?
+  publishedAt          DateTime    @default(now())
+  expiresAt            DateTime?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
   @@map("announcements")
 }

@@ -684,6 +684,16 @@ export const SidebarDataTest = [
         submenuItems: [],
       },
       {
+        label: 'Announcements',
+        link: routes.announcements,
+        base: routes.announcements,
+        submenu: false,
+        showSubRoute: false,
+        icon: 'speakerphone',
+        materialicons: 'campaign',
+        submenuItems: [],
+      },
+      {
         label: 'Attendance',
         link: 'sales',
         submenu: true,
