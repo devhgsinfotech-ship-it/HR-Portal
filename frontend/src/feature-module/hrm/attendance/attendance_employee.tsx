@@ -525,14 +525,34 @@ const AttendanceEmployee = () => {
       dataIndex: "Status",
       render: (text: string, record: AttendanceEmployeeData) => {
         let badgeClass = 'badge-danger-transparent';
+        let displayText = text;
+
         if (text === 'PRESENT') badgeClass = 'badge-success-transparent';
-        if (text === 'HALF_DAY') badgeClass = 'badge-warning-transparent';
-        if (text === 'MISSING_PUNCH' || text === 'IRREGULAR') badgeClass = 'badge-danger-transparent';
-        
+        else if (text === 'HALF_DAY') badgeClass = 'badge-warning-transparent';
+        else if (text === 'ON_LEAVE') {
+          badgeClass = 'badge-warning-transparent';
+          displayText = 'ON LEAVE';
+        } else if (text === 'WEEKLY_OFF') {
+          badgeClass = 'badge-info-transparent';
+          displayText = 'WEEKLY OFF';
+        } else if (text === 'HOLIDAY') {
+          badgeClass = 'badge-purple-transparent';
+          displayText = 'HOLIDAY';
+        } else if (text === 'ABSENT') {
+          badgeClass = 'badge-danger-transparent';
+          displayText = 'ABSENT';
+        } else if (text === 'MISSING_PUNCH') {
+          badgeClass = 'badge-danger-transparent';
+          displayText = 'MISSING PUNCH';
+        } else if (text === 'IRREGULAR') {
+          badgeClass = 'badge-danger-transparent';
+          displayText = 'IRREGULAR';
+        }
+
         return (
           <span className={`badge ${badgeClass} d-inline-flex align-items-center`}>
             <i className="ti ti-point-filled me-1" />
-            {text === 'MISSING_PUNCH' ? 'MISSING PUNCH' : text}
+            {displayText}
           </span>
         );
       },
@@ -576,13 +596,15 @@ const AttendanceEmployee = () => {
     },
     {
       title: "Action",
+      dataIndex: "Action",
       render: (_text: string, record: AttendanceEmployeeData) => {
         const todayStr = new Date().toLocaleDateString();
         const isPastRecord = record.Date !== todayStr;
         const isMissingCheckOut = record.CheckOut === 'N/A' || !record.CheckOut;
         const isMissingCheckIn = record.CheckIn === 'N/A' || !record.CheckIn;
         const isSpecialStatus = record.Status === 'MISSING_PUNCH' || record.Status === 'IRREGULAR' || record.Status === 'HALF_DAY';
-        const showRegularize = isSpecialStatus || (isPastRecord && (isMissingCheckOut || isMissingCheckIn));
+        const isNonRegularizable = record.Status === 'ON_LEAVE' || record.Status === 'WEEKLY_OFF' || record.Status === 'HOLIDAY';
+        const showRegularize = (isSpecialStatus || (isPastRecord && (isMissingCheckOut || isMissingCheckIn))) && !isNonRegularizable;
 
         return showRegularize ? (
           <button
@@ -597,6 +619,96 @@ const AttendanceEmployee = () => {
       }
     }
   ];
+
+  const exportToExcel = () => {
+    if (!filteredData || filteredData.length === 0) {
+      alert('No attendance data available to export.');
+      return;
+    }
+    const headers = ["Date", "Status", "Check In", "Check Out", "Break", "Late", "Overtime", "Production Hours"];
+    const rows = filteredData.map(rec => [
+      `"${rec.Date || ''}"`,
+      `"${rec.Status || ''}"`,
+      `"${rec.CheckIn || ''}"`,
+      `"${rec.CheckOut || ''}"`,
+      `"${rec.Break || ''}"`,
+      `"${rec.Late || ''}"`,
+      `"${rec.Overtime || ''}"`,
+      `"${rec.ProductionHours || ''}"`
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `My_Attendance_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportToPDF = () => {
+    if (!filteredData || filteredData.length === 0) {
+      alert('No attendance data available to export.');
+      return;
+    }
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const html = `
+      <html>
+        <head>
+          <title>My Attendance Report - ${new Date().toLocaleDateString()}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+            h2 { color: #1e293b; margin-bottom: 5px; }
+            p { color: #64748b; font-size: 13px; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #cbd5e1; padding: 8px 12px; font-size: 12px; text-align: left; }
+            th { background-color: #f1f5f9; font-weight: bold; }
+            tr:nth-child(even) { background-color: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h2>Employee Attendance Report</h2>
+          <p>Generated on ${new Date().toLocaleString()} | Total Records: ${filteredData.length}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Check In</th>
+                <th>Check Out</th>
+                <th>Break</th>
+                <th>Late</th>
+                <th>Overtime</th>
+                <th>Hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredData.map(rec => `
+                <tr>
+                  <td>${rec.Date}</td>
+                  <td>${rec.Status}</td>
+                  <td>${rec.CheckIn}</td>
+                  <td>${rec.CheckOut}</td>
+                  <td>${rec.Break}</td>
+                  <td>${rec.Late}</td>
+                  <td>${rec.Overtime}</td>
+                  <td>${rec.ProductionHours}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <script>
+            window.onload = function() { window.print(); };
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
 
   return (
     <>
@@ -696,13 +808,14 @@ const AttendanceEmployee = () => {
                     <i className="ti ti-file-export me-1" />
                     Export
                   </button>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
+                  <ul className="dropdown-menu dropdown-menu-end p-3">
                     <li>
                       <button
                         type="button"
                         className="dropdown-item rounded-1"
+                        onClick={exportToPDF}
                       >
-                        <i className="ti ti-file-type-pdf me-1" />
+                        <i className="ti ti-file-type-pdf me-1 text-danger" />
                         Export as PDF
                       </button>
                     </li>
@@ -710,24 +823,14 @@ const AttendanceEmployee = () => {
                       <button
                         type="button"
                         className="dropdown-item rounded-1"
+                        onClick={exportToExcel}
                       >
-                        <i className="ti ti-file-type-xls me-1" />
-                        Export as Excel{" "}
+                        <i className="ti ti-file-type-xls me-1 text-success" />
+                        Export as Excel
                       </button>
                     </li>
                   </ul>
                 </div>
-              </div>
-              <div className="mb-2">
-                <button
-                  type="button"
-                  className="btn btn-primary d-flex align-items-center"
-                  data-bs-toggle="modal"
-                  data-bs-target="#attendance_report"
-                >
-                  <i className="ti ti-file-analytics me-2" />
-                  Report
-                </button>
               </div>
               <div className="ms-2 head-icons">
                 <CollapseHeader />

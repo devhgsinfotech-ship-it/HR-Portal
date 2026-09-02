@@ -405,6 +405,7 @@ model AttendancePolicy {
   requireGeofence        Boolean  @default(false)
   lateGracePeriod        Int      @default(15)
   autoCheckoutTime       String   @default("18:00")
+  weekOffDays            String   @default("Saturday,Sunday")
   updatedAt              DateTime @updatedAt
 
   @@map("attendance_policies")
