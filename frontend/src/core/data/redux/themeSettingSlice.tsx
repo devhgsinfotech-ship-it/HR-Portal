@@ -3,7 +3,7 @@ import type { PayloadAction } from "@reduxjs/toolkit";
 import type { ThemeSettingState } from "../types";
 
 const initialState: ThemeSettingState = {
-  dataLayout: localStorage.getItem("dataLayout") || "default",
+  dataLayout: localStorage.getItem("dataLayout") || "detached",
   dataWidth: localStorage.getItem("dataWidth") || "fluid",
   dataCard: localStorage.getItem("dataCard") || "bordered",
   dataSidebar: localStorage.getItem("dataSidebar") || "light",

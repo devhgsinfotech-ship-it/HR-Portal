@@ -613,16 +613,14 @@ const Header = React.memo(() => {
           </Link>
 
           <div className="header-user">
-            <div className="nav user-menu nav-list">
-              <div
-                className="me-auto d-flex align-items-center"
-                id="header-search"
+            <div className="nav user-menu nav-list position-relative">
+
+              {/* Dynamic Search Component Centered */}
+              <div 
+                className="position-absolute start-50 top-50 translate-middle d-none d-md-block" 
+                ref={searchContainerRef} 
+                style={{ width: "380px", maxWidth: "45vw", zIndex: 100 }}
               >
-                <Link id="toggle_btn" to="#" className="btn btn-menubar me-2">
-                  <i className="ti ti-arrow-bar-to-left" />
-                </Link>
-                {/* Dynamic Search Component */}
-                <div className="position-relative me-2" ref={searchContainerRef} style={{ minWidth: "300px" }}>
                   <div className="input-group input-group-flat">
                     <input
                       ref={searchInputRef}
@@ -758,90 +756,8 @@ const Header = React.memo(() => {
                   )}
                 </div>
                 {/* /Dynamic Search Component */}
-                <div className="dropdown crm-dropdown">
-                  <Link
-                    to="#"
-                    className="btn btn-menubar me-2"
-                    data-bs-toggle="dropdown"
-                  >
-                    <i className="ti ti-layout-grid" />
-                  </Link>
-                  <div className="dropdown-menu dropdown-lg dropdown-menu-start">
-                    <div className="card mb-0 border-0 shadow-none">
-                      <div className="card-header">
-                        <h4>CRM</h4>
-                      </div>
-                      <div className="card-body pb-1">
-                        <div className="row">
-                          <div className="col-sm-6">
-                            <Link
-                              to={all_routes.contactList}
-                              className="d-flex align-items-center justify-content-between p-2 crm-link mb-3"
-                            >
-                              <span className="d-flex align-items-center me-3">
-                                <i className="ti ti-user-shield text-default me-2" />
-                                Contacts
-                              </span>
-                              <i className="ti ti-arrow-right" />
-                            </Link>
-                            <Link
-                              to={all_routes.dealsGrid}
-                              className="d-flex align-items-center justify-content-between p-2 crm-link mb-3"
-                            >
-                              <span className="d-flex align-items-center me-3">
-                                <i className="ti ti-heart-handshake text-default me-2" />
-                                Deals
-                              </span>
-                              <i className="ti ti-arrow-right" />
-                            </Link>
-                            <Link
-                              to={all_routes.pipeline}
-                              className="d-flex align-items-center justify-content-between p-2 crm-link mb-3"
-                            >
-                              <span className="d-flex align-items-center me-3">
-                                <i className="ti ti-timeline-event-text text-default me-2" />
-                                Pipeline
-                              </span>
-                              <i className="ti ti-arrow-right" />
-                            </Link>
-                          </div>
-                          <div className="col-sm-6">
-                            <Link
-                              to={all_routes.companiesGrid}
-                              className="d-flex align-items-center justify-content-between p-2 crm-link mb-3"
-                            >
-                              <span className="d-flex align-items-center me-3">
-                                <i className="ti ti-building text-default me-2" />
-                                Companies
-                              </span>
-                              <i className="ti ti-arrow-right" />
-                            </Link>
-                            <Link
-                              to={all_routes.leadsGrid}
-                              className="d-flex align-items-center justify-content-between p-2 crm-link mb-3"
-                            >
-                              <span className="d-flex align-items-center me-3">
-                                <i className="ti ti-user-check text-default me-2" />
-                                Leads
-                              </span>
-                              <i className="ti ti-arrow-right" />
-                            </Link>
-                            <Link
-                              to={all_routes.activity}
-                              className="d-flex align-items-center justify-content-between p-2 crm-link mb-3"
-                            >
-                              <span className="d-flex align-items-center me-3">
-                                <i className="ti ti-activity text-default me-2" />
-                                Activities
-                              </span>
-                              <i className="ti ti-arrow-right" />
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+
+                <div className="ms-auto d-flex align-items-center">
                 <Link
                   to={all_routes.profilesettings}
                   className="btn btn-menubar"
@@ -1314,9 +1230,11 @@ const Header = React.memo(() => {
           </div>
         </div>
       </div>
-    </>
+</>
   );
 });
+
+// Header Component
 
 Header.displayName = "Header";
 

@@ -33,7 +33,7 @@ const layoutConfig: Record<string, {
   "/layout-without-header": { dataLayout: "without-header", bodyClass: "" },
   "/layout-rtl": { dataLayout: "rtl", bodyClass: "layout-mode-rtl", rtlClass: "layout-mode-rtl" },
   "/layout-dark": { dataLayout: "default", bodyClass: "", dataTheme: "dark" },
-  "/layout-default": { dataLayout: "default", bodyClass: "" },
+  "/layout-default": { dataLayout: "detached", bodyClass: "" },
   "/layout-mini": { dataLayout: "mini", bodyClass: "mini-sidebar" },
 };
 
@@ -87,7 +87,7 @@ const LayoutFeature = React.memo(() => {
 
   // Get layout config based on current path
   const currentLayoutConfig = useMemo(() => {
-    return layoutConfig[location.pathname] || { dataLayout: "default", bodyClass: "" };
+    return layoutConfig[location.pathname] || { dataLayout: "detached", bodyClass: "" };
   }, [location.pathname]);
 
   // Memoize the CSS variables string
