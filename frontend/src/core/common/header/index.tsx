@@ -100,6 +100,119 @@ const Header = React.memo(() => {
     navigate(all_routes.login);
   };
 
+  // ── Dynamic Global Search States & Handlers ──────────────────
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [dbEmployees, setDbEmployees] = useState<any[]>([]);
+  const [dbDepartments, setDbDepartments] = useState<any[]>([]);
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+  const searchContainerRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Fetch Employees and Departments for Search Index when search is opened
+  useEffect(() => {
+    if (isSearchOpen && dbEmployees.length === 0) {
+      const loadSearchData = async () => {
+        try {
+          const [empRes, deptRes] = await Promise.allSettled([
+            apiClient.get('/employees'),
+            apiClient.get('/departments')
+          ]);
+          if (empRes.status === 'fulfilled' && empRes.value.data) {
+            setDbEmployees(Array.isArray(empRes.value.data) ? empRes.value.data : []);
+          }
+          if (deptRes.status === 'fulfilled' && deptRes.value.data) {
+            setDbDepartments(Array.isArray(deptRes.value.data) ? deptRes.value.data : []);
+          }
+        } catch (e) {
+          console.error("Search data load error:", e);
+        }
+      };
+      loadSearchData();
+    }
+  }, [isSearchOpen, dbEmployees.length]);
+
+  // Keyboard shortcut listener (CTRL + /) and click outside
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setIsSearchOpen(true);
+      } else if (e.key === 'Escape') {
+        setIsSearchOpen(false);
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // System Modules & Actions Index for Quick Jump
+  const systemModules = useMemo(() => [
+    { title: 'Org Directory', category: 'Pages & Actions', icon: 'building', route: all_routes.org || '/org', keywords: 'organization org employee directory team' },
+    { title: 'Employees List', category: 'Pages & Actions', icon: 'users', route: all_routes.employeeList || '/employees', keywords: 'employee staff workforce team list' },
+    { title: 'Employees Grid', category: 'Pages & Actions', icon: 'layout-grid', route: all_routes.employeeGrid || '/employees-grid', keywords: 'employee grid cards' },
+    { title: 'Departments', category: 'Departments', icon: 'building-community', route: all_routes.departments || '/departments', keywords: 'department team division dept' },
+    { title: 'Designations', category: 'Departments', icon: 'badge', route: all_routes.designations || '/designations', keywords: 'designation role position title' },
+    
+    { title: 'My Attendance', category: 'Attendance & Leaves', icon: 'clock-check', route: all_routes.attendanceemployee || '/attendance-employee', keywords: 'attendance punch checkin checkout time in out' },
+    { title: 'Attendance Management', category: 'Attendance & Leaves', icon: 'clock-cog', route: all_routes.attendanceadmin || '/attendance-admin', keywords: 'admin attendance regularization punches' },
+    { title: 'My Leaves', category: 'Attendance & Leaves', icon: 'calendar-off', route: all_routes.leaveemployee || '/leaves-employee', keywords: 'leave vacation timeoff apply leave balance' },
+    { title: 'Leave Approvals', category: 'Attendance & Leaves', icon: 'calendar-event', route: all_routes.leaveadmin || '/leaves', keywords: 'leave admin approve reject leave requests' },
+    { title: 'Holidays', category: 'Attendance & Leaves', icon: 'calendar-star', route: all_routes.holidays || '/hrm/holidays', keywords: 'holiday calendar festival office off' },
+    
+    { title: 'My Payslips & Salary', category: 'Payroll', icon: 'receipt-2', route: all_routes.payslip || '/payslip', keywords: 'payslip salary pay slip gross net salary structure tax' },
+    { title: 'Employee Salary List', category: 'Payroll', icon: 'cash', route: all_routes.employeesalary || '/payroll/employee-salary', keywords: 'employee salary payroll list' },
+    { title: 'Payroll Additions', category: 'Payroll', icon: 'currency-dollar', route: all_routes.payrollAddition || '/payroll/payroll-addition', keywords: 'payroll items deductions allowances basic hra' },
+    
+    { title: 'Goal Tracking', category: 'Performance', icon: 'target', route: all_routes.goalTracking || '/performance/goal-tracking', keywords: 'goals target okr kpi tracking' },
+    { title: 'Performance Review', category: 'Performance', icon: 'stars', route: all_routes.performanceReview || '/performance/performance-review', keywords: 'appraisal review rating evaluation' },
+    { title: 'Performance Indicators', category: 'Performance', icon: 'chart-bar', route: all_routes.performanceIndicator || '/performance/performance-indicator', keywords: 'kpi indicator metrics' },
+    
+    { title: 'Company Policies', category: 'Policies & Docs', icon: 'file-text', route: all_routes.policy || '/policy', keywords: 'policy document hr rules guidelines code of conduct' },
+    { title: 'My Profile & Documents', category: 'Policies & Docs', icon: 'user-circle', route: all_routes.profile || '/pages/profile', keywords: 'profile documents aadhaar pan resume personal info' },
+    
+    { title: 'Leave Settings', category: 'Settings', icon: 'adjustments', route: all_routes.leavesettings || '/leave-settings', keywords: 'leave settings policy types' },
+    { title: 'General Settings', category: 'Settings', icon: 'settings', route: all_routes.profilesettings || '/settings/general-settings', keywords: 'company settings logo system config' },
+  ], [routes]);
+
+  // Compute Search Results across Employees, Departments, Pages & Modules
+  const searchResults = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return { pages: [], employees: [], departments: [] };
+
+    const matchedPages = systemModules.filter(m => 
+      m.title.toLowerCase().includes(q) || 
+      m.category.toLowerCase().includes(q) || 
+      m.keywords.toLowerCase().includes(q)
+    );
+
+    const matchedEmployees = dbEmployees.filter(emp => {
+      const name = `${emp.firstName || ''} ${emp.lastName || ''}`.toLowerCase();
+      const code = String(emp.employeeCode || emp.employeeId || '').toLowerCase();
+      const email = String(emp.user?.email || emp.email || '').toLowerCase();
+      const dept = String(emp.department?.name || emp.departmentName || '').toLowerCase();
+      const desig = String(emp.designation?.name || emp.companyRole?.name || '').toLowerCase();
+      return name.includes(q) || code.includes(q) || email.includes(q) || dept.includes(q) || desig.includes(q);
+    }).slice(0, 5);
+
+    const matchedDepts = dbDepartments.filter(d => 
+      String(d.name || '').toLowerCase().includes(q)
+    ).slice(0, 4);
+
+    return { pages: matchedPages, employees: matchedEmployees, departments: matchedDepts };
+  }, [searchQuery, systemModules, dbEmployees, dbDepartments]);
+
   // Multi-level menu open states (using Set for multiple open menus)
   const [openMenus, setOpenMenus] = useState<Set<string>>(new Set());
   const [openSubMenus, setOpenSubMenus] = useState<Set<string>>(new Set());
@@ -508,18 +621,143 @@ const Header = React.memo(() => {
                 <Link id="toggle_btn" to="#" className="btn btn-menubar me-2">
                   <i className="ti ti-arrow-bar-to-left" />
                 </Link>
-                {/* Search */}
-                <div className="input-group input-group-flat d-inline-flex me-2">
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Search in HRMS"
-                  />
-                  <span className="input-group-text">
-                    <kbd>CTRL + / </kbd>
-                  </span>
+                {/* Dynamic Search Component */}
+                <div className="position-relative me-2" ref={searchContainerRef} style={{ minWidth: "300px" }}>
+                  <div className="input-group input-group-flat">
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      className="form-control"
+                      placeholder="Search in HRMS..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onFocus={() => setIsSearchOpen(true)}
+                    />
+                    <span className="input-group-text cursor-pointer" onClick={() => searchInputRef.current?.focus()}>
+                      <kbd className="bg-light text-muted border px-1">CTRL + /</kbd>
+                    </span>
+                  </div>
+
+                  {/* Floating Live Search Dropdown */}
+                  {isSearchOpen && searchQuery.trim().length > 0 && (
+                    <div 
+                      className="dropdown-menu show shadow-lg border rounded-3 p-3 position-absolute w-100 mt-1 bg-white overflow-auto" 
+                      style={{ maxHeight: '450px', zIndex: 1050, left: 0, minWidth: '360px' }}
+                    >
+                      {/* Search Header */}
+                      <div className="d-flex align-items-center justify-content-between pb-2 mb-2 border-bottom">
+                        <span className="fs-11 text-uppercase fw-bold text-muted">
+                          {searchQuery ? `Search Results for "${searchQuery}"` : 'Quick Jump & Navigation'}
+                        </span>
+                        <span className="badge bg-light text-muted border fs-10">Esc to close</span>
+                      </div>
+
+                      {/* Employees Section */}
+                      {searchResults.employees.length > 0 && (
+                        <div className="mb-3">
+                          <div className="fs-11 fw-bold text-primary text-uppercase mb-2 d-flex align-items-center">
+                            <i className="ti ti-user me-1" /> Employees ({searchResults.employees.length})
+                          </div>
+                          {searchResults.employees.map((emp) => {
+                            const empName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.user?.name || 'Employee';
+                            const desig = emp.designation?.name || emp.companyRole?.name || 'Staff';
+                            const empCode = emp.employeeCode || emp.employeeId || '';
+                            const userRole = user?.role || localStorage.getItem('userRole') || 'EMPLOYEE';
+                            const targetRoute = userRole === 'EMPLOYEE' ? '/org' : `${all_routes.employeedetails}?id=${emp.id}`;
+
+                            return (
+                              <div 
+                                key={emp.id}
+                                className="d-flex align-items-center p-2 rounded hover-bg-light cursor-pointer mb-1 border-bottom-dashed"
+                                onClick={() => {
+                                  navigate(targetRoute);
+                                  setIsSearchOpen(false);
+                                  setSearchQuery('');
+                                }}
+                              >
+                                <div className="avatar avatar-sm rounded-circle me-2 bg-primary-transparent text-primary fw-bold d-flex align-items-center justify-content-center">
+                                  {empName.charAt(0)}
+                                </div>
+                                <div className="flex-grow-1 overflow-hidden">
+                                  <div className="d-flex align-items-center justify-content-between">
+                                    <span className="fw-bold text-dark fs-13 text-truncate">{empName}</span>
+                                    {empCode && <span className="badge bg-light text-secondary border fs-10">{empCode}</span>}
+                                  </div>
+                                  <div className="fs-11 text-muted text-truncate">{desig} {emp.department?.name ? `• ${emp.department.name}` : ''}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Departments Section */}
+                      {searchResults.departments.length > 0 && (
+                        <div className="mb-3">
+                          <div className="fs-11 fw-bold text-success text-uppercase mb-2 d-flex align-items-center">
+                            <i className="ti ti-building-community me-1" /> Departments ({searchResults.departments.length})
+                          </div>
+                          {searchResults.departments.map((dept) => (
+                            <div 
+                              key={dept.id}
+                              className="d-flex align-items-center justify-content-between p-2 rounded hover-bg-light cursor-pointer mb-1 border-bottom-dashed"
+                              onClick={() => {
+                                navigate('/departments');
+                                setIsSearchOpen(false);
+                                setSearchQuery('');
+                              }}
+                            >
+                              <div className="d-flex align-items-center">
+                                <i className="ti ti-building-arch text-success me-2 fs-16" />
+                                <span className="fw-semibold text-dark fs-13">{dept.name}</span>
+                              </div>
+                              <span className="fs-11 text-muted">View Department</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* System Pages & Modules Section */}
+                      {searchResults.pages.length > 0 && (
+                        <div className="mb-2">
+                          <div className="fs-11 fw-bold text-secondary text-uppercase mb-2 d-flex align-items-center">
+                            <i className="ti ti-layout-grid me-1" /> System Modules & Pages ({searchResults.pages.length})
+                          </div>
+                          {searchResults.pages.map((m, idx) => (
+                            <div 
+                              key={idx}
+                              className="d-flex align-items-center justify-content-between p-2 rounded hover-bg-light cursor-pointer mb-1"
+                              onClick={() => {
+                                navigate(m.route);
+                                setIsSearchOpen(false);
+                                setSearchQuery('');
+                              }}
+                            >
+                              <div className="d-flex align-items-center">
+                                <i className={`ti ti-${m.icon} text-primary me-2 fs-16`} />
+                                <div>
+                                  <div className="fw-semibold text-dark fs-13">{m.title}</div>
+                                  <div className="fs-10 text-muted">{m.category}</div>
+                                </div>
+                              </div>
+                              <i className="ti ti-chevron-right text-muted fs-12" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* No Results Fallback */}
+                      {searchResults.employees.length === 0 && searchResults.departments.length === 0 && searchResults.pages.length === 0 && (
+                        <div className="text-center py-4 text-muted">
+                          <i className="ti ti-search-off fs-24 mb-1 d-block text-secondary" />
+                          <div className="fs-13 fw-semibold">No results found for "{searchQuery}"</div>
+                          <div className="fs-11">Try searching by module name, employee name, or department</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {/* /Search */}
+                {/* /Dynamic Search Component */}
                 <div className="dropdown crm-dropdown">
                   <Link
                     to="#"

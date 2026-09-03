@@ -150,6 +150,7 @@ export const HRMChunk = {
   ),
   OverTime: lazy(() => import("../feature-module/hrm/attendance/overtime")),
   Holidays: lazy(() => import("../feature-module/hrm/holidays")),
+  Announcements: lazy(() => import("../feature-module/hrm/announcements/announcements")),
   Termination: lazy(() => import("../feature-module/hrm/termination")),
   Resignation: lazy(() => import("../feature-module/hrm/resignation")),
   Promotion: lazy(() => import("../feature-module/hrm/promotion")),

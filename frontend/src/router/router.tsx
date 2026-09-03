@@ -24,7 +24,8 @@ const getRouteRoles = (path: string | undefined): Role[] => {
   const employeeAllowedPrefixes = [
     "/employee-dashboard", "/attendance-employee", "/leaves-employee",
     "/pages/profile", "/hrm/holidays", "/payslip", "/application",
-    "/projects", "/tasks", "/task-board", "/clients"
+    "/projects", "/tasks", "/task-board", "/clients",
+    "/org", "/org-directory"
   ];
   if (employeeAllowedPrefixes.some(prefix => p.startsWith(prefix))) {
     return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];

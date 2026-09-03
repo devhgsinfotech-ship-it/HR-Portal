@@ -379,6 +379,9 @@ export const OverTime = createLazyComponent(
 export const Holidays = createLazyComponent(
   () => import("../feature-module/hrm/holidays")
 );
+export const Announcements = createLazyComponent(
+  () => import("../feature-module/hrm/announcements/announcements")
+);
 export const Termination = createLazyComponent(
   () => import("../feature-module/hrm/termination")
 );

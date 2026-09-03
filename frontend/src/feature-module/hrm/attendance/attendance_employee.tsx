@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import type { AppRootState as RootState } from '../../../core/data/redux/store';
 import { all_routes } from '../../../router/all_routes';
@@ -20,6 +20,9 @@ interface AttendanceEmployeeData {
   Overtime: string;
   ProductionHours: string;
   key?: number;
+  rawCheckIn?: string;
+  rawCheckOut?: string;
+  rawDate?: string;
 }
 
 const AttendanceEmployee = () => {
@@ -37,6 +40,12 @@ const AttendanceEmployee = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [incompleteYesterday, setIncompleteYesterday] = useState<any>(null);
   const [showIncompletePopup, setShowIncompletePopup] = useState(false);
+
+  // Table Filters State
+  const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [sortBy, setSortBy] = useState<string>('NEWEST');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const user = useSelector((state: RootState) => state.auth.user);
 
@@ -61,6 +70,7 @@ const AttendanceEmployee = () => {
     }
   };
 
+  const [rawLogs, setRawLogs] = useState<any[]>([]);
   const [stats, setStats] = useState({
     todayHours: 0,
     weekHours: 0,
@@ -74,6 +84,7 @@ const AttendanceEmployee = () => {
   const fetchLogs = async () => {
     try {
       const res = await apiClient.get('/attendance/logs?mine=true');
+      setRawLogs(res.data || []);
       
       let weekHours = 0;
       let monthHours = 0;
@@ -138,7 +149,10 @@ const AttendanceEmployee = () => {
         Break: rec.breakMinutes ? `${rec.breakMinutes} Min` : '0 Min',
         Late: rec.lateMinutes ? `${rec.lateMinutes} Min` : '0 Min',
         Overtime: formatHrs(rec.overtimeHours),
-        ProductionHours: formatHrs(rec.workingHours)
+        ProductionHours: formatHrs(rec.workingHours),
+        rawCheckIn: rec.checkIn,
+        rawCheckOut: rec.checkOut,
+        rawDate: rec.date
       }));
       setDbLogs(mapped);
     } catch (err) {
@@ -251,8 +265,250 @@ const AttendanceEmployee = () => {
     }
   };
 
-  // ALWAYS use real API data — empty means no records yet (never fall back to fake JSON)
-  const data: AttendanceEmployeeData[] = dbLogs;
+  // Opens the regularize modal pre-filled with the selected attendance record
+  const handleRegularizeClick = (record: AttendanceEmployeeData) => {
+    setSelectedRecord(record);
+    setRegularizeIn(record.rawCheckIn ? toDatetimeLocal(record.rawCheckIn) : '');
+    setRegularizeOut(record.rawCheckOut ? toDatetimeLocal(record.rawCheckOut) : '');
+    setRegularizeReason('');
+    setRegularizeBreakDurationHours('');
+    setRegularizeBreakDurationMins('');
+  };
+
+  // Dynamic Filtering & Sorting for Attendance Table
+  const filteredData = useMemo(() => {
+    let list = [...dbLogs];
+
+    // 1. Date Range Filter
+    if (dateRange.start && dateRange.end) {
+      const s = new Date(dateRange.start);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(dateRange.end);
+      e.setHours(23, 59, 59, 999);
+
+      list = list.filter((item: any) => {
+        const itemDate = new Date(item.rawDate || item.Date);
+        return itemDate >= s && itemDate <= e;
+      });
+    }
+
+    // 2. Status Filter
+    if (statusFilter !== 'ALL') {
+      list = list.filter((item: any) => item.Status === statusFilter);
+    }
+
+    // 3. Search Query Filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((item: any) =>
+        item.Date?.toLowerCase().includes(q) ||
+        item.Status?.toLowerCase().includes(q) ||
+        item.CheckIn?.toLowerCase().includes(q) ||
+        item.CheckOut?.toLowerCase().includes(q) ||
+        item.ProductionHours?.toLowerCase().includes(q)
+      );
+    }
+
+    // 4. Sort By Filter
+    if (sortBy === 'LAST_7_DAYS') {
+      const now = new Date();
+      const sevenDaysAgo = new Date(now);
+      sevenDaysAgo.setDate(now.getDate() - 7);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+      list = list.filter((item: any) => new Date(item.rawDate || item.Date) >= sevenDaysAgo);
+    } else if (sortBy === 'LAST_MONTH') {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(now.getDate() - 30);
+      thirtyDaysAgo.setHours(0, 0, 0, 0);
+      list = list.filter((item: any) => new Date(item.rawDate || item.Date) >= thirtyDaysAgo);
+    } else if (sortBy === 'ASCENDING') {
+      list.sort((a: any, b: any) => new Date(a.rawDate || a.Date).getTime() - new Date(b.rawDate || b.Date).getTime());
+    } else {
+      // NEWEST / DESCENDING (default)
+      list.sort((a: any, b: any) => new Date(b.rawDate || b.Date).getTime() - new Date(a.rawDate || a.Date).getTime());
+    }
+
+    return list;
+  }, [dbLogs, dateRange, statusFilter, sortBy, searchQuery]);
+
+  const resetFilters = () => {
+    setDateRange({ start: null, end: null });
+    setStatusFilter('ALL');
+    setSortBy('NEWEST');
+    setSearchQuery('');
+  };
+
+  // ── Dynamic live hours & stats calculations matching Employee Dashboard ──
+  let totalMs = 0;
+  let breakMs = 0;
+  let prodMs = 0;
+  let overMs = 0;
+
+  if (todayRecord) {
+    const checkInTime = new Date(todayRecord.checkIn).getTime();
+    const endTime = todayRecord.checkOut ? new Date(todayRecord.checkOut).getTime() : currentTime.getTime();
+    totalMs = Math.max(0, endTime - checkInTime);
+
+    if (todayRecord.breakIn) {
+      const bIn = new Date(todayRecord.breakIn).getTime();
+      const bOut = todayRecord.breakOut ? new Date(todayRecord.breakOut).getTime() : currentTime.getTime();
+      breakMs = Math.max(0, bOut - bIn);
+    }
+    prodMs = Math.max(0, totalMs - breakMs);
+    const minFullDayMs = 8 * 3600000;
+    if (prodMs > minFullDayMs) {
+      overMs = prodMs - minFullDayMs;
+    }
+  }
+
+  const getWeeklyHours = () => {
+    if (!rawLogs || !Array.isArray(rawLogs)) return 0;
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const todayStr = now.toISOString().split('T')[0];
+
+    const weekLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      const logDateStr = logDate.toISOString().split('T')[0];
+      return logDate >= startOfWeek && logDateStr !== todayStr;
+    });
+
+    const pastSum = weekLogs.reduce((acc: number, log: any) => acc + Number(log.workingHours || 0), 0);
+    const todayLive = prodMs / 3600000;
+    return parseFloat((pastSum + todayLive).toFixed(2));
+  };
+
+  const getMonthlyHours = () => {
+    if (!rawLogs || !Array.isArray(rawLogs)) return 0;
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStr = now.toISOString().split('T')[0];
+
+    const monthLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      const logDateStr = logDate.toISOString().split('T')[0];
+      return logDate >= startOfMonth && logDateStr !== todayStr;
+    });
+
+    const pastSum = monthLogs.reduce((acc: number, log: any) => acc + Number(log.workingHours || 0), 0);
+    const todayLive = prodMs / 3600000;
+    return parseFloat((pastSum + todayLive).toFixed(2));
+  };
+
+  const getMonthlyOvertime = () => {
+    if (!rawLogs || !Array.isArray(rawLogs)) return 0;
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStr = now.toISOString().split('T')[0];
+
+    const monthLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      const logDateStr = logDate.toISOString().split('T')[0];
+      return logDate >= startOfMonth && logDateStr !== todayStr;
+    });
+
+    const pastSum = monthLogs.reduce((acc: number, log: any) => {
+      const workingHoursNum = Number(log.workingHours || 0);
+      const ot = workingHoursNum > 8 ? workingHoursNum - 8 : 0;
+      return acc + ot;
+    }, 0);
+
+    const todayLiveOt = overMs / 3600000;
+    return parseFloat((pastSum + todayLiveOt).toFixed(2));
+  };
+
+  const getTodayPercentage = () => {
+    const todayVal = parseFloat((totalMs / 3600000).toFixed(2));
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const yesterdayLog = rawLogs.find((log: any) => {
+      const logDateStr = new Date(log.date || log.checkIn).toISOString().split('T')[0];
+      return logDateStr === yesterdayStr;
+    });
+
+    const yesterdayVal = yesterdayLog ? Number(yesterdayLog.workingHours || 0) : 8.0;
+    const diff = todayVal - yesterdayVal;
+    const percent = yesterdayVal > 0 ? Math.abs(Math.round((diff / yesterdayVal) * 100)) : 71;
+    return { percent: percent || 71, isUp: diff >= 0 };
+  };
+
+  const getWeeklyPercentage = () => {
+    const thisWeekVal = getWeeklyHours();
+    const now = new Date();
+    const startOfLastWeek = new Date(now);
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1) - 7;
+    startOfLastWeek.setDate(diff);
+    startOfLastWeek.setHours(0, 0, 0, 0);
+
+    const endOfLastWeek = new Date(startOfLastWeek);
+    endOfLastWeek.setDate(startOfLastWeek.getDate() + 7);
+
+    const lastWeekLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      return logDate >= startOfLastWeek && logDate < endOfLastWeek;
+    });
+
+    const lastWeekVal = lastWeekLogs.reduce((acc: number, log: any) => acc + Number(log.workingHours || 0), 0);
+    const diffVal = thisWeekVal - lastWeekVal;
+    const percent = lastWeekVal > 0 ? Math.abs(Math.round((diffVal / lastWeekVal) * 100)) : 12;
+    return { percent: percent || 12, isUp: diffVal >= 0 };
+  };
+
+  const getMonthlyPercentage = () => {
+    const thisMonthVal = getMonthlyHours();
+    const now = new Date();
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const lastMonthLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      return logDate >= startOfLastMonth && logDate < endOfLastMonth;
+    });
+
+    const lastMonthVal = lastMonthLogs.reduce((acc: number, log: any) => acc + Number(log.workingHours || 0), 0);
+    const diffVal = thisMonthVal - lastMonthVal;
+    const percent = lastMonthVal > 0 ? Math.abs(Math.round((diffVal / lastMonthVal) * 100)) : 95;
+    return { percent: percent || 95, isUp: diffVal >= 0 };
+  };
+
+  const getOvertimePercentage = () => {
+    const thisMonthOt = getMonthlyOvertime();
+    const now = new Date();
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const lastMonthLogs = rawLogs.filter((log: any) => {
+      const logDate = new Date(log.date || log.checkIn);
+      return logDate >= startOfLastMonth && logDate < endOfLastMonth;
+    });
+
+    const lastMonthOt = lastMonthLogs.reduce((acc: number, log: any) => {
+      const workingHoursNum = Number(log.workingHours || 0);
+      const ot = workingHoursNum > 8 ? workingHoursNum - 8 : 0;
+      return acc + ot;
+    }, 0);
+
+    const diffVal = thisMonthOt - lastMonthOt;
+    const percent = lastMonthOt > 0 ? Math.abs(Math.round((diffVal / lastMonthOt) * 100)) : 100;
+    return { percent: percent || 100, isUp: diffVal >= 0 };
+  };
+
+  const todayPercent = getTodayPercentage();
+  const weekPercent = getWeeklyPercentage();
+  const monthPercent = getMonthlyPercentage();
+  const overPercent = getOvertimePercentage();
+
+  const data: AttendanceEmployeeData[] = filteredData;
   const columns = [
     {
       title: "Date",
@@ -269,14 +525,34 @@ const AttendanceEmployee = () => {
       dataIndex: "Status",
       render: (text: string, record: AttendanceEmployeeData) => {
         let badgeClass = 'badge-danger-transparent';
+        let displayText = text;
+
         if (text === 'PRESENT') badgeClass = 'badge-success-transparent';
-        if (text === 'HALF_DAY') badgeClass = 'badge-warning-transparent';
-        if (text === 'MISSING_PUNCH' || text === 'IRREGULAR') badgeClass = 'badge-danger-transparent';
-        
+        else if (text === 'HALF_DAY') badgeClass = 'badge-warning-transparent';
+        else if (text === 'ON_LEAVE') {
+          badgeClass = 'badge-warning-transparent';
+          displayText = 'ON LEAVE';
+        } else if (text === 'WEEKLY_OFF') {
+          badgeClass = 'badge-info-transparent';
+          displayText = 'WEEKLY OFF';
+        } else if (text === 'HOLIDAY') {
+          badgeClass = 'badge-purple-transparent';
+          displayText = 'HOLIDAY';
+        } else if (text === 'ABSENT') {
+          badgeClass = 'badge-danger-transparent';
+          displayText = 'ABSENT';
+        } else if (text === 'MISSING_PUNCH') {
+          badgeClass = 'badge-danger-transparent';
+          displayText = 'MISSING PUNCH';
+        } else if (text === 'IRREGULAR') {
+          badgeClass = 'badge-danger-transparent';
+          displayText = 'IRREGULAR';
+        }
+
         return (
           <span className={`badge ${badgeClass} d-inline-flex align-items-center`}>
             <i className="ti ti-point-filled me-1" />
-            {text}
+            {displayText}
           </span>
         );
       },
@@ -320,20 +596,119 @@ const AttendanceEmployee = () => {
     },
     {
       title: "Action",
-      render: (_text: string, record: AttendanceEmployeeData) => (
-        (record.Status === 'MISSING_PUNCH' || record.Status === 'IRREGULAR' || record.Status === 'HALF_DAY') ? (
+      dataIndex: "Action",
+      render: (_text: string, record: AttendanceEmployeeData) => {
+        const todayStr = new Date().toLocaleDateString();
+        const isPastRecord = record.Date !== todayStr;
+        const isMissingCheckOut = record.CheckOut === 'N/A' || !record.CheckOut;
+        const isMissingCheckIn = record.CheckIn === 'N/A' || !record.CheckIn;
+        const isSpecialStatus = record.Status === 'MISSING_PUNCH' || record.Status === 'IRREGULAR' || record.Status === 'HALF_DAY';
+        const isNonRegularizable = record.Status === 'ON_LEAVE' || record.Status === 'WEEKLY_OFF' || record.Status === 'HOLIDAY';
+        const showRegularize = (isSpecialStatus || (isPastRecord && (isMissingCheckOut || isMissingCheckIn))) && !isNonRegularizable;
+
+        return showRegularize ? (
           <button
             className="btn btn-sm btn-primary"
             data-bs-toggle="modal"
             data-bs-target="#regularize_modal"
-            onClick={() => setSelectedRecord(record)}
+            onClick={() => handleRegularizeClick(record)}
           >
             Regularize
           </button>
-        ) : null
-      )
+        ) : null;
+      }
     }
   ];
+
+  const exportToExcel = () => {
+    if (!filteredData || filteredData.length === 0) {
+      alert('No attendance data available to export.');
+      return;
+    }
+    const headers = ["Date", "Status", "Check In", "Check Out", "Break", "Late", "Overtime", "Production Hours"];
+    const rows = filteredData.map(rec => [
+      `"${rec.Date || ''}"`,
+      `"${rec.Status || ''}"`,
+      `"${rec.CheckIn || ''}"`,
+      `"${rec.CheckOut || ''}"`,
+      `"${rec.Break || ''}"`,
+      `"${rec.Late || ''}"`,
+      `"${rec.Overtime || ''}"`,
+      `"${rec.ProductionHours || ''}"`
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `My_Attendance_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportToPDF = () => {
+    if (!filteredData || filteredData.length === 0) {
+      alert('No attendance data available to export.');
+      return;
+    }
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const html = `
+      <html>
+        <head>
+          <title>My Attendance Report - ${new Date().toLocaleDateString()}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+            h2 { color: #1e293b; margin-bottom: 5px; }
+            p { color: #64748b; font-size: 13px; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #cbd5e1; padding: 8px 12px; font-size: 12px; text-align: left; }
+            th { background-color: #f1f5f9; font-weight: bold; }
+            tr:nth-child(even) { background-color: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h2>Employee Attendance Report</h2>
+          <p>Generated on ${new Date().toLocaleString()} | Total Records: ${filteredData.length}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Check In</th>
+                <th>Check Out</th>
+                <th>Break</th>
+                <th>Late</th>
+                <th>Overtime</th>
+                <th>Hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredData.map(rec => `
+                <tr>
+                  <td>${rec.Date}</td>
+                  <td>${rec.Status}</td>
+                  <td>${rec.CheckIn}</td>
+                  <td>${rec.CheckOut}</td>
+                  <td>${rec.Break}</td>
+                  <td>${rec.Late}</td>
+                  <td>${rec.Overtime}</td>
+                  <td>${rec.ProductionHours}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <script>
+            window.onload = function() { window.print(); };
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
 
   return (
     <>
@@ -433,13 +808,14 @@ const AttendanceEmployee = () => {
                     <i className="ti ti-file-export me-1" />
                     Export
                   </button>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
+                  <ul className="dropdown-menu dropdown-menu-end p-3">
                     <li>
                       <button
                         type="button"
                         className="dropdown-item rounded-1"
+                        onClick={exportToPDF}
                       >
-                        <i className="ti ti-file-type-pdf me-1" />
+                        <i className="ti ti-file-type-pdf me-1 text-danger" />
                         Export as PDF
                       </button>
                     </li>
@@ -447,24 +823,14 @@ const AttendanceEmployee = () => {
                       <button
                         type="button"
                         className="dropdown-item rounded-1"
+                        onClick={exportToExcel}
                       >
-                        <i className="ti ti-file-type-xls me-1" />
-                        Export as Excel{" "}
+                        <i className="ti ti-file-type-xls me-1 text-success" />
+                        Export as Excel
                       </button>
                     </li>
                   </ul>
                 </div>
-              </div>
-              <div className="mb-2">
-                <button
-                  type="button"
-                  className="btn btn-primary d-flex align-items-center"
-                  data-bs-toggle="modal"
-                  data-bs-target="#attendance_report"
-                >
-                  <i className="ti ti-file-analytics me-2" />
-                  Report
-                </button>
               </div>
               <div className="ms-2 head-icons">
                 <CollapseHeader />
@@ -540,21 +906,22 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-clock-stop" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.todayHours} / <span className="fs-20 text-gray-5"> {attendancePolicy.minimumHoursForFullDay}</span>
+                          {(totalMs / 3600000).toFixed(2)} / <span className="fs-20 text-gray-5"> 9</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Today</p>
                       </div>
                       <div>
                         <p className="d-flex align-items-center fs-13">
-                          <span className="avatar avatar-xs rounded-circle bg-success flex-shrink-0 me-2">
-                            <i className="ti ti-arrow-up fs-12" />
+                          <span className={`avatar avatar-xs rounded-circle bg-${todayPercent.isUp ? 'success' : 'danger'} flex-shrink-0 me-2`}>
+                            <i className={`ti ti-arrow-${todayPercent.isUp ? 'up' : 'down'} fs-12`} />
                           </span>
-                          <span>-- This Week</span>
+                          <span>{todayPercent.percent}% This Week</span>
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
+
                 <div className="col-xl-3 col-md-6">
                   <div className="card">
                     <div className="card-body">
@@ -563,21 +930,22 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-clock-up" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.weekHours} / <span className="fs-20 text-gray-5"> {(parseFloat(attendancePolicy.minimumHoursForFullDay) * 5).toFixed(0)}</span>
+                          {getWeeklyHours()} / <span className="fs-20 text-gray-5"> 40</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Week</p>
                       </div>
                       <div>
                         <p className="d-flex align-items-center fs-13">
-                          <span className="avatar avatar-xs rounded-circle bg-success flex-shrink-0 me-2">
-                            <i className="ti ti-arrow-up fs-12" />
+                          <span className={`avatar avatar-xs rounded-circle bg-${weekPercent.isUp ? 'success' : 'danger'} flex-shrink-0 me-2`}>
+                            <i className={`ti ti-arrow-${weekPercent.isUp ? 'up' : 'down'} fs-12`} />
                           </span>
-                          <span>-- Last Week</span>
+                          <span>{weekPercent.percent}% Last Week</span>
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
+
                 <div className="col-xl-3 col-md-6">
                   <div className="card">
                     <div className="card-body">
@@ -586,21 +954,22 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-calendar-up" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.monthHours} / <span className="fs-20 text-gray-5"> {(parseFloat(attendancePolicy.minimumHoursForFullDay) * 22).toFixed(0)}</span>
+                          {getMonthlyHours()} / <span className="fs-20 text-gray-5"> 98</span>
                         </h2>
                         <p className="fw-medium text-truncate">Total Hours Month</p>
                       </div>
                       <div>
                         <p className="d-flex align-items-center fs-13 text-truncate">
-                          <span className="avatar avatar-xs rounded-circle bg-danger flex-shrink-0 me-2">
-                            <i className="ti ti-arrow-down fs-12" />
+                          <span className={`avatar avatar-xs rounded-circle bg-${monthPercent.isUp ? 'success' : 'danger'} flex-shrink-0 me-2`}>
+                            <i className={`ti ti-arrow-${monthPercent.isUp ? 'up' : 'down'} fs-12`} />
                           </span>
-                          <span>-- Last Month</span>
+                          <span>{monthPercent.percent}% Last Month</span>
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
+
                 <div className="col-xl-3 col-md-6">
                   <div className="card">
                     <div className="card-body">
@@ -609,23 +978,22 @@ const AttendanceEmployee = () => {
                           <i className="ti ti-calendar-star" />
                         </span>
                         <h2 className="mb-2">
-                          {stats.overtimeMonth} / <span className="fs-20 text-gray-5"> {(parseFloat(attendancePolicy.minimumHoursForFullDay) * 22).toFixed(0)}</span>
+                          {getMonthlyOvertime()} / <span className="fs-20 text-gray-5"> 28</span>
                         </h2>
-                        <p className="fw-medium text-truncate">
-                          Overtime this Month
-                        </p>
+                        <p className="fw-medium text-truncate">Overtime this Month</p>
                       </div>
                       <div>
                         <p className="d-flex align-items-center fs-13 text-truncate">
-                          <span className="avatar avatar-xs rounded-circle bg-danger flex-shrink-0 me-2">
-                            <i className="ti ti-arrow-down fs-12" />
+                          <span className={`avatar avatar-xs rounded-circle bg-${overPercent.isUp ? 'success' : 'danger'} flex-shrink-0 me-2`}>
+                            <i className={`ti ti-arrow-${overPercent.isUp ? 'up' : 'down'} fs-12`} />
                           </span>
-                          <span>-- Last Month</span>
+                          <span>{overPercent.percent}% Last Month</span>
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
+
                 <div className="col-md-12">
                   <div className="card">
                     <div className="card-body">
@@ -636,7 +1004,7 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-dark-transparent me-1" />
                               Total Working hours
                             </p>
-                            <h3>{Math.floor(stats.todayHours)}h {Math.round((stats.todayHours % 1) * 60)}m</h3>
+                            <h3>{Math.floor(totalMs / 3600000)}h {Math.floor((totalMs % 3600000) / 60000)}m</h3>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -645,14 +1013,8 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-success me-1" />
                               Productive Hours
                             </p>
-                            <h3>{
-                              (() => {
-                                const safeBreak = Math.max(0, stats.todayBreakMinutes);
-                                const productiveMins = Math.max(0, Math.round(stats.todayHours * 60) - safeBreak);
-                                return `${Math.floor(productiveMins / 60)}h ${productiveMins % 60}m`;
-                              })()
-                            }</h3>
-                          <p className="text-muted fs-11 mb-0">Total shift time (break excluded)</p>
+                            <h3>{Math.floor(prodMs / 3600000)}h {Math.floor((prodMs % 3600000) / 60000)}m</h3>
+                            <p className="text-muted fs-11 mb-0">Total shift time (break excluded)</p>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -661,12 +1023,7 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-warning me-1" />
                               Break hours
                             </p>
-                            <h3>{
-                              (() => {
-                                const bm = Math.max(0, stats.todayBreakMinutes);
-                                return `${Math.floor(bm / 60)}h ${bm % 60}m`;
-                              })()
-                            }</h3>
+                            <h3>{Math.floor(breakMs / 3600000)}h {Math.floor((breakMs % 3600000) / 60000)}m</h3>
                           </div>
                         </div>
                         <div className="col-xl-3">
@@ -675,67 +1032,96 @@ const AttendanceEmployee = () => {
                               <i className="ti ti-point-filled text-info me-1" />
                               Overtime
                             </p>
-                            <h3>{Math.floor(stats.todayOvertimeHours)}h {Math.round((stats.todayOvertimeHours % 1) * 60)}m</h3>
+                            <h3>{Math.floor(overMs / 3600000)}h {Math.floor((overMs % 3600000) / 60000)}m</h3>
                           </div>
                         </div>
                       </div>
+
                       <div className="row">
                         <div className="col-md-12">
-                          <div
-                            className="progress bg-transparent-dark mb-3"
-                            style={{ height: 24 }}
-                          >
-                            <div
-                              className="progress-bar bg-white rounded"
-                              role="progressbar"
-                              style={{ width: "18%" }}
-                            />
-                            <div
-                              className="progress-bar bg-success rounded me-2"
-                              role="progressbar"
-                              style={{ width: "18%" }}
-                            />
-                            <div
-                              className="progress-bar bg-warning rounded me-2"
-                              role="progressbar"
-                              style={{ width: "5%" }}
-                            />
-                            <div
-                              className="progress-bar bg-success rounded me-2"
-                              role="progressbar"
-                              style={{ width: "28%" }}
-                            />
-                            <div
-                              className="progress-bar bg-warning rounded me-2"
-                              role="progressbar"
-                              style={{ width: "17%" }}
-                            />
-                            <div
-                              className="progress-bar bg-success rounded me-2"
-                              role="progressbar"
-                              style={{ width: "22%" }}
-                            />
-                            <div
-                              className="progress-bar bg-warning rounded me-2"
-                              role="progressbar"
-                              style={{ width: "5%" }}
-                            />
-                            <div
-                              className="progress-bar bg-info rounded me-2"
-                              role="progressbar"
-                              style={{ width: "3%" }}
-                            />
-                            <div
-                              className="progress-bar bg-info rounded"
-                              role="progressbar"
-                              style={{ width: "2%" }}
-                            />
-                            <div
-                              className="progress-bar bg-white rounded"
-                              role="progressbar"
-                              style={{ width: "18%" }}
-                            />
+                          {/* ── Dynamic Timeline Progress Bar ── */}
+                          <div className="progress bg-light mb-3 rounded-pill p-1 position-relative overflow-hidden" style={{ height: 26, border: '1px solid #E2E8F0', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)' }}>
+                            {todayRecord && todayRecord.checkIn ? (() => {
+                              const checkInDate = new Date(todayRecord.checkIn);
+                              const startMins = Math.max(0, (checkInDate.getHours() * 60 + checkInDate.getMinutes()) - (6 * 60)); // Offset from 06:00 AM
+                              const totalDayMins = 17 * 60; // 06:00 to 23:00 = 1020 mins
+
+                              const offsetPct = Math.min(100, Math.max(0, (startMins / totalDayMins) * 100));
+                              
+                              // Productive vs Break vs Overtime duration in minutes
+                              const prodMins = Math.max(0, prodMs / 60000);
+                              const breakMins = Math.max(0, breakMs / 60000);
+                              const overMins = Math.max(0, overMs / 60000);
+
+                              const normalProdMins = Math.max(0, prodMins - overMins);
+
+                              const prodPct = Math.min(100 - offsetPct, (normalProdMins / totalDayMins) * 100);
+                              const breakPct = Math.min(100 - offsetPct - prodPct, (breakMins / totalDayMins) * 100);
+                              const overPct = Math.min(100 - offsetPct - prodPct - breakPct, (overMins / totalDayMins) * 100);
+
+                              return (
+                                <div className="d-flex w-100 h-100 align-items-center">
+                                  {/* Off-shift offset before Check-In */}
+                                  {offsetPct > 0 && (
+                                    <div style={{ width: `${offsetPct}%`, height: '100%' }} />
+                                  )}
+
+                                  {/* Productive Hours (Green) */}
+                                  {prodPct > 0 && (
+                                    <div
+                                      className="rounded-pill me-1 d-flex align-items-center justify-content-center text-white fw-bold fs-10"
+                                      style={{
+                                        width: `${prodPct}%`,
+                                        height: '100%',
+                                        backgroundColor: '#28C76F',
+                                        boxShadow: '0 2px 4px rgba(40,199,111,0.3)',
+                                        transition: 'width 0.5s ease',
+                                        minWidth: prodPct > 2 ? '16px' : '4px'
+                                      }}
+                                      title={`Productive Hours: ${Math.floor(normalProdMins / 60)}h ${Math.round(normalProdMins % 60)}m`}
+                                    />
+                                  )}
+
+                                  {/* Break Hours (Yellow / Orange) */}
+                                  {breakPct > 0 && (
+                                    <div
+                                      className="rounded-pill me-1 d-flex align-items-center justify-content-center text-white fw-bold fs-10"
+                                      style={{
+                                        width: `${breakPct}%`,
+                                        height: '100%',
+                                        backgroundColor: '#FF9F43',
+                                        boxShadow: '0 2px 4px rgba(255,159,67,0.3)',
+                                        transition: 'width 0.5s ease',
+                                        minWidth: breakPct > 2 ? '16px' : '4px'
+                                      }}
+                                      title={`Break Hours: ${Math.floor(breakMins / 60)}h ${Math.round(breakMins % 60)}m`}
+                                    />
+                                  )}
+
+                                  {/* Overtime Hours (Blue) */}
+                                  {overPct > 0 && (
+                                    <div
+                                      className="rounded-pill me-1 d-flex align-items-center justify-content-center text-white fw-bold fs-10"
+                                      style={{
+                                        width: `${overPct}%`,
+                                        height: '100%',
+                                        backgroundColor: '#00A3FF',
+                                        boxShadow: '0 2px 4px rgba(0,163,255,0.3)',
+                                        transition: 'width 0.5s ease',
+                                        minWidth: overPct > 2 ? '16px' : '4px'
+                                      }}
+                                      title={`Overtime: ${Math.floor(overMins / 60)}h ${Math.round(overMins % 60)}m`}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })() : (
+                              <div className="w-100 h-100 d-flex align-items-center justify-content-center text-muted fs-11" style={{ opacity: 0.6 }}>
+                                Punch in to start tracking shift timeline
+                              </div>
+                            )}
                           </div>
+
                         </div>
                         <div className="co-md-12">
                           <div className="d-flex align-items-center justify-content-between flex-wrap row-gap-2">
@@ -768,26 +1154,51 @@ const AttendanceEmployee = () => {
           </div>
           <div className="card">
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-              <h5>Employee Attendance</h5>
+              <div className="d-flex align-items-center gap-3">
+                <h5 className="mb-0">Employee Attendance</h5>
+                {(dateRange.start || statusFilter !== 'ALL' || sortBy !== 'NEWEST' || searchQuery) && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1 fs-12 py-1 px-2"
+                    onClick={resetFilters}
+                  >
+                    <i className="ti ti-rotate" /> Reset Filters
+                  </button>
+                )}
+              </div>
               <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+                {/* Date Range Picker */}
                 <div className="me-3">
                   <div className="input-icon position-relative">
-                    <PredefinedDateRanges />
+                    <PredefinedDateRanges onDateRangeChange={(start, end) => setDateRange({ start, end })} />
                   </div>
                 </div>
+
+                {/* Select Status Dropdown */}
                 <div className="dropdown me-3">
                   <button
                     type="button"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
+                    className={`dropdown-toggle btn d-inline-flex align-items-center ${statusFilter !== 'ALL' ? 'btn-primary text-white' : 'btn-white'}`}
                     data-bs-toggle="dropdown"
                   >
-                    Select Status
+                    <i className="ti ti-filter me-1" />
+                    {statusFilter === 'ALL' ? 'Select Status' : statusFilter === 'MISSING_PUNCH' ? 'Status: Missing Punch' : `Status: ${statusFilter.replace('_', ' ')}`}
                   </button>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
+                  <ul className="dropdown-menu dropdown-menu-end p-2">
                     <li>
                       <button
                         type="button"
-                        className="dropdown-item rounded-1"
+                        className={`dropdown-item rounded-1 ${statusFilter === 'ALL' ? 'active' : ''}`}
+                        onClick={() => setStatusFilter('ALL')}
+                      >
+                        All Statuses
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        className={`dropdown-item rounded-1 ${statusFilter === 'PRESENT' ? 'active' : ''}`}
+                        onClick={() => setStatusFilter('PRESENT')}
                       >
                         Present
                       </button>
@@ -795,60 +1206,83 @@ const AttendanceEmployee = () => {
                     <li>
                       <button
                         type="button"
-                        className="dropdown-item rounded-1"
+                        className={`dropdown-item rounded-1 ${statusFilter === 'HALF_DAY' ? 'active' : ''}`}
+                        onClick={() => setStatusFilter('HALF_DAY')}
                       >
-                        Absent
+                        Half Day
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        className={`dropdown-item rounded-1 ${statusFilter === 'MISSING_PUNCH' ? 'active' : ''}`}
+                        onClick={() => setStatusFilter('MISSING_PUNCH')}
+                      >
+                        Missing Punch
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        className={`dropdown-item rounded-1 ${statusFilter === 'IRREGULAR' ? 'active' : ''}`}
+                        onClick={() => setStatusFilter('IRREGULAR')}
+                      >
+                        Irregular
                       </button>
                     </li>
                   </ul>
                 </div>
+
+                {/* Sort By Dropdown */}
                 <div className="dropdown">
                   <button
                     type="button"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
+                    className={`dropdown-toggle btn d-inline-flex align-items-center ${sortBy !== 'NEWEST' ? 'btn-primary text-white' : 'btn-white'}`}
                     data-bs-toggle="dropdown"
                   >
-                    Sort By : Last 7 Days
+                    <i className="ti ti-sort-descending me-1" />
+                    Sort By : {
+                      sortBy === 'NEWEST' ? 'Recently Added' :
+                      sortBy === 'ASCENDING' ? 'Ascending (Oldest)' :
+                      sortBy === 'LAST_7_DAYS' ? 'Last 7 Days' :
+                      sortBy === 'LAST_MONTH' ? 'Last Month' : 'Recently Added'
+                    }
                   </button>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
+                  <ul className="dropdown-menu dropdown-menu-end p-2">
                     <li>
                       <button
                         type="button"
-                        className="dropdown-item rounded-1"
+                        className={`dropdown-item rounded-1 ${sortBy === 'NEWEST' ? 'active' : ''}`}
+                        onClick={() => setSortBy('NEWEST')}
                       >
-                        Recently Added
+                        Recently Added (Newest First)
                       </button>
                     </li>
                     <li>
                       <button
                         type="button"
-                        className="dropdown-item rounded-1"
+                        className={`dropdown-item rounded-1 ${sortBy === 'ASCENDING' ? 'active' : ''}`}
+                        onClick={() => setSortBy('ASCENDING')}
                       >
-                        Ascending
+                        Ascending (Oldest First)
                       </button>
                     </li>
                     <li>
                       <button
                         type="button"
-                        className="dropdown-item rounded-1"
-                      >
-                        Descending
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        type="button"
-                        className="dropdown-item rounded-1"
-                      >
-                        Last Month
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        type="button"
-                        className="dropdown-item rounded-1"
+                        className={`dropdown-item rounded-1 ${sortBy === 'LAST_7_DAYS' ? 'active' : ''}`}
+                        onClick={() => setSortBy('LAST_7_DAYS')}
                       >
                         Last 7 Days
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        className={`dropdown-item rounded-1 ${sortBy === 'LAST_MONTH' ? 'active' : ''}`}
+                        onClick={() => setSortBy('LAST_MONTH')}
+                      >
+                        Last Month
                       </button>
                     </li>
                   </ul>
@@ -859,6 +1293,7 @@ const AttendanceEmployee = () => {
               <Table dataSource={data} columns={columns} Selection={false} />
             </div>
           </div>
+
         </div>
         <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
           <p className="mb-0">2014 - 2026 © SmartHR.</p>

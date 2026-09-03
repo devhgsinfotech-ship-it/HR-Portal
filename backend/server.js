@@ -86,6 +86,7 @@ const leaveRoutes = require('./src/routes/leaveRoutes');
 const attendanceRoutes = require('./src/routes/attendanceRoutes');
 const holidayRoutes = require('./src/routes/holidayRoutes'); // Added Holiday Routes
 const hrDashboardRoutes = require('./src/routes/hrDashboardRoutes');
+const announcementRoutes = require('./src/routes/announcementRoutes');
 
 // PSA Module Routes
 const clientRoutes = require('./src/routes/clientRoutes');
@@ -105,6 +106,7 @@ app.use('/leaves', leaveRoutes);
 app.use('/attendance', attendanceRoutes);
 app.use('/holidays', holidayRoutes);
 app.use('/dashboard', hrDashboardRoutes);
+app.use('/announcements', announcementRoutes);
 
 // PSA Module
 app.use('/api/clients', clientRoutes);

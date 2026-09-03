@@ -52,7 +52,12 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response && error.response.status === 401) {
+        const isUnauth = error.response && (
+            error.response.status === 401 ||
+            (error.response.status === 403 && String(error.response.data?.message || '').toLowerCase().includes('token'))
+        );
+
+        if (isUnauth) {
             const requestUrl = error.config?.url || '';
 
             // Skip redirect for auth endpoints — let the component handle those errors
@@ -65,6 +70,7 @@ apiClient.interceptors.response.use(
                 localStorage.removeItem("token");
                 localStorage.removeItem("authUser");
                 localStorage.removeItem("userRole");
+                localStorage.removeItem("user");
                 window.location.href = "/login";
             }
         }
