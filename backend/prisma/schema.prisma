@@ -658,7 +658,7 @@ model Announcement {
   publishedAt          DateTime    @default(now())
   expiresAt            DateTime?
   createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
+  updatedAt            DateTime    @default(now()) @updatedAt
 
   @@map("announcements")
 }
@@ -1039,12 +1039,12 @@ model Post {
   id          Int           @id @default(autoincrement())
   companyId   Int
   company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employeeId  Int
-  employee    Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId  Int?
+  employee    Employee?     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   content     String        @db.Text
   image       String?
   createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  updatedAt   DateTime      @default(now()) @updatedAt
 
   likes       PostLike[]
   comments    PostComment[]
@@ -1068,13 +1068,14 @@ model PostComment {
   id          Int           @id @default(autoincrement())
   postId      Int
   post        Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
-  employeeId  Int
-  employee    Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId  Int?
+  employee    Employee?     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   content     String        @db.Text
   parentId    Int?
   parent      PostComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies     PostComment[] @relation("CommentReplies")
   createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @default(now()) @updatedAt
   likes       CommentLike[]
 
   @@map("post_comments")
