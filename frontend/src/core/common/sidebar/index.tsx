@@ -5,7 +5,7 @@ import "../../../style/icon/tabler-icons/webfont/tabler-icons.css";
 import { setExpandMenu } from "../../data/redux/sidebarSlice";
 import { useDispatch } from "react-redux";
 import { setDataLayout } from "../../data/redux/themeSettingSlice";
-import { SidebarDataTest } from "../../data/json/sidebarMenu";
+import { SidebarDataTest, EmployeeSidebarData } from "../../data/json/sidebarMenu";
 import { all_routes } from "../../../router/all_routes";
 import { useAppSelector } from "../../data/redux/store";
 import type { AppDispatch } from "../../data/redux/store";
@@ -212,6 +212,12 @@ const Sidebar = React.memo(() => {
 
   // Filter sidebar data deeply based on role
   const filteredSidebarData = useMemo(() => {
+    // Show custom sidebar for Employees based on Keka design
+    if (currentRole === 'EMPLOYEE') {
+      return EmployeeSidebarData;
+    }
+    
+    // Admin, HR, Manager roles see the original sidebar
     const dataCopy = JSON.parse(JSON.stringify(SidebarDataTest)) as SidebarMainMenu[];
     return dataCopy.map(mainMenu => {
       mainMenu.submenuItems = filterMenu(mainMenu.submenuItems, currentRole);
@@ -236,7 +242,7 @@ const Sidebar = React.memo(() => {
           activeMenuLabels.push(menuItem.label);
 
           // Check for active submenu items
-          menuItem.submenuItems?.forEach((subItem) => {
+          (menuItem as any).submenuItems?.forEach((subItem: any) => {
             if (isItemActive(subItem, currentPath)) {
               activeSubMenuLabels.push(subItem.label);
             }

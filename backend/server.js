@@ -93,6 +93,9 @@ const projectRoutes = require('./src/routes/projectRoutes');
 const taskRoutes = require('./src/routes/taskRoutes');
 const timesheetRoutes = require('./src/routes/timesheetRoutes');
 const roleRoutes = require('./src/routes/roleRoutes');
+const postRoutes = require('./src/routes/postRoutes');
+const notificationRoutes = require('./src/routes/notificationRoutes');
+const celebrationRoutes = require('./src/routes/celebrationRoutes');
 
 // Initialize Cron Jobs
 require('./src/cron/attendanceJobs');
@@ -112,6 +115,9 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/timesheets', timesheetRoutes);
 app.use('/api/roles', roleRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/celebrations', celebrationRoutes);
 
 
 const prisma = require('./src/config/prisma');
