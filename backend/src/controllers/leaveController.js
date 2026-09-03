@@ -299,8 +299,32 @@ async function getLeaveBalances(req, res) {
                 }
             });
 
+            // Dynamically calculate actual used days from approved leaves this year
+            const approvedLeaves = await prisma.leaveRequest.aggregate({
+                _sum: { totalDays: true },
+                where: {
+                    employeeId: employee.id,
+                    leaveTypeId: lt.id,
+                    status: 'APPROVED',
+                    startDate: {
+                        gte: new Date(`${currentYear}-01-01T00:00:00Z`),
+                        lt: new Date(`${currentYear + 1}-01-01T00:00:00Z`)
+                    }
+                }
+            });
+
             const total = policy ? Number(policy.days) : Number(lt.totalDaysPerYear);
-            const used = bal ? Number(bal.usedDays) : 0;
+            const dynamicallyCalculatedUsed = approvedLeaves._sum.totalDays ? Number(approvedLeaves._sum.totalDays) : 0;
+            
+            // Sync database if it was out of sync
+            if (bal && bal.usedDays !== dynamicallyCalculatedUsed) {
+                await prisma.leaveBalance.update({
+                    where: { id: bal.id },
+                    data: { usedDays: dynamicallyCalculatedUsed }
+                }).catch(e => console.error("Failed to sync leave balance", e));
+            }
+
+            const used = dynamicallyCalculatedUsed;
 
             return {
                 leaveTypeId: lt.id,
@@ -583,6 +607,7 @@ async function getLeaveAdminSummary(req, res) {
     }
 }
 
+<<<<<<< HEAD
 async function updateLeaveRequest(req, res) {
     try {
         const userId = req.user.id;
@@ -634,6 +659,36 @@ async function updateLeaveRequest(req, res) {
         res.json(updated);
     } catch (error) {
         console.error('Update Leave Request Error:', error);
+=======
+// ── GET ON LEAVE TODAY (For Dashboard) ──────────────────────
+async function getOnLeaveToday(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const endOfToday = new Date(today);
+        endOfToday.setHours(23, 59, 59, 999);
+
+        const onLeave = await prisma.leaveRequest.findMany({
+            where: {
+                employee: { user: { companyId } },
+                status: 'APPROVED',
+                startDate: { lte: endOfToday },
+                endDate: { gte: today }
+            },
+            include: {
+                employee: {
+                    include: { user: true }
+                },
+                leaveType: true
+            }
+        });
+
+        res.json(onLeave);
+    } catch (error) {
+        console.error('Error fetching on leave today:', error);
+>>>>>>> develop
         res.status(500).json({ message: 'Internal server error' });
     }
 }
@@ -652,5 +707,6 @@ module.exports = {
     createLeavePolicy,
     updateLeavePolicy,
     deleteLeavePolicy,
-    getLeaveAdminSummary
+    getLeaveAdminSummary,
+    getOnLeaveToday
 };

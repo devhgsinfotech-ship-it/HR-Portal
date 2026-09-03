@@ -75,6 +75,35 @@ const Header = React.memo(() => {
   const Location = useLocation();
   const apiUrl = APP_CONFIG.getBackendUrl();
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/api/notifications');
+      setNotifications(res.data);
+    } catch (err) {
+      console.error("Failed to load notifications", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+    // Poll for notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  const handleMarkAllAsRead = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      await apiClient.put('/api/notifications/mark-read');
+      fetchNotifications();
+    } catch (err) {
+      console.error("Failed to mark notifications as read", err);
+    }
+  };
 
   useEffect(() => {
     const fetchLogo = async () => {
@@ -990,155 +1019,53 @@ const Header = React.memo(() => {
                     data-bs-toggle="dropdown"
                   >
                     <i className="ti ti-bell" />
-                    <span className="notification-status-dot" />
+                    {unreadCount > 0 && <span className="notification-status-dot" />}
                   </Link>
-                  <div className="dropdown-menu dropdown-menu-end notification-dropdown p-4">
+                  <div className="dropdown-menu dropdown-menu-end notification-dropdown p-4" style={{ width: '400px', maxHeight: '500px', overflowY: 'auto' }}>
                     <div className="d-flex align-items-center justify-content-between border-bottom p-0 pb-3 mb-3">
-                      <h4 className="notification-title">Notifications (2)</h4>
+                      <h4 className="notification-title">Notifications ({unreadCount})</h4>
                       <div className="d-flex align-items-center">
-                        <Link to="#" className="text-primary fs-15 me-3 lh-1">
+                        <Link to="#" className="text-primary fs-15 lh-1" onClick={handleMarkAllAsRead}>
                           Mark all as read
                         </Link>
-                        <div className="dropdown">
-                          <Link
-                            to="#"
-                            className="bg-white dropdown-toggle"
-                            data-bs-toggle="dropdown"
-                          >
-                            <i className="ti ti-calendar-due me-1" />
-                            Today
-                          </Link>
-                          <ul className="dropdown-menu mt-2 p-3">
-                            <li>
-                              <Link to="#" className="dropdown-item rounded-1">
-                                This Week
-                              </Link>
-                            </li>
-                            <li>
-                              <Link to="#" className="dropdown-item rounded-1">
-                                Last Week
-                              </Link>
-                            </li>
-                            <li>
-                              <Link to="#" className="dropdown-item rounded-1">
-                                Last Month
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
                       </div>
                     </div>
                     <div className="noti-content">
                       <div className="d-flex flex-column">
-                        <div className="border-bottom mb-3 pb-3">
-                          <Link to={all_routes.activity}>
-                            <div className="d-flex">
-                              <span className="avatar avatar-lg me-2 flex-shrink-0">
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-27.jpg"
-                                  alt="Profile"
-                                />
-                              </span>
-                              <div className="flex-grow-1">
-                                <p className="mb-1">
-                                  <span className="text-dark fw-semibold">
-                                    Shawn
+                        {notifications.length === 0 ? (
+                            <div className="text-center p-3 text-muted">No new notifications</div>
+                        ) : (
+                          notifications.map((noti) => (
+                            <div key={noti.id} className={`border-bottom mb-3 pb-3 ${noti.isRead ? 'opacity-75' : 'bg-light p-2 rounded'}`}>
+                              <Link to={noti.referenceId ? `/employee-dashboard?post=${noti.referenceId}` : "#"}>
+                                <div className="d-flex">
+                                  <span className="avatar avatar-lg me-2 flex-shrink-0">
+                                    {noti.sender?.profilePhotoUrl ? (
+                                      <img
+                                        src={noti.sender.profilePhotoUrl.startsWith('http') ? noti.sender.profilePhotoUrl : `${apiUrl}${noti.sender.profilePhotoUrl}`}
+                                        alt="Profile"
+                                        className="img-fluid rounded-circle"
+                                      />
+                                    ) : (
+                                      <div className="avatar-title bg-primary rounded-circle">
+                                        {noti.sender?.firstName?.charAt(0) || 'U'}
+                                      </div>
+                                    )}
                                   </span>
-                                  performance in Math is below the threshold.
-                                </p>
-                                <span>Just Now</span>
-                              </div>
-                            </div>
-                          </Link>
-                        </div>
-                        <div className="border-bottom mb-3 pb-3">
-                          <Link to={all_routes.activity} className="pb-0">
-                            <div className="d-flex">
-                              <span className="avatar avatar-lg me-2 flex-shrink-0">
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-23.jpg"
-                                  alt="Profile"
-                                />
-                              </span>
-                              <div className="flex-grow-1">
-                                <p className="mb-1">
-                                  <span className="text-dark fw-semibold">
-                                    Sylvia
-                                  </span>{" "}
-                                  added appointment on 02:00 PM
-                                </p>
-                                <span>10 mins ago</span>
-                                <div className="d-flex justify-content-start align-items-center mt-1">
-                                  <span className="btn btn-light btn-sm me-2">
-                                    Deny
-                                  </span>
-                                  <span className="btn btn-primary btn-sm">
-                                    Approve
-                                  </span>
+                                  <div className="flex-grow-1">
+                                    <p className="mb-1 text-dark">
+                                      {noti.message}
+                                    </p>
+                                    <span className="text-muted" style={{ fontSize: '12px' }}>
+                                      {new Date(noti.createdAt).toLocaleString()}
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
+                              </Link>
                             </div>
-                          </Link>
-                        </div>
-                        <div className="border-bottom mb-3 pb-3">
-                          <Link to={all_routes.activity}>
-                            <div className="d-flex">
-                              <span className="avatar avatar-lg me-2 flex-shrink-0">
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-25.jpg"
-                                  alt="Profile"
-                                />
-                              </span>
-                              <div className="flex-grow-1">
-                                <p className="mb-1">
-                                  New student record{" "}
-                                  <span className="text-dark fw-semibold">
-                                    {" "}
-                                    George
-                                  </span>{" "}
-                                  is created by{" "}
-                                  <span className="text-dark fw-semibold">
-                                    Teressa
-                                  </span>
-                                </p>
-                                <span>2 hrs ago</span>
-                              </div>
-                            </div>
-                          </Link>
-                        </div>
-                        <div className="border-0 mb-3 pb-0">
-                          <Link to={all_routes.activity}>
-                            <div className="d-flex">
-                              <span className="avatar avatar-lg me-2 flex-shrink-0">
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-01.jpg"
-                                  alt="Profile"
-                                />
-                              </span>
-                              <div className="flex-grow-1">
-                                <p className="mb-1">
-                                  A new teacher record for{" "}
-                                  <span className="text-dark fw-semibold">
-                                    Elisa
-                                  </span>{" "}
-                                </p>
-                                <span>09:45 AM</span>
-                              </div>
-                            </div>
-                          </Link>
-                        </div>
+                          ))
+                        )}
                       </div>
-                    </div>
-                    <div className="d-flex p-0">
-                      <Link to="#" className="btn btn-light w-100 me-2">
-                        Cancel
-                      </Link>
-                      <Link
-                        to={all_routes.activity}
-                        className="btn btn-primary w-100"
-                      >
-                        View All
-                      </Link>
                     </div>
                   </div>
                 </div>

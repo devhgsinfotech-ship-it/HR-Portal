@@ -33,6 +33,14 @@ import {
   UnderConstruction,
   AdminDashboard,
   EmployeeDashboard,
+  EmployeeMe,
+  EmployeeInbox,
+  EmployeeMyTeam,
+  EmployeeMyFinances,
+  EmployeeOrg,
+  EmployeeEngage,
+  EmployeeHelpdesk,
+  EmployeePerformance,
   LeadsDasboard,
   DealsDashboard,
   Estimates,
@@ -353,6 +361,46 @@ export const publicRoutes = [
   {
     path: routes.employeeDashboard,
     element: <EmployeeDashboard />,
+    route: Route,
+  },
+  {
+    path: routes.employeeMe,
+    element: <EmployeeMe />,
+    route: Route,
+  },
+  {
+    path: routes.employeeInbox,
+    element: <EmployeeInbox />,
+    route: Route,
+  },
+  {
+    path: routes.employeeMyTeam,
+    element: <EmployeeMyTeam />,
+    route: Route,
+  },
+  {
+    path: routes.employeeMyFinances,
+    element: <EmployeeMyFinances />,
+    route: Route,
+  },
+  {
+    path: routes.employeeOrg,
+    element: <EmployeeOrg />,
+    route: Route,
+  },
+  {
+    path: routes.employeeEngage,
+    element: <EmployeeEngage />,
+    route: Route,
+  },
+  {
+    path: routes.employeeHelpdesk,
+    element: <EmployeeHelpdesk />,
+    route: Route,
+  },
+  {
+    path: routes.employeePerformance,
+    element: <EmployeePerformance />,
     route: Route,
   },
   {

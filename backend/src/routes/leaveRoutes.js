@@ -13,6 +13,7 @@ router.put('/types/:id', requireRole('HR', 'SUPER_ADMIN'), leaveController.updat
 router.delete('/types/:id', requireRole('HR', 'SUPER_ADMIN'), leaveController.deleteLeaveType);
 
 // Leave Requests
+router.get('/on-leave-today', leaveController.getOnLeaveToday);
 router.get('/requests', leaveController.getLeaveRequests);
 router.post('/apply', leaveController.applyLeave);
 router.put('/requests/:id', leaveController.updateLeaveRequest);

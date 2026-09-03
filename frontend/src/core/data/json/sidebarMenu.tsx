@@ -1,6 +1,98 @@
 import { all_routes } from "../../../router/all_routes";
 const routes = all_routes;
 
+export const EmployeeSidebarData = [
+  {
+    tittle: 'Main Menu',
+    icon: 'airplay',
+    showAsTab: true,
+    separateRoute: false,
+    submenuItems: [
+      {
+        label: 'Home',
+        link: routes.employeeDashboard,
+        submenu: false,
+        showSubRoute: false,
+        icon: 'home',
+        base: routes.employeeDashboard,
+        materialicons: 'home',
+      },
+      {
+        label: 'Me',
+        link: routes.employeeMe,
+        submenu: false,
+        showSubRoute: false,
+        icon: 'user',
+        base: routes.employeeMe,
+        materialicons: 'person',
+      },
+      {
+        label: 'Inbox',
+        link: routes.employeeInbox,
+        submenu: false,
+        showSubRoute: false,
+        icon: 'inbox',
+        base: routes.employeeInbox,
+        materialicons: 'inbox',
+      },
+      {
+        label: 'My Team',
+        link: routes.employeeMyTeam,
+        submenu: false,
+        showSubRoute: false,
+        icon: 'users',
+        base: routes.employeeMyTeam,
+        materialicons: 'group',
+      },
+      {
+        label: 'My Finances',
+        link: routes.employeeMyFinances,
+        submenu: false,
+        showSubRoute: false,
+        icon: 'dollar-sign',
+        base: routes.employeeMyFinances,
+        materialicons: 'attach_money',
+      },
+      {
+        label: 'Org',
+        link: routes.employeeOrg,
+        submenu: false,
+        showSubRoute: false,
+        icon: 'building',
+        base: routes.employeeOrg,
+        materialicons: 'business',
+      },
+      {
+        label: 'Engage',
+        link: routes.employeeEngage,
+        submenu: false,
+        showSubRoute: false,
+        icon: 'smile',
+        base: routes.employeeEngage,
+        materialicons: 'mood',
+      },
+      {
+        label: 'Helpdesk',
+        link: routes.employeeHelpdesk,
+        submenu: false,
+        showSubRoute: false,
+        icon: 'headphones',
+        base: routes.employeeHelpdesk,
+        materialicons: 'headset',
+      },
+      {
+        label: 'Performance',
+        link: routes.employeePerformance,
+        submenu: false,
+        showSubRoute: false,
+        icon: 'trending-up',
+        base: routes.employeePerformance,
+        materialicons: 'trending_up',
+      }
+    ]
+  }
+];
+
 export const SidebarDataTest = [
   {
     tittle: 'Main Menu',

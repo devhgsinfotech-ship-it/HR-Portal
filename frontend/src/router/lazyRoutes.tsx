@@ -201,6 +201,14 @@ export const EmployeeDashboard = createLazyComponent(
     import("../feature-module/mainMenu/employeeDashboard/employee-dashboard"),
   <LoadingSpinner text="Loading employee dashboard..." />
 );
+export const EmployeeMe = createLazyComponent(() => import("../feature-module/mainMenu/employeeDashboard/employeeMe"), <LoadingSpinner text="Loading..." />);
+export const EmployeeInbox = createLazyComponent(() => import("../feature-module/mainMenu/employeeDashboard/employeeInbox"), <LoadingSpinner text="Loading..." />);
+export const EmployeeMyTeam = createLazyComponent(() => import("../feature-module/mainMenu/employeeDashboard/employeeMyTeam"), <LoadingSpinner text="Loading..." />);
+export const EmployeeMyFinances = createLazyComponent(() => import("../feature-module/mainMenu/employeeDashboard/employeeMyFinances"), <LoadingSpinner text="Loading..." />);
+export const EmployeeOrg = createLazyComponent(() => import("../feature-module/mainMenu/employeeDashboard/employeeOrg"), <LoadingSpinner text="Loading..." />);
+export const EmployeeEngage = createLazyComponent(() => import("../feature-module/mainMenu/employeeDashboard/employeeEngage"), <LoadingSpinner text="Loading..." />);
+export const EmployeeHelpdesk = createLazyComponent(() => import("../feature-module/mainMenu/employeeDashboard/employeeHelpdesk"), <LoadingSpinner text="Loading..." />);
+export const EmployeePerformance = createLazyComponent(() => import("../feature-module/mainMenu/employeeDashboard/employeePerformance"), <LoadingSpinner text="Loading..." />);
 export const LeadsDasboard = createLazyComponent(
   () => import("../feature-module/mainMenu/leadsDashboard"),
   <LoadingSpinner text="Loading leads dashboard..." />
