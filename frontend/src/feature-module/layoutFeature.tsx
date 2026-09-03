@@ -84,11 +84,17 @@ const LayoutFeature = React.memo(() => {
   const dataThemeRedux = useSelector(
     (state: RootState) => state.themeSetting.dataTheme
   );
+  const dataLayoutRedux = useSelector(
+    (state: RootState) => state.themeSetting.dataLayout
+  );
 
-  // Get layout config based on current path
+  // Get layout config based on current path or Redux theme customizer setting
   const currentLayoutConfig = useMemo(() => {
-    return layoutConfig[location.pathname] || { dataLayout: "detached", bodyClass: "" };
-  }, [location.pathname]);
+    if (layoutConfig[location.pathname]) {
+      return layoutConfig[location.pathname];
+    }
+    return { dataLayout: dataLayoutRedux || "detached", bodyClass: "" };
+  }, [location.pathname, dataLayoutRedux]);
 
   // Memoize the CSS variables string
   const cssVariablesString = useMemo(

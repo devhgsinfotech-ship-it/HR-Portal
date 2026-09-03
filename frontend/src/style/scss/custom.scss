@@ -2325,9 +2325,6 @@ span.p-dropdown-label.p-inputtext span {
 }
 
 .sidebar {
-  background: linear-gradient(180deg, #0D1F3C 0%, #162E5B 45%, #1A3A6B 75%, #0E3355 100%) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35) !important;
   border-radius: 12px !important;
   overflow: hidden !important;
 
@@ -2441,7 +2438,6 @@ span.p-dropdown-label.p-inputtext span {
     > ul > li > ul > li {
       // Base link style
       > a {
-        color: rgba(255, 255, 255, 0.72) !important;
         border-radius: 8px !important;
         transition: all 0.2s ease !important;
         position: relative;
@@ -2613,4 +2609,87 @@ span.p-dropdown-label.p-inputtext span {
 .sidebar-overlay {
   background: rgba(13, 31, 60, 0.65) !important;
   backdrop-filter: blur(4px);
+}
+
+// ── Theme Customizer Sidebar Color Options Support ───────────
+
+// 1. Signature Dark Navy (Default / Dark)
+html[data-sidebar="dark"] .sidebar,
+html[data-sidebar="default"] .sidebar,
+html:not([data-sidebar]) .sidebar {
+  background: linear-gradient(180deg, #0D1F3C 0%, #162E5B 45%, #1A3A6B 75%, #0E3355 100%) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35) !important;
+}
+
+// 2. Light / White Sidebar
+html[data-sidebar="light"] .sidebar {
+  background: #ffffff !important;
+  border-right: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+
+  .menu-title {
+    color: #94a3b8 !important;
+  }
+
+  .sidebar-menu > ul > li > ul > li {
+    > a {
+      color: #334155 !important;
+      i { color: #64748b !important; }
+      span { color: #334155 !important; }
+
+      &:hover {
+        background: rgba(0, 188, 212, 0.08) !important;
+        color: #00bcd4 !important;
+        i, span { color: #00bcd4 !important; }
+      }
+
+      &.active, &.subdrop {
+        background: rgba(0, 188, 212, 0.12) !important;
+        color: #00bcd4 !important;
+        border-left: 3px solid #00bcd4 !important;
+        i, span { color: #00bcd4 !important; }
+      }
+    }
+
+    &.submenu ul li a {
+      color: #475569 !important;
+      &:hover, &.active { color: #00bcd4 !important; }
+    }
+  }
+}
+
+// 3. Dark Green Sidebar
+html[data-sidebar="darkgreen"] .sidebar {
+  background: linear-gradient(180deg, #0A2218 0%, #0F3826 45%, #144D34 100%) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+// 4. Night Blue Sidebar
+html[data-sidebar="nightblue"] .sidebar {
+  background: linear-gradient(180deg, #0A192F 0%, #112240 45%, #1D3557 100%) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+// 5. Dark Gray Sidebar
+html[data-sidebar="darkgray"] .sidebar {
+  background: linear-gradient(180deg, #182232 0%, #1F2937 45%, #111827 100%) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+// 6. Royal Blue Sidebar
+html[data-sidebar="royalblue"] .sidebar {
+  background: linear-gradient(180deg, #0F2B5B 0%, #1E3A8A 45%, #1D4ED8 100%) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+// 7. Indigo Sidebar
+html[data-sidebar="indigo"] .sidebar {
+  background: linear-gradient(180deg, #1E1035 0%, #2E1065 45%, #3B0764 100%) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+// 8. Custom Color Picker Sidebar
+html[data-sidebar="all"] .sidebar {
+  background: rgb(var(--sidebar--rgb-picr)) !important;
 }
