@@ -387,7 +387,7 @@ const HrDashboard = () => {
                                                             <p className="fs-13 mb-0">Delayed Logins Today</p>
                                                         </div>
                                                         <div className="d-inline-flex align-items-center bg-light border rounded-pill text-dark p-1 ps-2">
-                                                            <Link to={all_routes.attendanceemployee} className="text-dark fs-12">View</Link>
+                                                            <Link to={all_routes.attendanceadmin} className="text-dark fs-12">View</Link>
                                                             <span className="bg-danger btn-icon btn-sm rounded-circle d-flex align-items-center justify-content-center ms-1">
                                                                 <i className="ti ti-arrow-down-right fs-20" />
                                                             </span>
@@ -418,7 +418,7 @@ const HrDashboard = () => {
                                                             <p className="fs-13 mb-0">No Check-In Recorded</p>
                                                         </div>
                                                         <div className="d-inline-flex align-items-center bg-light border rounded-pill text-dark p-1 ps-2">
-                                                            <Link to={all_routes.attendanceemployee} className="text-dark fs-12">View</Link>
+                                                            <Link to={all_routes.attendanceadmin} className="text-dark fs-12">View</Link>
                                                             <span className="bg-warning btn-icon btn-sm rounded-circle d-flex align-items-center justify-content-center ms-1">
                                                                 <i className="ti ti-minus fs-20" />
                                                             </span>
@@ -441,7 +441,7 @@ const HrDashboard = () => {
                                 <div className="card-body pb-0">
                                     <div className="border rounded border-start border-start-primary d-flex align-items-center justify-content-between p-2 gap-2 flex-wrap mb-3">
                                         <h2 className="card-title mb-0">Attendance Trend</h2>
-                                        <Link to={all_routes.attendanceemployee} className="btn btn-md btn-light">
+                                        <Link to={all_routes.attendanceadmin} className="btn btn-md btn-light">
                                             View All
                                         </Link>
                                     </div>
@@ -538,7 +538,7 @@ const HrDashboard = () => {
                                 <div className="card-body">
                                     <div className="border rounded border-start border-start-primary d-flex align-items-center justify-content-between p-2 gap-2 flex-wrap mb-3">
                                         <h2 className="card-title mb-0">Late Arrivals Today</h2>
-                                        <Link to={all_routes.attendanceemployee} className="btn btn-md btn-light">
+                                        <Link to={all_routes.attendanceadmin} className="btn btn-md btn-light">
                                             View All
                                         </Link>
                                     </div>
