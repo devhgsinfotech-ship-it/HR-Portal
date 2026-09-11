@@ -420,6 +420,12 @@ aiConfiguration:"/ai-configuration",
   payrollAddition: "/payroll",
   payrollOvertime: "/payroll-overtime",
   payrollDeduction: "/payroll-deduction",
+  // Keka-style payroll module
+  payrollProcess: "/payroll/process",
+  payrollSalaryConfig: "/payroll/salary-config",
+  payrollPolicy: "/payroll/policy",
+  payrollPayslips: "/payroll/payslips",
+  payrollMyPayslips: "/payroll/my-payslips",
   //ADMINISTRATION
   knowledgebase: "/knowledgebase",
   activity: "/activity",
