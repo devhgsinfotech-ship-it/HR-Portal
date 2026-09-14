@@ -2692,4 +2692,406 @@ html[data-sidebar="indigo"] .sidebar {
 // 8. Custom Color Picker Sidebar
 html[data-sidebar="all"] .sidebar {
   background: rgb(var(--sidebar--rgb-picr)) !important;
+}
+
+/* ==========================================================================
+   TOP BAR COLOR CUSTOMIZATION STYLES (Header & Logo reaction)
+   ========================================================================== */
+
+// 1. Dark Aqua Topbar
+html[data-topbar="darkaqua"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: #008080 !important;
+    border-color: #007373 !important;
+  }
+}
+
+// 2. White Rock Topbar
+html[data-topbar="whiterock"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: #f7f7f7 !important;
+    border-color: #e5e5e5 !important;
+  }
+}
+
+// 3. Rock Blue Topbar
+html[data-topbar="rockblue"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: #9eb5d8 !important;
+    border-color: #8fa7cb !important;
+  }
+}
+
+// 4. Blue Haze Topbar
+html[data-topbar="bluehaze"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: #c8d6e5 !important;
+    border-color: #b7c7d7 !important;
+  }
+}
+
+// 5. Orange Gradient Topbar
+html[data-topbar="orangegradient"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%) !important;
+    border-color: transparent !important;
+  }
+}
+
+// 6. Purple Gradient Topbar
+html[data-topbar="purplegradient"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%) !important;
+    border-color: transparent !important;
+  }
+}
+
+// 7. Blue Gradient Topbar
+html[data-topbar="bluegradient"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%) !important;
+    border-color: transparent !important;
+  }
+}
+
+// 8. Maroon Gradient Topbar
+html[data-topbar="maroongradient"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: linear-gradient(135deg, #800000 0%, #a52a2a 100%) !important;
+    border-color: transparent !important;
+  }
+}
+
+// 9. Primary Topbar
+html[data-topbar="primary"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: #ff9b44 !important;
+    border-color: #f28b33 !important;
+  }
+}
+
+// 10. Dark Topbar
+html[data-topbar="dark"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: #1d212a !important;
+    border-color: #2b303c !important;
+  }
+}
+
+// 11. White Topbar (Default)
+html[data-topbar="white"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: #ffffff !important;
+    border-color: #e8e8e8 !important;
+  }
+}
+
+// 12. Custom Topbar Picker
+html[data-topbar="all"] {
+  .header,
+  .header .main-header,
+  .header .header-left {
+    background: rgb(var(--topbar--rgb-picr)) !important;
+    border-color: transparent !important;
+  }
+}
+
+/* --- Dark / Vibrant Topbars: Header text, icons, search, and LOGO contrast --- */
+html[data-topbar="darkaqua"],
+html[data-topbar="orangegradient"],
+html[data-topbar="purplegradient"],
+html[data-topbar="bluegradient"],
+html[data-topbar="maroongradient"],
+html[data-topbar="primary"],
+html[data-topbar="dark"],
+html[data-topbar="all"] {
+  .header {
+    // Logo brightness/invert so both company logos and default logos are crisp white on dark topbar
+    .header-left {
+      .logo img,
+      .dark-logo img {
+        filter: brightness(0) invert(1) !important;
+        transition: filter 0.3s ease;
+      }
+    }
+
+    // Topbar Action Icons (Notification, Chat, Fullscreen, Customizer, Settings)
+    .btn-menubar,
+    .btn-menubar i,
+    .mobile_btn i,
+    .user-menu > li > a i {
+      color: #ffffff !important;
+    }
+
+    .btn-menubar:hover {
+      background: rgba(255, 255, 255, 0.15) !important;
+    }
+
+    // Mobile Hamburger Icon
+    .mobile_btn .bar-icon span {
+      background-color: #ffffff !important;
+    }
+
+    // User Profile text in Topbar
+    .user-name {
+      color: #ffffff !important;
+    }
+    .user-role {
+      color: rgba(255, 255, 255, 0.8) !important;
+    }
+
+    // Search Box styling on dark topbars
+    .input-group-flat {
+      .form-control {
+        background: rgba(255, 255, 255, 0.15) !important;
+        border-color: rgba(255, 255, 255, 0.2) !important;
+        color: #ffffff !important;
+
+        &::placeholder {
+          color: rgba(255, 255, 255, 0.7) !important;
+        }
+
+        &:focus {
+          background: rgba(255, 255, 255, 0.25) !important;
+          border-color: #ffffff !important;
+        }
+      }
+      .input-group-text {
+        background: rgba(255, 255, 255, 0.15) !important;
+        border-color: rgba(255, 255, 255, 0.2) !important;
+        kbd {
+          background: rgba(255, 255, 255, 0.2) !important;
+          color: #ffffff !important;
+          border-color: rgba(255, 255, 255, 0.3) !important;
+        }
+      }
+    }
+  }
+}
+
+/* --- Light Topbars: Original logo colors & dark text --- */
+html[data-topbar="white"],
+html[data-topbar="whiterock"],
+html[data-topbar="bluehaze"],
+html[data-topbar="rockblue"] {
+  .header {
+    .header-left {
+      .logo img,
+      .dark-logo img {
+        filter: none !important;
+      }
+    }
+  }
+}
+
+/* ==========================================================================
+   HR DASHBOARD ENHANCED STYLES & SHADOWS
+   ========================================================================== */
+
+.hr-kpi-card-wrapper {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  background: var(--bs-card-bg, #ffffff) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.hr-kpi-card-wrapper:hover {
+  transform: translateY(-5px) !important;
+  box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.14), 0 6px 12px -2px rgba(0, 0, 0, 0.06) !important;
+}
+
+.hr-kpi-card-wrapper::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 16px 16px 0 0;
+}
+
+.hr-kpi-card-wrapper.card-blue::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+.hr-kpi-card-wrapper.card-green::before { background: linear-gradient(90deg, #10b981, #34d399); }
+.hr-kpi-card-wrapper.card-orange::before { background: linear-gradient(90deg, #f97316, #fb923c); }
+.hr-kpi-card-wrapper.card-rose::before { background: linear-gradient(90deg, #f43f5e, #fb7185); }
+.hr-kpi-card-wrapper.card-purple::before { background: linear-gradient(90deg, #8b5cf6, #c084fc); }
+
+.hr-icon-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  transition: transform 0.3s ease;
+}
+
+.hr-kpi-card-wrapper:hover .hr-icon-circle {
+  transform: scale(1.1);
+}
+
+.hr-icon-blue { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); color: #2563eb; }
+.hr-icon-green { background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); color: #059669; }
+.hr-icon-orange { background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); color: #ea580c; }
+.hr-icon-rose { background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%); color: #e11d48; }
+.hr-icon-purple { background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%); color: #7c3aed; }
+
+/* Pending Approvals Ultra-Clean Section */
+.pending-approval-card {
+  border-radius: 16px !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  background: var(--bs-card-bg, #ffffff) !important;
+  transition: all 0.3s ease;
+}
+
+.pending-item-box {
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  transition: all 0.2s ease !important;
+  padding: 12px 14px !important;
+}
+
+.pending-item-box:hover {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+}
+
+.btn-soft-approve {
+  background: #ecfdf5 !important;
+  color: #059669 !important;
+  border: 1px solid #a7f3d0 !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-soft-approve:hover {
+  background: #10b981 !important;
+  color: #ffffff !important;
+  border-color: #10b981 !important;
+}
+
+.btn-soft-decline {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+  border: 1px solid #fecaca !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-soft-decline:hover {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #ef4444 !important;
+}
+
+/* ==========================================================================
+   DATE RANGE PICKER & CALENDAR ICON STYLES
+   ========================================================================== */
+
+.custom-daterange-picker {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
+}
+
+.custom-daterange-picker .input-icon-addon {
+  position: absolute !important;
+  left: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 5 !important;
+  pointer-events: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.custom-daterange-picker .bookingrange {
+  padding-left: 36px !important;
+  padding-right: 14px !important;
+  height: 36px !important;
+  border-radius: 50rem !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #1e293b !important;
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+  width: auto !important;
+  min-width: 215px !important;
+}
+
+.custom-daterange-picker .bookingrange:hover,
+.custom-daterange-picker .bookingrange:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+}
+
+/* ── HR Dashboard Premium Card Shadow & Hover Elevation Effects ── */
+.hr-dashboard-card {
+  border-radius: 16px !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.28s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.28s ease !important;
+  background-color: var(--bs-card-bg, #ffffff) !important;
+}
+
+.hr-dashboard-card:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.09), 0 4px 10px rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(99, 102, 241, 0.25) !important;
+}
+
+.hr-kpi-card-wrapper {
+  border-radius: 16px !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.28s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.28s ease !important;
+}
+
+.hr-kpi-card-wrapper:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.09), 0 4px 10px rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(99, 102, 241, 0.25) !important;
+}
+
+.hr-banner-card {
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.08), 0 2px 6px rgba(0, 0, 0, 0.03) !important;
+  transition: transform 0.28s ease, box-shadow 0.28s ease !important;
+}
+
+.hr-banner-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 14px 32px rgba(99, 102, 241, 0.14), 0 4px 12px rgba(0, 0, 0, 0.05) !important;
 }

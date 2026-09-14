@@ -157,7 +157,7 @@ export default function PredefinedDatePicker({ onDateRangeChange }: PredefinedDa
   return (
     <div className="custom-daterange-picker">
       <span className="input-icon-addon">
-        <i className="ti ti-calendar text-gray-9"></i>
+        <i className="ti ti-calendar text-primary fs-15" />
       </span>
       <DateRangePicker
         initialSettings={initialSettings}
