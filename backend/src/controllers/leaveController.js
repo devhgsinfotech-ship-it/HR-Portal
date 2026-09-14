@@ -49,11 +49,12 @@ async function getLeaveRequests(req, res) {
         const userId = req.user.id;
         const role = req.user.role;
 
-        let whereClause = {
-            employee: {
+        let whereClause = {};
+        if (companyId) {
+            whereClause.employee = {
                 user: { companyId }
-            }
-        };
+            };
+        }
 
         // Employees only see their own requests unless HR/MANAGER/SUPER_ADMIN, 
         // OR if anyone explicitly requests only their own with ?mine=true
@@ -273,7 +274,7 @@ async function getLeaveBalances(req, res) {
 
         const employee = await prisma.employee.findUnique({ where: { userId } });
         if (!employee) {
-            return res.status(404).json({ message: 'Employee profile not found' });
+            return res.json([]);
         }
 
         const leaveTypes = await prisma.leaveType.findMany({

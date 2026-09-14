@@ -473,41 +473,58 @@ async function getMe(req, res) {
             }
         });
 
-        // If the logged-in user is an HR or SUPER_ADMIN and does not have an employee profile yet,
-        // auto-create one so their profile page is editable and displays correctly.
+        // If the logged-in user (HR, SUPER_ADMIN, MANAGER, etc.) does not have an employee profile yet,
+        // attempt to auto-create one or return a synthesized profile.
         if (!employee) {
             const user = await prisma.user.findUnique({ 
                 where: { id: userId },
                 include: { company: true }
             });
-            if (user && (user.role === 'HR' || user.role === 'SUPER_ADMIN')) {
-                const nameParts = user.name.trim().split(/\s+/);
-                const firstName = nameParts[0] || 'Admin';
-                const lastName = nameParts.slice(1).join(' ') || 'User';
-                const employeeCode = user.company 
-                    ? `${getCompanyPrefix(user.company.name)}-HR-${Date.now().toString().slice(-6)}`
-                    : `HR-${Date.now().toString().slice(-6)}`;
+            if (user) {
+                const nameParts = (user.name || '').trim().split(/\s+/).filter(Boolean);
+                const firstName = nameParts[0] || (user.role === 'HR' ? 'HR' : user.role === 'SUPER_ADMIN' ? 'Admin' : 'User');
+                const lastName = nameParts.slice(1).join(' ') || (user.role === 'HR' ? 'Manager' : '');
+                const companyPrefix = user.company ? getCompanyPrefix(user.company.name) : 'EMP';
+                const employeeCode = `${companyPrefix}-${user.role}-${Date.now().toString().slice(-6)}`;
 
-                employee = await prisma.employee.create({
-                    data: {
-                        userId,
+                try {
+                    employee = await prisma.employee.create({
+                        data: {
+                            userId,
+                            employeeCode,
+                            firstName,
+                            lastName,
+                            phone: user.company?.phone || null,
+                            address: user.company?.address || null,
+                            onboardingStatus: 'COMPLETED'
+                        },
+                        include: {
+                            user: { select: { id: true, name: true, email: true, role: true, company: true } },
+                            department: true,
+                            designation: true,
+                            bankDetails: true,
+                            salaryStructure: true
+                        }
+                    });
+                } catch (createErr) {
+                    console.error('Auto-creation of employee profile failed, returning virtual profile:', createErr);
+                    return res.json({
+                        id: 0,
+                        userId: user.id,
                         employeeCode,
                         firstName,
                         lastName,
-                        phone: user.company?.phone || null,
-                        address: user.company?.address || null,
-                        onboardingStatus: 'COMPLETED'
-                    },
-                    include: {
-                        user: { select: { id: true, name: true, email: true, role: true, company: true } },
-                        department: true,
-                        designation: true,
-                        bankDetails: true,
-                        salaryStructure: true
-                    }
-                });
+                        phone: user.company?.phone || 'N/A',
+                        address: user.company?.address || 'N/A',
+                        user: { id: user.id, name: user.name || `${firstName} ${lastName}`, email: user.email, role: user.role, company: user.company },
+                        department: { name: user.role === 'HR' ? 'Human Resources' : user.role },
+                        designation: { name: user.role === 'HR' ? 'HR Manager' : user.role },
+                        reportingManager: null,
+                        dateOfJoining: user.createdAt
+                    });
+                }
             } else {
-                return res.status(404).json({ message: 'Employee profile not found' });
+                return res.status(404).json({ message: 'User not found' });
             }
         } else if (employee && (employee.user?.role === 'HR' || employee.user?.role === 'SUPER_ADMIN')) {
             // Self-heal: If profile already exists but phone/address are missing, copy them from the company

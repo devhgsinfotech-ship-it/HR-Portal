@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSelector } from "react-redux";
 import apiClient from "../../../core/utils/apiClient";
 import { Link } from "react-router-dom";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
@@ -13,6 +14,7 @@ import CommonTextEditor from "@/core/common/textEditor";
 import { APP_CONFIG } from "../../../environment";
 
 const EmployeeDashboard = () => {
+  const authUser = useSelector((state: any) => state.auth?.user);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -230,14 +232,26 @@ const EmployeeDashboard = () => {
         apiClient.get('/attendance/today').catch(() => ({ data: null })),
         apiClient.get('/attendance/logs?mine=true').catch(() => ({ data: [] })),
         apiClient.get('/leaves/balances').catch(() => ({ data: [] })),
-        apiClient.get('/leaves/requests').catch(() => ({ data: [] })),
+        apiClient.get('/leaves/requests?mine=true').catch(() => ({ data: [] })),
         apiClient.get('/employees/dashboard/events').catch(() => ({ data: { birthdays: { today: [], upcoming: [] }, anniversaries: [], joinees: [] } })),
         apiClient.get('/employees/dashboard/posts').catch(() => ({ data: [] })),
         apiClient.get('/employees/dashboard/on-leave-today').catch(() => ({ data: [] })),
         apiClient.get('/employees/dashboard/next-holiday').catch(() => ({ data: null })),
         apiClient.get('/announcements').catch(() => ({ data: [] }))
       ]);
-      setEmployeeData(empRes.data);
+
+      const profileData = empRes.data || (authUser ? {
+        firstName: authUser.name ? authUser.name.split(' ')[0] : (authUser.role || 'User'),
+        lastName: authUser.name ? authUser.name.split(' ').slice(1).join(' ') : '',
+        designation: { name: authUser.role === 'HR' ? 'HR Manager' : authUser.role === 'SUPER_ADMIN' ? 'System Administrator' : 'Employee' },
+        department: { name: authUser.role === 'HR' ? 'Human Resources' : 'Management' },
+        user: { email: authUser.email, name: authUser.name, role: authUser.role },
+        phone: 'N/A',
+        dateOfJoining: null,
+        reportingManager: null
+      } : null);
+
+      setEmployeeData(profileData);
       setAttendanceStatus(statusRes.data);
       setAttendanceLogs(logsRes.data || []);
       setLeaveBalances(balancesRes.data || []);
