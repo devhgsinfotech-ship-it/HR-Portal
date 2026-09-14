@@ -379,6 +379,9 @@ export const OverTime = createLazyComponent(
 export const Holidays = createLazyComponent(
   () => import("../feature-module/hrm/holidays")
 );
+export const Announcements = createLazyComponent(
+  () => import("../feature-module/hrm/announcements/announcements")
+);
 export const Termination = createLazyComponent(
   () => import("../feature-module/hrm/termination")
 );
@@ -457,6 +460,15 @@ export const PayRollOvertime = createLazyComponent(
 );
 export const PayRollDeduction = createLazyComponent(
   () => import("../feature-module/finance-accounts/payrool/payrollDedution")
+);
+export const PayrollProcess = createLazyComponent(
+  () => import("../feature-module/finance-accounts/payrool/PayrollProcess")
+);
+export const PayrollSalaryConfig = createLazyComponent(
+  () => import("../feature-module/finance-accounts/payrool/PayrollSalaryConfig")
+);
+export const PayrollPayslips = createLazyComponent(
+  () => import("../feature-module/finance-accounts/payrool/PayrollPayslips")
 );
 
 // Performance Components - Lazy Loaded

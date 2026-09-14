@@ -1,228 +1,94 @@
-import React, { useEffect, useState } from "react";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Tooltip,
-  Legend,
-  Plugin,
-} from "chart.js";
-import { Line } from "react-chartjs-2";
+import React from "react";
+import ReactApexChart from "react-apexcharts";
+import { ApexOptions } from "apexcharts";
 
-import user1 from "../../../../../public/assets/img/users/user-01.jpg";
-import user2 from "../../../../../public/assets/img/users/user-02.jpg";
-import user3 from "../../../../../public/assets/img/users/user-03.jpg";
-import user4 from "../../../../../public/assets/img/users/user-04.jpg";
-import user5 from "../../../../../public/assets/img/users/user-05.jpg";
-import user6 from "../../../../../public/assets/img/users/user-06.jpg";
-import user7 from "../../../../../public/assets/img/users/user-07.jpg";
-import user8 from "../../../../../public/assets/img/users/user-08.jpg";
-import user27 from "../../../../../public/assets/img/users/user-27.jpg";
-import user30 from "../../../../../public/assets/img/users/user-30.jpg";
+interface TopEmp {
+  name: string;
+  score: number;
+  avatar?: string | null;
+}
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Tooltip,
-  Legend
-);
+interface Props {
+  employees?: TopEmp[];
+}
 
-const imageSources = [
-  user1,
-  user5,
-  user3,
-  user4,
-  user2,
-  user6,
-  user7,
-  user8,
-  user30,
-  user27,
-];
+const TopEmployeeChart: React.FC<Props> = ({ employees = [] }) => {
+  const defaultEmps: TopEmp[] = [
+    { name: "Rohan", score: 95 },
+    { name: "Priya", score: 88 },
+    { name: "Amit", score: 82 },
+    { name: "Neha", score: 78 },
+    { name: "Sahil", score: 70 },
+  ];
 
-const labels = [
-  "Micheal",
-  "Martinz",
-  "Clark",
-  "Hensrita",
-  "Lisa",
-  "Davis",
-  "Anderson",
-  "James",
-  "Merkel",
-  "Daniel",
-];
-
-const chartData = [100, 95, 100, 100, 100, 70, 45, 78, 75, 80];
-
-const ImagePointChart: React.FC = () => {
-  const [images, setImages] = useState<HTMLImageElement[]>([]);
-
-  useEffect(() => {
-    const loaded: HTMLImageElement[] = [];
-    let count = 0;
-
-    imageSources.forEach((src, i) => {
-      const img = new Image();
-      img.src = src;
-
-      img.onload = () => {
-        loaded[i] = img;
-        count++;
-
-        if (count === imageSources.length) {
-          setImages([...loaded]);
-        }
-      };
-
-      img.onerror = () => {
-        count++;
-
-        if (count === imageSources.length) {
-          setImages([...loaded]);
-        }
-      };
-    });
-  }, []);
-
-  const imageLabelsPlugin: Plugin<"line"> = {
-    id: "imageLabels",
-    afterDraw: (chart) => {
-      if (!images.length) return;
-
-      const {
-        ctx,
-        chartArea: { bottom },
-        scales: { x },
-      } = chart;
-
-      ctx.save();
-
-      images.forEach((image, index) => {
-        if (!image) return;
-
-        const xPos = x.getPixelForValue(index);
-        const size = 24;
-        const yPos = bottom + 10;
-        const radius = size / 2;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(xPos, yPos + radius, radius, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
-
-        ctx.drawImage(image, xPos - radius, yPos, size, size);
-
-        ctx.restore();
-
-        ctx.beginPath();
-        ctx.arc(xPos, yPos + radius, radius, 0, Math.PI * 2);
-        ctx.strokeStyle = "#FFFFFF";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      });
-
-      ctx.restore();
+  const list = employees.length > 0 ? employees : defaultEmps;
+  const series = [
+    {
+      name: "Performance",
+      data: list.map((e) => e.score),
     },
-  };
+  ];
 
-  const verticalLinesPlugin: Plugin<"line"> = {
-    id: "verticalLines",
-    afterDatasetsDraw: (chart) => {
-      const {
-        ctx,
-        scales: { x, y },
-      } = chart;
-
-      ctx.save();
-      ctx.strokeStyle = "#B9CBD1";
-      ctx.lineWidth = 6;
-
-      chartData.forEach((value, index) => {
-        const xPos = x.getPixelForValue(index);
-        const yPos = y.getPixelForValue(value);
-
-        ctx.beginPath();
-        ctx.moveTo(xPos, yPos + 2);
-        ctx.lineTo(xPos, y.getPixelForValue(0));
-        ctx.stroke();
-      });
-
-      ctx.restore();
+  const options: ApexOptions = {
+    chart: {
+      height: 140,
+      type: "bar",
+      toolbar: { show: false },
+      sparkline: { enabled: false },
     },
-  };
-
-  const data = {
-    labels,
-    datasets: [
-      {
-        label: "Score",
-        data: chartData,
-        pointBackgroundColor: "#0C4B5E",
-        pointBorderColor: "#FFFFFF",
-        pointBorderWidth: 2,
-        pointRadius: 6,
-        pointHoverRadius: 8,
-        showLine: false,
-      },
-    ],
-  };
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    layout: {
-      padding: {
-        top: 10,
-        bottom: 40,
+    colors: ["#3b82f6"],
+    plotOptions: {
+      bar: {
+        columnWidth: "35%",
+        borderRadius: 4,
+        borderRadiusApplication: "end",
       },
     },
-    scales: {
-      y: {
-        min: 0,
-        max: 110,
-        ticks: {
-          stepSize: 25,
-          color: "#9CA3AF",
-        },
-        grid: {
-          color: "#F3F4F6",
-        },
-      },
-      x: {
-        grid: {
-          display: false,
-        },
-        ticks: {
-          display: false,
-        },
+    dataLabels: { enabled: false },
+    xaxis: {
+      categories: list.map((e) => e.name),
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+      labels: {
+        style: { colors: "#6b7280", fontSize: "11px" },
       },
     },
-    plugins: {
-      legend: {
-        display: false,
+    yaxis: {
+      min: 0,
+      max: 100,
+      tickAmount: 4,
+      labels: {
+        style: { colors: "#9ca3af", fontSize: "10px" },
+        formatter: (val: number) => `${val}%`,
       },
-      tooltip: {
-        enabled: true,
-      },
+    },
+    grid: {
+      show: true,
+      borderColor: "rgba(107, 114, 128, 0.15)",
+      strokeDashArray: 2,
+    },
+    tooltip: {
+      y: { formatter: (val: number) => `${val}%` },
     },
   };
 
   return (
-    <div style={{ height: "180px", position: "relative" }}>
-      <Line
-        key={images.length}
-        data={data}
-        options={options as any}
-        plugins={[imageLabelsPlugin, verticalLinesPlugin]}
-      />
+    <div id="top-employees-chart">
+      <ReactApexChart options={options} series={series} type="bar" height={140} />
+      <div className="d-flex justify-content-around text-center mt-1">
+        {list.map((emp, i) => (
+          <div key={i} className="d-flex flex-column align-items-center">
+            <div
+              className="rounded-circle bg-primary-100 text-primary fw-bold d-flex align-items-center justify-content-center"
+              style={{ width: 22, height: 22, fontSize: 10 }}
+            >
+              {emp.name.charAt(0)}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
 
-export default ImagePointChart;
+export default TopEmployeeChart;

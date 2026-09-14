@@ -839,6 +839,583 @@ async function requestOnboardingCorrection(req, res) {
     }
 }
 
+
+async function getCompanyEvents(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const employees = await prisma.employee.findMany({
+            where: { user: { companyId } },
+            include: { user: { select: { name: true, email: true } }, designation: true }
+        });
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const currentDay = today.getDate();
+        const currentMonth = today.getMonth();
+
+        const birthdaysToday = [];
+        const upcomingBirthdays = [];
+        const anniversaries = [];
+        const joinees = [];
+
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+
+        for (const emp of employees) {
+            if (emp.dateOfBirth) {
+                const dob = new Date(emp.dateOfBirth);
+                
+                // Get birthday in current year
+                const bdayThisYear = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
+                bdayThisYear.setHours(0, 0, 0, 0);
+                
+                let nextBday = bdayThisYear;
+                if (bdayThisYear.getTime() < today.getTime()) {
+                    nextBday = new Date(today.getFullYear() + 1, dob.getMonth(), dob.getDate());
+                }
+                
+                const diffTime = nextBday.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                const formattedBday = nextBday.toLocaleDateString('en-GB', { day: '2-digit', month: 'long' });
+                
+                const empBdayInfo = {
+                    id: emp.id,
+                    name: `${emp.firstName} ${emp.lastName || ''}`.trim(),
+                    profilePhotoUrl: emp.profilePhotoUrl,
+                    designation: emp.designation?.name || 'N/A',
+                    dateStr: formattedBday,
+                    diffDays
+                };
+
+                if (dob.getDate() === currentDay && dob.getMonth() === currentMonth) {
+                    birthdaysToday.push(empBdayInfo);
+                } else if (diffDays <= 30) {
+                    upcomingBirthdays.push(empBdayInfo);
+                }
+            }
+
+            if (emp.dateOfJoining) {
+                const doj = new Date(emp.dateOfJoining);
+                if (doj.getDate() === currentDay && doj.getMonth() === currentMonth) {
+                    if (doj.getFullYear() < today.getFullYear()) {
+                        const years = today.getFullYear() - doj.getFullYear();
+                        anniversaries.push({
+                            id: emp.id,
+                            name: `${emp.firstName} ${emp.lastName || ''}`.trim(),
+                            profilePhotoUrl: emp.profilePhotoUrl,
+                            designation: emp.designation?.name || 'N/A',
+                            years: `${years} Year${years > 1 ? 's' : ''}`
+                        });
+                    }
+                }
+
+                if (doj >= thirtyDaysAgo && doj <= today) {
+                    joinees.push({
+                        id: emp.id,
+                        name: `${emp.firstName} ${emp.lastName || ''}`.trim(),
+                        profilePhotoUrl: emp.profilePhotoUrl,
+                        designation: emp.designation?.name || 'N/A',
+                        dateOfJoining: doj
+                    });
+                }
+            }
+        }
+
+        // Sort upcoming birthdays chronologically
+        upcomingBirthdays.sort((a, b) => a.diffDays - b.diffDays);
+
+        res.json({ 
+            birthdays: {
+                today: birthdaysToday,
+                upcoming: upcomingBirthdays
+            }, 
+            anniversaries, 
+            joinees 
+        });
+    } catch (error) {
+        console.error('Get Company Events Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function getPosts(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const userId = req.user.id;
+
+        const currentEmployee = await prisma.employee.findUnique({
+            where: { userId }
+        });
+        if (!currentEmployee) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+
+        const posts = await prisma.post.findMany({
+            where: { companyId },
+            include: {
+                employee: {
+                    include: {
+                        user: { select: { name: true, email: true } },
+                        designation: true
+                    }
+                },
+                likes: true,
+                comments: {
+                    include: {
+                        employee: {
+                            include: {
+                                user: { select: { name: true, email: true } }
+                            }
+                        },
+                        likes: true
+                    },
+                    orderBy: { createdAt: 'asc' }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        const enrichedPosts = posts.map(post => {
+            const likedByMe = post.likes.some(like => like.employeeId === currentEmployee.id);
+            
+            const allComments = post.comments.map(c => {
+                const commentLikedByMe = c.likes.some(like => like.employeeId === currentEmployee.id);
+                return {
+                    id: c.id,
+                    parentId: c.parentId,
+                    employeeId: c.employeeId,
+                    author: `${c.employee.firstName} ${c.employee.lastName || ''}`.trim(),
+                    profilePhotoUrl: c.employee.profilePhotoUrl,
+                    timestamp: c.createdAt,
+                    content: c.content,
+                    likesCount: c.likes.length,
+                    liked: commentLikedByMe,
+                    replies: []
+                };
+            });
+
+            const parentComments = allComments.filter(c => !c.parentId);
+            const replies = allComments.filter(c => c.parentId);
+
+            for (const reply of replies) {
+                const parent = parentComments.find(p => p.id === reply.parentId);
+                if (parent) {
+                    parent.replies.push(reply);
+                }
+            }
+
+            return {
+                id: post.id,
+                employeeId: post.employeeId,
+                author: `${post.employee.firstName} ${post.employee.lastName || ''}`.trim(),
+                profilePhotoUrl: post.employee.profilePhotoUrl,
+                designation: post.employee.designation?.name || 'N/A',
+                timestamp: post.createdAt,
+                content: post.content,
+                image: post.image,
+                likes: post.likes.length,
+                liked: likedByMe,
+                comments: parentComments
+            };
+        });
+
+        res.json(enrichedPosts);
+    } catch (error) {
+        console.error('Get Posts Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function createPost(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const userId = req.user.id;
+        const { content } = req.body;
+
+        const currentEmployee = await prisma.employee.findUnique({
+            where: { userId }
+        });
+        if (!currentEmployee) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+
+        const imagePath = req.file ? `/uploads/posts/${req.file.filename}` : null;
+
+        const newPost = await prisma.post.create({
+            data: {
+                companyId,
+                employeeId: currentEmployee.id,
+                content: content || '',
+                image: imagePath
+            },
+            include: {
+                employee: {
+                    include: {
+                        user: { select: { name: true } },
+                        designation: true
+                    }
+                }
+            }
+        });
+
+        res.status(201).json(newPost);
+    } catch (error) {
+        console.error('Create Post Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function toggleLikePost(req, res) {
+    try {
+        const userId = req.user.id;
+        const postId = parseInt(req.params.id, 10);
+
+        const currentEmployee = await prisma.employee.findUnique({
+            where: { userId }
+        });
+        if (!currentEmployee) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+
+        const existingLike = await prisma.postLike.findUnique({
+            where: {
+                postId_employeeId: {
+                    postId,
+                    employeeId: currentEmployee.id
+                }
+            }
+        });
+
+        if (existingLike) {
+            await prisma.postLike.delete({
+                where: { id: existingLike.id }
+            });
+            return res.json({ liked: false });
+        } else {
+            await prisma.postLike.create({
+                data: {
+                    postId,
+                    employeeId: currentEmployee.id
+                }
+            });
+            return res.json({ liked: true });
+        }
+    } catch (error) {
+        console.error('Toggle Like Post Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function addCommentPost(req, res) {
+    try {
+        const userId = req.user.id;
+        const postId = parseInt(req.params.id, 10);
+        const { content, parentId } = req.body;
+
+        if (!content || content.trim() === '') {
+            return res.status(400).json({ message: 'Comment content is required' });
+        }
+
+        const currentEmployee = await prisma.employee.findUnique({
+            where: { userId }
+        });
+        if (!currentEmployee) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+
+        const newComment = await prisma.postComment.create({
+            data: {
+                postId,
+                employeeId: currentEmployee.id,
+                content,
+                parentId: parentId ? parseInt(parentId, 10) : null
+            },
+            include: {
+                employee: {
+                    include: {
+                        user: { select: { name: true } }
+                    }
+                }
+            }
+        });
+
+        res.status(201).json({
+            id: newComment.id,
+            parentId: newComment.parentId,
+            author: `${newComment.employee.firstName} ${newComment.employee.lastName || ''}`.trim(),
+            timestamp: newComment.createdAt,
+            content: newComment.content
+        });
+    } catch (error) {
+        console.error('Add Comment Post Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+
+async function editPost(req, res) {
+    try {
+        const postId = parseInt(req.params.id, 10);
+        const userId = req.user.id;
+        const { content, imageRemoved } = req.body;
+
+        const currentEmployee = await prisma.employee.findUnique({
+            where: { userId }
+        });
+        if (!currentEmployee) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+
+        const post = await prisma.post.findUnique({
+            where: { id: postId }
+        });
+        if (!post) {
+            return res.status(404).json({ message: 'Post not found' });
+        }
+
+        if (post.employeeId !== currentEmployee.id) {
+            return res.status(403).json({ message: 'Forbidden: You are not authorized to edit this post' });
+        }
+
+        const dataToUpdate = { content: content || '' };
+        if (req.file) {
+            dataToUpdate.image = `/uploads/posts/${req.file.filename}`;
+        } else if (imageRemoved === 'true') {
+            dataToUpdate.image = null;
+        }
+
+        const updated = await prisma.post.update({
+            where: { id: postId },
+            data: dataToUpdate
+        });
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Edit Post Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function deletePost(req, res) {
+    try {
+        const postId = parseInt(req.params.id, 10);
+        const userId = req.user.id;
+
+        const currentEmployee = await prisma.employee.findUnique({
+            where: { userId }
+        });
+        if (!currentEmployee) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+
+        const post = await prisma.post.findUnique({
+            where: { id: postId }
+        });
+        if (!post) {
+            return res.status(404).json({ message: 'Post not found' });
+        }
+
+        if (post.employeeId !== currentEmployee.id && req.user.role !== 'HR' && req.user.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ message: 'Forbidden: You are not authorized to delete this post' });
+        }
+
+        await prisma.post.delete({
+            where: { id: postId }
+        });
+
+        res.json({ message: 'Post deleted successfully' });
+    } catch (error) {
+        console.error('Delete Post Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+
+async function editComment(req, res) {
+    try {
+        const commentId = parseInt(req.params.id, 10);
+        const userId = req.user.id;
+        const { content } = req.body;
+
+        if (!content || content.trim() === '') {
+            return res.status(400).json({ message: 'Comment content is required' });
+        }
+
+        const currentEmployee = await prisma.employee.findUnique({
+            where: { userId }
+        });
+        if (!currentEmployee) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+
+        const comment = await prisma.postComment.findUnique({
+            where: { id: commentId }
+        });
+        if (!comment) {
+            return res.status(404).json({ message: 'Comment not found' });
+        }
+
+        if (comment.employeeId !== currentEmployee.id) {
+            return res.status(403).json({ message: 'Forbidden: You are not authorized to edit this comment' });
+        }
+
+        const updated = await prisma.postComment.update({
+            where: { id: commentId },
+            data: { content }
+        });
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Edit Comment Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function deleteComment(req, res) {
+    try {
+        const commentId = parseInt(req.params.id, 10);
+        const userId = req.user.id;
+
+        const currentEmployee = await prisma.employee.findUnique({
+            where: { userId }
+        });
+        if (!currentEmployee) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+
+        const comment = await prisma.postComment.findUnique({
+            where: { id: commentId }
+        });
+        if (!comment) {
+            return res.status(404).json({ message: 'Comment not found' });
+        }
+
+        if (comment.employeeId !== currentEmployee.id && req.user.role !== 'HR' && req.user.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ message: 'Forbidden: You are not authorized to delete this comment' });
+        }
+
+        await prisma.postComment.delete({
+            where: { id: commentId }
+        });
+
+        res.json({ message: 'Comment deleted successfully' });
+    } catch (error) {
+        console.error('Delete Comment Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+
+async function toggleLikeComment(req, res) {
+    try {
+        const commentId = parseInt(req.params.id, 10);
+        const userId = req.user.id;
+
+        const currentEmployee = await prisma.employee.findUnique({
+            where: { userId }
+        });
+        if (!currentEmployee) {
+            return res.status(404).json({ message: 'Employee profile not found' });
+        }
+
+        const existingLike = await prisma.commentLike.findUnique({
+            where: {
+                commentId_employeeId: {
+                    commentId,
+                    employeeId: currentEmployee.id
+                }
+            }
+        });
+
+        if (existingLike) {
+            await prisma.commentLike.delete({
+                where: { id: existingLike.id }
+            });
+            return res.json({ liked: false });
+        } else {
+            await prisma.commentLike.create({
+                data: {
+                    commentId,
+                    employeeId: currentEmployee.id
+                }
+            });
+            return res.json({ liked: true });
+        }
+    } catch (error) {
+        console.error('Toggle Like Comment Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function getOnLeaveToday(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        const onLeave = await prisma.leaveRequest.findMany({
+            where: {
+                status: 'APPROVED',
+                startDate: { lte: todayEnd },
+                endDate: { gte: todayStart },
+                employee: {
+                    user: { companyId }
+                }
+            },
+            include: {
+                employee: {
+                    include: {
+                        user: { select: { name: true } },
+                        designation: { select: { name: true } },
+                        department: { select: { name: true } }
+                    }
+                },
+                leaveType: { select: { name: true } }
+            }
+        });
+
+        const result = onLeave.map(r => ({
+            id: r.id,
+            employeeName: `${r.employee.firstName} ${r.employee.lastName}`,
+            designation: r.employee.designation?.name || null,
+            department: r.employee.department?.name || null,
+            profilePhotoUrl: r.employee.profilePhotoUrl || null,
+            leaveType: r.leaveType?.name || 'Leave',
+            startDate: r.startDate,
+            endDate: r.endDate
+        }));
+
+        res.json(result);
+    } catch (error) {
+        console.error('Get On Leave Today Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function getNextHoliday(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const nextHoliday = await prisma.holiday.findFirst({
+            where: {
+                companyId,
+                holidayDate: { gte: today }
+            },
+            orderBy: { holidayDate: 'asc' }
+        });
+
+        res.json(nextHoliday || null);
+    } catch (error) {
+        console.error('Get Next Holiday Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     checkEmailAvailability,
     createEmployee,
@@ -854,5 +1431,17 @@ module.exports = {
     approveOnboarding,
     resendInvite,
     updateEmployeeDocuments,
-    requestOnboardingCorrection
+    requestOnboardingCorrection,
+    getCompanyEvents,
+    getPosts,
+    createPost,
+    toggleLikePost,
+    addCommentPost,
+    editPost,
+    deletePost,
+    editComment,
+    deleteComment,
+    toggleLikeComment,
+    getOnLeaveToday,
+    getNextHoliday
 };

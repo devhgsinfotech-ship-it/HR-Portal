@@ -37,6 +37,64 @@ const AdminDashboard = () => {
     totalTasks: 0
   });
 
+  // ── Clock & Attendance state for Admin login display ──
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [attendanceStatus, setAttendanceStatus] = useState<any>(null);
+  const [clockLoading, setClockLoading] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const fetchTodayAttendance = async () => {
+    try {
+      const res = await apiClient.get('/attendance/today');
+      setAttendanceStatus(res.data);
+    } catch (error) {
+      console.error('Failed to fetch admin attendance status:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchTodayAttendance();
+  }, []);
+
+  const handlePunch = async () => {
+    try {
+      setClockLoading(true);
+      if (attendanceStatus?.isCheckedIn) {
+        await apiClient.post('/attendance/check-out');
+      } else {
+        await apiClient.post('/attendance/check-in');
+      }
+      await fetchTodayAttendance();
+    } catch (error) {
+      console.error('Failed to punch in/out:', error);
+    } finally {
+      setClockLoading(false);
+    }
+  };
+
+  const getFormattedDate = () => {
+    const d = currentTime;
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  };
+
+  const getFormattedTimeParts = () => {
+    const timeString = currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+    const parts = timeString.split(':');
+    if (parts.length < 3) return { hhmm: '00:00', ssAmPm: ':00 AM' };
+    const hh = parts[0];
+    const mm = parts[1];
+    const ssWithAmPm = parts[2];
+    return { hhmm: `${hh}:${mm}`, ssAmPm: `:${ssWithAmPm}` };
+  };
+
+  const { hhmm, ssAmPm } = getFormattedTimeParts();
+
   useEffect(() => {
     const fetchSummary = async () => {
       try {
@@ -466,6 +524,41 @@ const AdminDashboard = () => {
                 </div>
               </div>
               <div className="d-flex align-items-center flex-wrap mb-1">
+                {/* ── Clock In / Clock Out Widget for Admin Login Display ── */}
+                <div className="card border-0 shadow-sm text-start me-3 mb-2" style={{ backgroundColor: '#162E5B', borderRadius: '12px', minWidth: '320px' }}>
+                  <div className="card-body p-3 text-white">
+                    <div className="d-flex align-items-center justify-content-between mb-2">
+                      <span className="text-white fs-13 fw-medium">Time Today - {getFormattedDate()}</span>
+                      <Link to={all_routes.attendanceemployee} className="text-white text-decoration-underline fs-12 fw-medium">View All</Link>
+                    </div>
+                    <span className="d-block text-white-50 fs-11 fw-bold tracking-wide mb-1" style={{ letterSpacing: '0.05em' }}>CURRENT TIME</span>
+                    <div className="d-flex align-items-end justify-content-between">
+                      <div className="d-flex align-items-baseline text-white me-3">
+                        <h1 className="display-4 text-white mb-0 fw-normal" style={{ fontSize: '2rem', lineHeight: '1' }}>{hhmm}</h1>
+                        <span className="fs-13 ms-1" style={{ opacity: 0.85 }}>{ssAmPm}</span>
+                      </div>
+                      <button 
+                        onClick={handlePunch} 
+                        disabled={clockLoading}
+                        className="btn px-3 py-2 border-0 fw-medium fs-13 rounded-3 text-white shadow-sm" 
+                        style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s', opacity: clockLoading ? 0.7 : 1 }}
+                      >
+                        {clockLoading ? (
+                          <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" />
+                        ) : attendanceStatus?.isCheckedIn ? (
+                          <>
+                            <i className="ti ti-clock-off me-1" /> Clock-out
+                          </>
+                        ) : (
+                          <>
+                            <i className="ti ti-clock-check me-1" /> Clock-in
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <Link
                   to="#"
                   className="btn btn-white me-2 mb-2"

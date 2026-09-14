@@ -86,6 +86,7 @@ const leaveRoutes = require('./src/routes/leaveRoutes');
 const attendanceRoutes = require('./src/routes/attendanceRoutes');
 const holidayRoutes = require('./src/routes/holidayRoutes'); // Added Holiday Routes
 const hrDashboardRoutes = require('./src/routes/hrDashboardRoutes');
+const announcementRoutes = require('./src/routes/announcementRoutes');
 
 // PSA Module Routes
 const clientRoutes = require('./src/routes/clientRoutes');
@@ -93,25 +94,43 @@ const projectRoutes = require('./src/routes/projectRoutes');
 const taskRoutes = require('./src/routes/taskRoutes');
 const timesheetRoutes = require('./src/routes/timesheetRoutes');
 const roleRoutes = require('./src/routes/roleRoutes');
+const payrollRoutes = require('./src/routes/payrollRoutes');
 
 // Initialize Cron Jobs
 require('./src/cron/attendanceJobs');
 
 app.use('/auth', authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/departments', departmentRoutes);
+app.use('/api/departments', departmentRoutes);
 app.use('/designations', designationRoutes);
+app.use('/api/designations', designationRoutes);
 app.use('/employees', employeeRoutes);
+app.use('/api/employees', employeeRoutes);
 app.use('/leaves', leaveRoutes);
+app.use('/api/leaves', leaveRoutes);
 app.use('/attendance', attendanceRoutes);
+app.use('/api/attendance', attendanceRoutes);
 app.use('/holidays', holidayRoutes);
+app.use('/api/holidays', holidayRoutes);
 app.use('/dashboard', hrDashboardRoutes);
+app.use('/api/dashboard', hrDashboardRoutes);
+app.use('/announcements', announcementRoutes);
+app.use('/api/announcements', announcementRoutes);
 
-// PSA Module
+// PSA & Payroll Modules
+app.use('/clients', clientRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/projects', projectRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/tasks', taskRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/timesheets', timesheetRoutes);
 app.use('/api/timesheets', timesheetRoutes);
+app.use('/roles', roleRoutes);
 app.use('/api/roles', roleRoutes);
+app.use('/payroll', payrollRoutes);
+app.use('/api/payroll', payrollRoutes);
 
 
 const prisma = require('./src/config/prisma');

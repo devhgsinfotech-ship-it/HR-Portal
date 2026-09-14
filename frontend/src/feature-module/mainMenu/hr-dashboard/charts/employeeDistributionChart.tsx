@@ -2,133 +2,108 @@ import React from "react";
 import ReactApexChart from "react-apexcharts";
 import { ApexOptions } from "apexcharts";
 
-const EmployeeDistributionChart: React.FC = () => {
+interface DistributionItem {
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+interface EmployeeDistributionChartProps {
+  distribution?: DistributionItem[];
+}
+
+const defaultDist: DistributionItem[] = [
+  { label: 'Web Developer', count: 4, percentage: 36 },
+  { label: 'SEO', count: 2, percentage: 18 },
+  { label: 'IT', count: 2, percentage: 18 },
+  { label: 'Web Designer', count: 2, percentage: 18 },
+  { label: 'PHP Developer', count: 1, percentage: 10 }
+];
+
+const EmployeeDistributionChart: React.FC<EmployeeDistributionChartProps> = ({ distribution }) => {
+  const dataToUse = (distribution && distribution.length > 0) ? distribution : defaultDist;
+  const categories = dataToUse.map(d => d.label);
+  const dataSeries = dataToUse.map(d => d.percentage);
+  const maxPercentage = Math.max(...dataSeries, 40) + 15;
+
   const series = [
     {
-      name: "Company",
-      data: [40, 20, 35, 10],
+      name: "Share",
+      data: dataSeries,
     },
   ];
 
   const options: ApexOptions = {
-    colors: ["#FF7129"],
-
     chart: {
-      height: 340,
+      height: 230,
       type: "bar",
-      toolbar: {
-        show: false,
-      },
+      toolbar: { show: false },
     },
-
+    colors: ["#6366f1"],
     fill: {
       type: "gradient",
       gradient: {
         shade: "light",
         type: "vertical",
-        shadeIntensity: 0.5,
+        shadeIntensity: 0.2,
+        gradientToColors: ["#a855f7"],
         inverseColors: false,
-        opacityFrom: 1,
-        opacityTo: 1,
+        opacityFrom: 0.9,
+        opacityTo: 0.9,
         stops: [0, 100],
-        colorStops: [
-          {
-            offset: 0,
-            color: "#FF7129",
-            opacity: 0.5,
-          },
-          {
-            offset: 100,
-            color: "#FFFFFF",
-            opacity: 0.5,
-          },
-        ],
       },
     },
-
-    responsive: [
-      {
-        breakpoint: 480,
-        options: {
-          legend: {
-            position: "bottom",
-            offsetY: 10,
-          },
-        },
-      },
-    ],
-
     plotOptions: {
       bar: {
-        columnWidth: "90%",
-        borderRadius: 10,
-        borderRadiusWhenStacked: "all",
-        horizontal: false,
-        dataLabels: {
-          position: "bottom",
-        },
-        colors: {
-          backgroundBarColors: ["#F8F9FA"],
-          backgroundBarOpacity: 0.5,
-          backgroundBarRadius: 10,
-        },
+        columnWidth: "40%",
+        borderRadius: 6,
+        borderRadiusApplication: "end",
+        dataLabels: { position: "top" },
       },
     },
-
     dataLabels: {
       enabled: true,
       formatter: (val: number) => `${val}%`,
-      offsetY: 10,
+      offsetY: -20,
       style: {
-        fontSize: "12px",
-        colors: ["#111827"],
-        fontWeight: "bold",
+        fontSize: "11px",
+        colors: ["var(--bs-body-color, #1e293b)"],
+        fontWeight: "600",
       },
     },
-
     xaxis: {
-      categories: ["Sales", "Front End", "React", "UI"],
+      categories: categories,
       axisBorder: { show: false },
       axisTicks: { show: false },
       labels: {
         style: {
-          colors: "#111827",
-          fontSize: "13px",
+          colors: "#64748b",
+          fontSize: "11px",
+          fontWeight: "500",
         },
       },
     },
-
     yaxis: {
-      min: 0,
-      max: 50,
-      labels: {
-        show: false,
-      },
-    },
-
-    grid: {
       show: false,
-      strokeDashArray: 5,
-      padding: {
-        left: -10,
-        right: -30,
-        bottom: -10,
-      },
+      max: maxPercentage,
     },
-
-    legend: {
-      show: false,
+    grid: { show: false },
+    legend: { show: false },
+    tooltip: {
+      enabled: true,
+      theme: "dark",
+      y: {
+        formatter: (val: number, opts: any) => {
+          const item = dataToUse[opts.dataPointIndex];
+          return `${val}% (${item?.count || 0} employee${(item?.count || 0) > 1 ? 's' : ''})`;
+        }
+      },
     },
   };
 
   return (
-    <div id="employee-distribution">
-      <ReactApexChart
-        options={options}
-        series={series}
-        type="bar"
-        height={340}
-      />
+    <div id="top-employee-distribution-chart">
+      <ReactApexChart options={options} series={series} type="bar" height={230} />
     </div>
   );
 };

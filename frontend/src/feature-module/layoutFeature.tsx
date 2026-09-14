@@ -33,7 +33,7 @@ const layoutConfig: Record<string, {
   "/layout-without-header": { dataLayout: "without-header", bodyClass: "" },
   "/layout-rtl": { dataLayout: "rtl", bodyClass: "layout-mode-rtl", rtlClass: "layout-mode-rtl" },
   "/layout-dark": { dataLayout: "default", bodyClass: "", dataTheme: "dark" },
-  "/layout-default": { dataLayout: "default", bodyClass: "" },
+  "/layout-default": { dataLayout: "detached", bodyClass: "" },
   "/layout-mini": { dataLayout: "mini", bodyClass: "mini-sidebar" },
 };
 
@@ -84,11 +84,17 @@ const LayoutFeature = React.memo(() => {
   const dataThemeRedux = useSelector(
     (state: RootState) => state.themeSetting.dataTheme
   );
+  const dataLayoutRedux = useSelector(
+    (state: RootState) => state.themeSetting.dataLayout
+  );
 
-  // Get layout config based on current path
+  // Get layout config based on current path or Redux theme customizer setting
   const currentLayoutConfig = useMemo(() => {
-    return layoutConfig[location.pathname] || { dataLayout: "default", bodyClass: "" };
-  }, [location.pathname]);
+    if (layoutConfig[location.pathname]) {
+      return layoutConfig[location.pathname];
+    }
+    return { dataLayout: dataLayoutRedux || "detached", bodyClass: "" };
+  }, [location.pathname, dataLayoutRedux]);
 
   // Memoize the CSS variables string
   const cssVariablesString = useMemo(

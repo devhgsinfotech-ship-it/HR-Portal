@@ -1,6 +1,7 @@
 import { Navigate, Route } from "react-router";
 import { all_routes } from "./all_routes";
 import TestTheme from "../test-theme";
+import OrgDirectory from "../feature-module/hrm/employees/OrgDirectory";
 
 // Import all lazy-loaded components
 import {
@@ -101,6 +102,7 @@ import {
   TicketGrid,
   TicketDetails,
   Holidays,
+  Announcements,
   PerformanceIndicator,
   PerformanceReview,
   PerformanceAppraisal,
@@ -195,6 +197,9 @@ import {
   PayRoll,
   PayRollOvertime,
   PayRollDeduction,
+  PayrollProcess,
+  PayrollSalaryConfig,
+  PayrollPayslips,
   Termination,
   Resignation,
   Promotion,
@@ -986,6 +991,11 @@ export const publicRoutes = [
     route: Route,
   },
   {
+    path: routes.announcements,
+    element: <Announcements />,
+    route: Route,
+  },
+  {
     path: routes.performanceReview,
     element: <PerformanceReview />,
     route: Route,
@@ -1510,7 +1520,7 @@ export const publicRoutes = [
   },
   {
     path: routes.payslip,
-    element: <PaySlip />,
+    element: <PayrollPayslips />,
     route: Route,
   },
   {
@@ -1529,8 +1539,33 @@ export const publicRoutes = [
     route: Route,
   },
   {
+    path: routes.payrollProcess,
+    element: <PayrollProcess />,
+    route: Route,
+  },
+  {
+    path: routes.payrollSalaryConfig,
+    element: <PayrollSalaryConfig />,
+    route: Route,
+  },
+  {
+    path: routes.payrollPayslips,
+    element: <PayrollPayslips />,
+    route: Route,
+  },
+  {
+    path: routes.payrollMyPayslips,
+    element: <PayrollPayslips />,
+    route: Route,
+  },
+  {
     path: routes.employeeList,
     element: <EmployeeList />,
+    route: Route,
+  },
+  {
+    path: routes.org,
+    element: <OrgDirectory />,
     route: Route,
   },
   {

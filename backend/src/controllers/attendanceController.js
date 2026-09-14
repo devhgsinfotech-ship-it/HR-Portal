@@ -285,9 +285,10 @@ async function getAttendanceLogs(req, res) {
         const shouldFilterByEmployee = role === 'EMPLOYEE' || isMine;
 
         let whereClause = {};
+        let employee = null;
 
         if (shouldFilterByEmployee) {
-            const employee = await prisma.employee.findUnique({ where: { userId } });
+            employee = await prisma.employee.findUnique({ where: { userId } });
             if (!employee) return res.json([]);
             whereClause.employeeId = employee.id;
         } else if (role === 'MANAGER') {
@@ -316,74 +317,309 @@ async function getAttendanceLogs(req, res) {
                 }
             },
             orderBy: { date: 'desc' },
-            take: 200
+            take: 500
         });
 
-        // Fetch policy and settings for dynamic calculations
+        // Fetch policy, settings, holidays, and leaves for dynamic calendar display
         let policy = null;
         let settings = null;
         if (companyId) {
-            policy = await prisma.attendancePolicy.findUnique({ where: { companyId } });
-            settings = await prisma.companySetting.findUnique({ where: { companyId } });
+            policy = await prisma.attendancePolicy.findUnique({ where: { companyId } }).catch(() => null);
+            settings = await prisma.companySetting.findUnique({ where: { companyId } }).catch(() => null);
         }
 
         const minFullDay = policy ? parseFloat(policy.minimumHoursForFullDay.toString()) : 8.0;
         const officeStartTime = settings?.officeStartTime || "09:00";
         const gracePeriod = policy?.lateGracePeriod || 15;
+        const weekOffDaysRaw = policy?.weekOffDays || "Saturday,Sunday";
+        const weekOffDays = typeof weekOffDaysRaw === 'string' ? weekOffDaysRaw.split(',') : (weekOffDaysRaw || ["Saturday", "Sunday"]);
 
-        // Add dynamic Keka-style calculations
-        const enrichedRecords = records.map(record => {
-            let lateMinutes = 0;
-            let overtimeHours = 0;
-            let breakMinutes = 0;
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
 
-            // Calculate Late
-            if (record.checkIn && officeStartTime) {
-                const checkInDate = new Date(record.checkIn);
-                
-                // Get local time in the specified timezone to avoid Docker/Node UTC vs Local mismatches
-                const formatter = new Intl.DateTimeFormat('en-US', { 
-                    timeZone: settings?.timezone || 'Asia/Kolkata', 
-                    hour: 'numeric', minute: 'numeric', hour12: false 
-                });
-                const parts = formatter.formatToParts(checkInDate);
-                const actualHour = parseInt(parts.find(p => p.type === 'hour').value) % 24;
-                const actualMin = parseInt(parts.find(p => p.type === 'minute').value);
-                
-                const [startHour, startMin] = officeStartTime.split(':').map(Number);
-                
-                const thresholdMinutes = startHour * 60 + startMin + gracePeriod;
-                const actualMinutes = actualHour * 60 + actualMin;
+        // Map existing punch records by YYYY-MM-DD
+        const recordMap = new Map();
+        records.forEach(r => {
+            const key = new Date(r.date).toISOString().split('T')[0];
+            recordMap.set(key, r);
+        });
 
-                if (actualMinutes > thresholdMinutes) {
-                    lateMinutes = actualMinutes - thresholdMinutes;
+        // If requesting single employee's logs (Employee Attendance page), generate FULL calendar view
+        if (shouldFilterByEmployee && employee) {
+            // Fetch employee's approved leave requests
+            const approvedLeaves = await prisma.leaveRequest.findMany({
+                where: {
+                    employeeId: employee.id,
+                    status: 'APPROVED'
+                }
+            });
+
+            // Fetch company holidays
+            const companyHolidays = companyId ? await prisma.holiday.findMany({
+                where: { companyId }
+            }) : [];
+
+            const holidayDateSet = new Set(
+                companyHolidays.map(h => new Date(h.holidayDate).toISOString().split('T')[0])
+            );
+
+            // Generate date list for the last 30 days up to Today
+            const resultList = [];
+            const dayCount = 30;
+
+            for (let i = 0; i < dayCount; i++) {
+                const d = new Date(todayStart);
+                d.setDate(d.getDate() - i);
+                const dateKey = d.toISOString().split('T')[0];
+
+                if (recordMap.has(dateKey)) {
+                    // Punched attendance record exists
+                    const rec = recordMap.get(dateKey);
+                    let lateMinutes = 0;
+                    let overtimeHours = 0;
+                    let breakMinutes = 0;
+                    let status = rec.status;
+                    let workingHours = rec.workingHours || 0;
+
+                    const recDate = new Date(rec.date);
+                    recDate.setHours(0, 0, 0, 0);
+                    if (recDate < todayStart && rec.checkIn && !rec.checkOut) {
+                        status = 'MISSING_PUNCH';
+                        workingHours = 0;
+                    }
+
+                    if (rec.checkIn && officeStartTime) {
+                        const checkInDate = new Date(rec.checkIn);
+                        const formatter = new Intl.DateTimeFormat('en-US', { 
+                            timeZone: settings?.timezone || 'Asia/Kolkata', 
+                            hour: 'numeric', minute: 'numeric', hour12: false 
+                        });
+                        const parts = formatter.formatToParts(checkInDate);
+                        const actualHour = parseInt(parts.find(p => p.type === 'hour').value) % 24;
+                        const actualMin = parseInt(parts.find(p => p.type === 'minute').value);
+                        
+                        const [startHour, startMin] = officeStartTime.split(':').map(Number);
+                        const thresholdMinutes = startHour * 60 + startMin + gracePeriod;
+                        const actualMinutes = actualHour * 60 + actualMin;
+
+                        if (actualMinutes > thresholdMinutes) {
+                            lateMinutes = actualMinutes - thresholdMinutes;
+                        }
+                    }
+
+                    if (workingHours && workingHours > minFullDay) {
+                        overtimeHours = parseFloat((workingHours - minFullDay).toFixed(2));
+                    }
+
+                    if (rec.breakIn && rec.breakOut) {
+                        const raw = Math.floor((new Date(rec.breakOut) - new Date(rec.breakIn)) / (1000 * 60));
+                        breakMinutes = Math.max(0, raw);
+                    } else if (rec.breakIn && !rec.breakOut) {
+                        const raw = Math.floor((new Date() - new Date(rec.breakIn)) / (1000 * 60));
+                        breakMinutes = Math.max(0, raw);
+                    }
+
+                    resultList.push({
+                        ...rec,
+                        status,
+                        workingHours,
+                        lateMinutes,
+                        overtimeHours,
+                        breakMinutes
+                    });
+                } else {
+                    // No punch record exists for this date -> Evaluate status (ON_LEAVE, HOLIDAY, WEEKLY_OFF, ABSENT)
+                    const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' });
+
+                    // Check Approved Leave
+                    const isOnLeave = approvedLeaves.some(l => {
+                        const start = new Date(l.startDate);
+                        start.setHours(0, 0, 0, 0);
+                        const end = new Date(l.endDate);
+                        end.setHours(23, 59, 59, 999);
+                        return d >= start && d <= end;
+                    });
+
+                    // Check Holiday
+                    const isHoliday = holidayDateSet.has(dateKey);
+
+                    // Check Weekly Off
+                    const isWeeklyOff = weekOffDays.includes(dayOfWeek);
+
+                    let status = 'ABSENT';
+                    if (isOnLeave) {
+                        status = 'ON_LEAVE';
+                    } else if (isHoliday) {
+                        status = 'HOLIDAY';
+                    } else if (isWeeklyOff) {
+                        status = 'WEEKLY_OFF';
+                    } else if (d.getTime() === todayStart.getTime()) {
+                        status = 'ABSENT';
+                    }
+
+                    resultList.push({
+                        id: `synthetic-${employee.id}-${dateKey}`,
+                        employeeId: employee.id,
+                        employee: employee,
+                        date: d.toISOString(),
+                        checkIn: null,
+                        checkOut: null,
+                        breakIn: null,
+                        breakOut: null,
+                        workingHours: 0,
+                        status: status,
+                        lateMinutes: 0,
+                        overtimeHours: 0,
+                        breakMinutes: 0
+                    });
                 }
             }
 
-            // Calculate Overtime
-            if (record.workingHours && record.workingHours > minFullDay) {
-                overtimeHours = parseFloat((record.workingHours - minFullDay).toFixed(2));
-            }
+            return res.json(resultList);
+        }
 
-            // Calculate Break (if they took a break today and ended it)
-            if (record.breakIn && record.breakOut) {
-                const raw = Math.floor((new Date(record.breakOut) - new Date(record.breakIn)) / (1000 * 60));
-                breakMinutes = Math.max(0, raw); // guard: never negative
-            } else if (record.breakIn && !record.breakOut) {
-                // Currently on break — live count
-                const raw = Math.floor((new Date() - new Date(record.breakIn)) / (1000 * 60));
-                breakMinutes = Math.max(0, raw);
+        // For Team / Admin Logs (multiple employees across company/department), generate full day-wise logs
+        const allEmployees = await prisma.employee.findMany({
+            where: companyId ? { user: { companyId } } : {},
+            include: {
+                user: { select: { id: true, name: true, email: true, role: true } },
+                department: true,
+                designation: true
             }
-
-            return {
-                ...record,
-                lateMinutes,
-                overtimeHours,
-                breakMinutes
-            };
         });
 
-        res.json(enrichedRecords);
+        const approvedLeaves = await prisma.leaveRequest.findMany({
+            where: {
+                status: 'APPROVED',
+                ...(companyId ? { employee: { user: { companyId } } } : {})
+            }
+        });
+
+        const companyHolidays = companyId ? await prisma.holiday.findMany({
+            where: { companyId }
+        }) : [];
+
+        const holidayDateSet = new Set(
+            companyHolidays.map(h => new Date(h.holidayDate).toISOString().split('T')[0])
+        );
+
+        // Index punched records by employeeId_YYYY-MM-DD
+        const empRecordMap = new Map();
+        records.forEach(r => {
+            const key = `${r.employeeId}_${new Date(r.date).toISOString().split('T')[0]}`;
+            empRecordMap.set(key, r);
+        });
+
+        const adminResultList = [];
+        const dayWindow = 30; // Track past 30 days for admin day-wise overview
+
+        for (let i = 0; i < dayWindow; i++) {
+            const d = new Date(todayStart);
+            d.setDate(d.getDate() - i);
+            const dateKey = d.toISOString().split('T')[0];
+            const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' });
+            const isHoliday = holidayDateSet.has(dateKey);
+            const isWeeklyOff = weekOffDays.includes(dayOfWeek);
+
+            for (const emp of allEmployees) {
+                const mapKey = `${emp.id}_${dateKey}`;
+
+                if (empRecordMap.has(mapKey)) {
+                    const rec = empRecordMap.get(mapKey);
+                    let lateMinutes = 0;
+                    let overtimeHours = 0;
+                    let breakMinutes = 0;
+                    let status = rec.status;
+                    let workingHours = rec.workingHours || 0;
+
+                    const recDate = new Date(rec.date);
+                    recDate.setHours(0, 0, 0, 0);
+                    if (recDate < todayStart && rec.checkIn && !rec.checkOut) {
+                        status = 'MISSING_PUNCH';
+                        workingHours = 0;
+                    }
+
+                    if (rec.checkIn && officeStartTime) {
+                        const checkInDate = new Date(rec.checkIn);
+                        const formatter = new Intl.DateTimeFormat('en-US', { 
+                            timeZone: settings?.timezone || 'Asia/Kolkata', 
+                            hour: 'numeric', minute: 'numeric', hour12: false 
+                        });
+                        const parts = formatter.formatToParts(checkInDate);
+                        const actualHour = parseInt(parts.find(p => p.type === 'hour').value) % 24;
+                        const actualMin = parseInt(parts.find(p => p.type === 'minute').value);
+                        
+                        const [startHour, startMin] = officeStartTime.split(':').map(Number);
+                        const thresholdMinutes = startHour * 60 + startMin + gracePeriod;
+                        const actualMinutes = actualHour * 60 + actualMin;
+
+                        if (actualMinutes > thresholdMinutes) {
+                            lateMinutes = actualMinutes - thresholdMinutes;
+                        }
+                    }
+
+                    if (workingHours && workingHours > minFullDay) {
+                        overtimeHours = parseFloat((workingHours - minFullDay).toFixed(2));
+                    }
+
+                    if (rec.breakIn && rec.breakOut) {
+                        const raw = Math.floor((new Date(rec.breakOut) - new Date(rec.breakIn)) / (1000 * 60));
+                        breakMinutes = Math.max(0, raw);
+                    } else if (rec.breakIn && !rec.breakOut) {
+                        const raw = Math.floor((new Date() - new Date(rec.breakIn)) / (1000 * 60));
+                        breakMinutes = Math.max(0, raw);
+                    }
+
+                    adminResultList.push({
+                        ...rec,
+                        status,
+                        workingHours,
+                        lateMinutes,
+                        overtimeHours,
+                        breakMinutes
+                    });
+                } else {
+                    // Check Leave
+                    const isOnLeave = approvedLeaves.some(l => {
+                        if (l.employeeId !== emp.id) return false;
+                        const start = new Date(l.startDate);
+                        start.setHours(0, 0, 0, 0);
+                        const end = new Date(l.endDate);
+                        end.setHours(23, 59, 59, 999);
+                        return d >= start && d <= end;
+                    });
+
+                    let status = 'ABSENT';
+                    if (isOnLeave) {
+                        status = 'ON_LEAVE';
+                    } else if (isHoliday) {
+                        status = 'HOLIDAY';
+                    } else if (isWeeklyOff) {
+                        status = 'WEEKLY_OFF';
+                    } else if (d.getTime() === todayStart.getTime()) {
+                        status = 'ABSENT';
+                    }
+
+                    adminResultList.push({
+                        id: `synthetic-${emp.id}-${dateKey}`,
+                        employeeId: emp.id,
+                        employee: emp,
+                        date: d.toISOString(),
+                        checkIn: null,
+                        checkOut: null,
+                        breakIn: null,
+                        breakOut: null,
+                        workingHours: 0,
+                        status: status,
+                        lateMinutes: 0,
+                        overtimeHours: 0,
+                        breakMinutes: 0
+                    });
+                }
+            }
+        }
+
+        res.json(adminResultList);
     } catch (error) {
         console.error('Error fetching attendance logs:', error);
         res.status(500).json({ message: 'Internal server error' });
@@ -668,13 +904,15 @@ async function getPolicy(req, res) {
                 allowWebPunch: true,
                 requireGeofence: false,
                 lateGracePeriod: 15,
-                autoCheckoutTime: '18:00'
+                autoCheckoutTime: '18:00',
+                weekOffDays: 'Saturday,Sunday'
             };
         }
 
-        const settings = await prisma.companySetting.findUnique({ where: { companyId } });
+        const settings = await prisma.companySetting.findUnique({ where: { companyId } }).catch(() => null);
         policy.officeStartTime = settings?.officeStartTime || "09:00";
         policy.officeEndTime = settings?.officeEndTime || "18:00";
+        policy.weekOffDays = policy.weekOffDays || "Saturday,Sunday";
 
         res.json(policy);
     } catch (error) {
@@ -689,8 +927,10 @@ async function upsertPolicy(req, res) {
         const companyId = req.user.companyId;
         if (!companyId) return res.status(400).json({ message: 'No company associated' });
         
-        const { minimumHoursForHalfDay, minimumHoursForFullDay, allowWebPunch, requireGeofence, officeStartTime, officeEndTime, lateGracePeriod, autoCheckoutTime } = req.body;
+        const { minimumHoursForHalfDay, minimumHoursForFullDay, allowWebPunch, requireGeofence, officeStartTime, officeEndTime, lateGracePeriod, autoCheckoutTime, weekOffDays } = req.body;
         
+        const weekOffDaysStr = Array.isArray(weekOffDays) ? weekOffDays.join(',') : (weekOffDays || 'Saturday,Sunday');
+
         const policy = await prisma.attendancePolicy.upsert({
             where: { companyId },
             create: {
@@ -700,7 +940,8 @@ async function upsertPolicy(req, res) {
                 allowWebPunch: allowWebPunch !== undefined ? allowWebPunch : true,
                 requireGeofence: requireGeofence !== undefined ? requireGeofence : false,
                 lateGracePeriod: parseInt(lateGracePeriod) || 15,
-                autoCheckoutTime: autoCheckoutTime || '18:00'
+                autoCheckoutTime: autoCheckoutTime || '18:00',
+                weekOffDays: weekOffDaysStr
             },
             update: {
                 minimumHoursForHalfDay: parseFloat(minimumHoursForHalfDay) || 4.0,
@@ -708,7 +949,8 @@ async function upsertPolicy(req, res) {
                 allowWebPunch: allowWebPunch !== undefined ? allowWebPunch : true,
                 requireGeofence: requireGeofence !== undefined ? requireGeofence : false,
                 lateGracePeriod: parseInt(lateGracePeriod) || 15,
-                autoCheckoutTime: autoCheckoutTime || '18:00'
+                autoCheckoutTime: autoCheckoutTime || '18:00',
+                weekOffDays: weekOffDaysStr
             }
         });
 
@@ -724,7 +966,7 @@ async function upsertPolicy(req, res) {
                     officeStartTime,
                     officeEndTime
                 }
-            });
+            }).catch(() => {});
             policy.officeStartTime = officeStartTime;
             policy.officeEndTime = officeEndTime;
         }

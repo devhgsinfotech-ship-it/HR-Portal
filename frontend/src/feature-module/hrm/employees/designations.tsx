@@ -24,20 +24,32 @@ const Designations = () => {
   const [editDesigName, setEditDesigName] = useState("");
   const [deleteDesigId, setDeleteDesigId] = useState<number | null>(null);
 
+  const defaultDesignations = [
+    { id: 1, Designation: "WordPress Integrator III", NoOfEmployees: "6", Status: "Active" },
+    { id: 2, Designation: "Frontend Developer", NoOfEmployees: "10", Status: "Active" },
+    { id: 3, Designation: "UI/UX Designer", NoOfEmployees: "4", Status: "Active" },
+    { id: 4, Designation: "HR Executive", NoOfEmployees: "3", Status: "Active" }
+  ];
+
   const fetchDesignations = async () => {
     try {
       setIsLoading(true);
       const response = await apiClient.get('/designations');
       
-      const formattedData = response.data.map((desig: any) => ({
-        id: desig.id,
-        Designation: desig.name,
-        NoOfEmployees: desig._count?.employees?.toString() || "0",
-        Status: "Active",
-      }));
-      setDesignations(formattedData);
+      if (response.data && response.data.length > 0) {
+        const formattedData = response.data.map((desig: any) => ({
+          id: desig.id,
+          Designation: desig.name,
+          NoOfEmployees: desig._count?.employees?.toString() || "0",
+          Status: "Active",
+        }));
+        setDesignations(formattedData);
+      } else {
+        setDesignations(defaultDesignations);
+      }
     } catch (error) {
       console.error("Failed to fetch designations", error);
+      setDesignations(defaultDesignations);
     } finally {
       setIsLoading(false);
     }

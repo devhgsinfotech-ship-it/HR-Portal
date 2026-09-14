@@ -15,6 +15,7 @@ router.delete('/types/:id', requireRole('HR', 'SUPER_ADMIN'), leaveController.de
 // Leave Requests
 router.get('/requests', leaveController.getLeaveRequests);
 router.post('/apply', leaveController.applyLeave);
+router.put('/requests/:id', leaveController.updateLeaveRequest);
 router.put('/requests/:id/status', requireRole('HR', 'MANAGER', 'SUPER_ADMIN'), leaveController.updateLeaveStatus);
 
 // Leave Balances

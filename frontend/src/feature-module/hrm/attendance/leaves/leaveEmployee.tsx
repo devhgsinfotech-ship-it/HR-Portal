@@ -29,8 +29,11 @@ const LeaveEmployee = () => {
   const [dbBalances, setDbBalances] = useState<any[]>([]);
   const [dbRequests, setDbRequests] = useState<any[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [newLeave, setNewLeave] = useState<any>({ leaveTypeId: '', startDate: null, endDate: null, reason: '' });
+  const [newLeave, setNewLeave] = useState<any>({ leaveTypeId: '', startDate: null, endDate: null, reason: '', leaveSession: 'FULL_DAY' });
   const [errorMsg, setErrorMsg] = useState('');
+  const [selectedLeave, setSelectedLeave] = useState<any>(null);
+  const [editLeave, setEditLeave] = useState<any>({ leaveTypeId: '', startDate: null, endDate: null, reason: '', leaveSession: 'FULL_DAY' });
+  const [editErrorMsg, setEditErrorMsg] = useState('');
 
   const fetchLeaveData = async () => {
     try {
@@ -43,6 +46,13 @@ const LeaveEmployee = () => {
       setDbBalances(balRes.data);
       const mapped = reqRes.data.map((r: any) => ({
         key: r.id,
+        id: r.id,
+        leaveTypeId: r.leaveTypeId,
+        rawStartDate: r.startDate,
+        rawEndDate: r.endDate,
+        rawReason: r.reason || '',
+        rawStatus: r.status,
+        rawLeaveSession: r.leaveSession || 'FULL_DAY',
         LeaveType: r.leaveType?.name || 'Leave',
         From: new Date(r.startDate).toLocaleDateString(),
         To: new Date(r.endDate).toLocaleDateString(),
@@ -74,15 +84,39 @@ const LeaveEmployee = () => {
         leaveTypeId: newLeave.leaveTypeId,
         startDate: newLeave.startDate.format('YYYY-MM-DD'),
         endDate: newLeave.endDate.format('YYYY-MM-DD'),
-        reason: newLeave.reason
+        reason: newLeave.reason,
+        leaveSession: newLeave.leaveSession
       });
-      const closeBtn = document.querySelector('#add_leaves .btn-close') as HTMLButtonElement;
+      const closeBtn = document.querySelector('#add_employee_leaves .btn-close') as HTMLButtonElement;
       if (closeBtn) closeBtn.click();
       fetchLeaveData();
-      setNewLeave({ leaveTypeId: '', startDate: null, endDate: null, reason: '' });
+      setNewLeave({ leaveTypeId: '', startDate: null, endDate: null, reason: '', leaveSession: 'FULL_DAY' });
       setErrorMsg('');
     } catch (err: any) {
       setErrorMsg(err.response?.data?.message || 'Error applying for leave');
+    }
+  };
+
+  const handleUpdateLeave = async (e: any) => {
+    e.preventDefault();
+    if (!selectedLeave || !editLeave.leaveTypeId || !editLeave.startDate || !editLeave.endDate) {
+      setEditErrorMsg('Please fill all required fields.');
+      return;
+    }
+    try {
+      await apiClient.put(`/leaves/requests/${selectedLeave.id}`, {
+        leaveTypeId: editLeave.leaveTypeId,
+        startDate: editLeave.startDate.format('YYYY-MM-DD'),
+        endDate: editLeave.endDate.format('YYYY-MM-DD'),
+        reason: editLeave.reason,
+        leaveSession: editLeave.leaveSession
+      });
+      const closeBtn = document.querySelector('#edit_employee_leaves .btn-close') as HTMLButtonElement;
+      if (closeBtn) closeBtn.click();
+      fetchLeaveData();
+      setEditErrorMsg('');
+    } catch (err: any) {
+      setEditErrorMsg(err.response?.data?.message || 'Error updating leave request');
     }
   };
 
@@ -207,17 +241,30 @@ const LeaveEmployee = () => {
     {
       title: "",
       dataIndex: "actions",
-      render: () => (
+      render: (_: any, record: any) => (
         <div className="action-icon d-inline-flex">
-          <button
-            type="button"
-            className="me-2"
-            data-bs-toggle="modal"
-            data-bs-target="#edit_leaves"
-            aria-label="Edit leave"
-          >
-            <i className="ti ti-edit" />
-          </button>
+          {record.rawStatus === 'PENDING' && (
+            <button
+              type="button"
+              className="me-2"
+              data-bs-toggle="modal"
+              data-bs-target="#edit_employee_leaves"
+              aria-label="Edit leave"
+              onClick={() => {
+                setSelectedLeave(record);
+                setEditLeave({
+                  leaveTypeId: String(record.leaveTypeId),
+                  startDate: dayjs(record.rawStartDate),
+                  endDate: dayjs(record.rawEndDate),
+                  reason: record.rawReason,
+                  leaveSession: record.rawLeaveSession || 'FULL_DAY'
+                });
+                setEditErrorMsg('');
+              }}
+            >
+              <i className="ti ti-edit" />
+            </button>
+          )}
           <button
             type="button"
             data-bs-toggle="modal"
@@ -309,7 +356,7 @@ const LeaveEmployee = () => {
                 <button
                   type="button"
                   data-bs-toggle="modal"
-                  data-bs-target="#add_leaves"
+                  data-bs-target="#add_employee_leaves"
                   className="btn btn-primary d-flex align-items-center"
                 >
                   <i className="ti ti-circle-plus me-2" />
@@ -559,7 +606,7 @@ const LeaveEmployee = () => {
       </div>
       {/* /Page Wrapper */}
       {/* Add Leaves */}
-      <div className="modal fade" id="add_leaves">
+      <div className="modal fade" id="add_employee_leaves">
         <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
@@ -626,6 +673,34 @@ const LeaveEmployee = () => {
 
                   <div className="col-md-12">
                     <div className="mb-3">
+                      <label className="form-label">Leave Duration</label>
+                      <div className="d-flex align-items-center gap-3 mt-1">
+                        {[
+                          { value: 'FULL_DAY', label: 'Full Day' },
+                          { value: 'FIRST_HALF', label: 'First Half' },
+                          { value: 'SECOND_HALF', label: 'Second Half' },
+                        ].map((opt) => (
+                          <div className="form-check me-2" key={opt.value}>
+                            <input
+                              className="form-check-input"
+                              type="radio"
+                              name="newLeaveSession"
+                              id={`new_${opt.value}`}
+                              value={opt.value}
+                              checked={newLeave.leaveSession === opt.value}
+                              onChange={() => setNewLeave((prev: any) => ({ ...prev, leaveSession: opt.value }))}
+                            />
+                            <label className="form-check-label" htmlFor={`new_${opt.value}`}>
+                              {opt.label}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-md-12">
+                    <div className="mb-3">
                       <label className="form-label">Reason</label>
                       <textarea
                         className="form-control"
@@ -655,7 +730,7 @@ const LeaveEmployee = () => {
       </div>
       {/* /Add Leaves */}
       {/* Edit Leaves */}
-      <div className="modal fade" id="edit_leaves">
+      <div className="modal fade" id="edit_employee_leaves">
         <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
@@ -669,29 +744,34 @@ const LeaveEmployee = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form>
+            <form onSubmit={handleUpdateLeave}>
               <div className="modal-body pb-0">
+                {editErrorMsg && <div className="alert alert-danger py-2 fs-13">{editErrorMsg}</div>}
                 <div className="row">
                   <div className="col-md-12">
                     <div className="mb-3">
-                      <label className="form-label">Leave Type</label>
-                      <CommonSelect
-                        className='select'
-                        options={leavetype}
-                        defaultValue={leavetype[1]}
-                      />
+                      <label className="form-label">Leave Type <span className="text-danger">*</span></label>
+                      <select
+                        className="form-select"
+                        value={editLeave.leaveTypeId}
+                        onChange={(e) => setEditLeave((prev: any) => ({ ...prev, leaveTypeId: e.target.value }))}
+                      >
+                        <option value="">Select Leave Type</option>
+                        {dbTypes.map((t: any) => (
+                          <option key={t.id} value={String(t.id)}>{t.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">From </label>
+                      <label className="form-label">From <span className="text-danger">*</span></label>
                       <div className="input-icon-end position-relative">
                         <DatePicker
                           className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
+                          format={{ format: "DD-MM-YYYY", type: "mask" }}
+                          value={editLeave.startDate}
+                          onChange={(date) => setEditLeave((prev: any) => ({ ...prev, startDate: date }))}
                           getPopupContainer={getModalContainer}
                           placeholder="DD-MM-YYYY"
                         />
@@ -703,14 +783,13 @@ const LeaveEmployee = () => {
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">To </label>
+                      <label className="form-label">To <span className="text-danger">*</span></label>
                       <div className="input-icon-end position-relative">
                         <DatePicker
                           className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
+                          format={{ format: "DD-MM-YYYY", type: "mask" }}
+                          value={editLeave.endDate}
+                          onChange={(date) => setEditLeave((prev: any) => ({ ...prev, endDate: date }))}
                           getPopupContainer={getModalContainer}
                           placeholder="DD-MM-YYYY"
                         />
@@ -718,91 +797,32 @@ const LeaveEmployee = () => {
                           <i className="ti ti-calendar text-gray-7" />
                         </span>
                       </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <div className="input-icon-end position-relative">
-                        <input
-                          type="text"
-                          className="form-control datetimepicker"
-                          defaultValue="15/01/24"
-                          disabled
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <CommonSelect
-                        className='select'
-                        options={selectChoose}
-                        defaultValue={selectChoose[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">No of Days</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue={'01'}
-                        disabled
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Remaining Days</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue={'07'}
-                        disabled
-                      />
                     </div>
                   </div>
                   <div className="col-md-12">
-                    <div className="d-flex align-items-center mb-3">
-                      <div className="form-check me-2">
-                        <input
-                          className="form-check-input"
-                          type="radio"
-                          name="leave1"
-                          defaultValue="option4"
-                          id="leave6"
-                        />
-                        <label className="form-check-label" htmlFor="leave6">
-                          Full Day
-                        </label>
-                      </div>
-                      <div className="form-check me-2">
-                        <input
-                          className="form-check-input"
-                          type="radio"
-                          name="leave1"
-                          defaultValue="option5"
-                          id="leave5"
-                        />
-                        <label className="form-check-label" htmlFor="leave5">
-                          First Half
-                        </label>
-                      </div>
-                      <div className="form-check me-2">
-                        <input
-                          className="form-check-input"
-                          type="radio"
-                          name="leave1"
-                          defaultValue="option6"
-                          id="leave4"
-                        />
-                        <label className="form-check-label" htmlFor="leave4">
-                          Second Half
-                        </label>
+                    <div className="mb-3">
+                      <label className="form-label">Leave Duration</label>
+                      <div className="d-flex align-items-center gap-3 mt-1">
+                        {[
+                          { value: 'FULL_DAY', label: 'Full Day' },
+                          { value: 'FIRST_HALF', label: 'First Half' },
+                          { value: 'SECOND_HALF', label: 'Second Half' },
+                        ].map((opt) => (
+                          <div className="form-check me-2" key={opt.value}>
+                            <input
+                              className="form-check-input"
+                              type="radio"
+                              name="editLeaveSession"
+                              id={`edit_${opt.value}`}
+                              value={opt.value}
+                              checked={editLeave.leaveSession === opt.value}
+                              onChange={() => setEditLeave((prev: any) => ({ ...prev, leaveSession: opt.value }))}
+                            />
+                            <label className="form-check-label" htmlFor={`edit_${opt.value}`}>
+                              {opt.label}
+                            </label>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -812,7 +832,9 @@ const LeaveEmployee = () => {
                       <textarea
                         className="form-control"
                         rows={3}
-                        defaultValue={" Going to Hospital "}
+                        value={editLeave.reason}
+                        onChange={(e) => setEditLeave((prev: any) => ({ ...prev, reason: e.target.value }))}
+                        placeholder="Reason for leave (optional)"
                       />
                     </div>
                   </div>
@@ -826,7 +848,7 @@ const LeaveEmployee = () => {
                 >
                   Cancel
                 </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                <button type="submit" className="btn btn-primary">
                   Save Changes
                 </button>
               </div>
