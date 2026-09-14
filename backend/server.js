@@ -137,7 +137,7 @@ const prisma = require('./src/config/prisma');
 app.get('/health', async (req, res) => {
     try {
         // Attempt a simple DB query
-        await prisma.$queryRaw`SELECT 1`;
+        await prisma.user.findFirst({ select: { id: true } });
         res.json({ status: 'ok', database: 'connected' });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message, stack: error.stack });
