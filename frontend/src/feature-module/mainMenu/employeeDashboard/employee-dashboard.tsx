@@ -13,8 +13,7 @@ import CommonFooter from "@/core/common/commonFooter/footer";
 import CommonTextEditor from "@/core/common/textEditor";
 import { APP_CONFIG } from "../../../environment";
 
-const EmployeeDashboard = () => {
-  const authUser = useSelector((state: any) => state.auth?.user);
+const LiveClockWidget = ({ handlePunch, attendanceStatus }: { handlePunch: () => void; attendanceStatus: any }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -42,6 +41,31 @@ const EmployeeDashboard = () => {
   };
 
   const { hhmm, ssAmPm } = getFormattedTimeParts();
+
+  return (
+    <div className="card border-0" style={{ backgroundColor: '#162E5B', borderRadius: '8px' }}>
+      <div className="card-body p-3 text-white">
+        <div className="d-flex align-items-center justify-content-between mb-4">
+          <span className="text-white fs-14 fw-medium">Time Today - {getFormattedDate()}</span>
+          <Link to={all_routes.attendanceemployee} className="text-white text-decoration-underline fs-14 fw-medium">View All</Link>
+        </div>
+        <span className="d-block text-white-50 fs-11 fw-bold tracking-wide mb-1" style={{ letterSpacing: '0.05em' }}>CURRENT TIME</span>
+        <div className="d-flex align-items-end justify-content-between">
+          <div className="d-flex align-items-baseline text-white">
+            <h1 className="display-4 text-white mb-0 fw-normal" style={{ fontSize: '2.5rem', lineHeight: '1' }}>{hhmm}</h1>
+            <span className="fs-14 ms-1" style={{ opacity: 0.85 }}>{ssAmPm}</span>
+          </div>
+          <button onClick={handlePunch} className="btn px-4 py-2 border-0 fw-medium fs-14 rounded-3 text-white" style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s' }}>
+            {attendanceStatus?.isCheckedIn ? "Clock-out" : "Clock-in"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EmployeeDashboard = () => {
+  const authUser = useSelector((state: any) => state.auth?.user);
   const [employeeData, setEmployeeData] = useState<any>(null);
   const [attendanceStatus, setAttendanceStatus] = useState<any>(null);
   const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
@@ -227,6 +251,33 @@ const EmployeeDashboard = () => {
 
   const fetchData = async () => {
     try {
+      const summaryRes = await apiClient.get('/employees/dashboard/summary').catch(() => null);
+      if (summaryRes?.data) {
+        const d = summaryRes.data;
+        const profileData = d.employee || (authUser ? {
+          firstName: authUser.name ? authUser.name.split(' ')[0] : (authUser.role || 'User'),
+          lastName: authUser.name ? authUser.name.split(' ').slice(1).join(' ') : '',
+          designation: { name: authUser.role === 'HR' ? 'HR Manager' : authUser.role === 'SUPER_ADMIN' ? 'System Administrator' : 'Employee' },
+          department: { name: authUser.role === 'HR' ? 'Human Resources' : 'Management' },
+          user: { email: authUser.email, name: authUser.name, role: authUser.role },
+          phone: 'N/A',
+          dateOfJoining: null,
+          reportingManager: null
+        } : null);
+
+        setEmployeeData(profileData);
+        setAttendanceStatus(d.attendanceStatus);
+        setAttendanceLogs(d.attendanceLogs || []);
+        setLeaveBalances(d.leaveBalances || []);
+        setLeaveRequests(d.leaveRequests || []);
+        setEvents(d.events || { birthdays: { today: [], upcoming: [] }, anniversaries: [], joinees: [] });
+        setPosts(d.posts || []);
+        setOnLeaveToday(d.onLeaveToday || []);
+        setNextHoliday(d.nextHoliday || null);
+        setAnnouncements(d.announcements || []);
+        return;
+      }
+
       const [empRes, statusRes, logsRes, balancesRes, requestsRes, eventsRes, postsRes, onLeaveRes, holidayRes, announceRes] = await Promise.all([
         apiClient.get('/employees/me').catch(() => ({ data: null })),
         apiClient.get('/attendance/today').catch(() => ({ data: null })),
@@ -703,7 +754,7 @@ const EmployeeDashboard = () => {
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
               <div className="d-inline-flex align-items-center bg-white border rounded-3 px-3 text-gray-9 fs-14 fw-medium" style={{ height: '40px', borderColor: '#E2E8F0' }}>
                 <i className="ti ti-calendar me-2 text-gray-5 fs-16" />
-                <span>{currentTime.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')}</span>
+                <span>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')}</span>
               </div>
               <div className="ms-2 mt-2 head-icons">
                 <CollapseHeader />
@@ -952,24 +1003,7 @@ const EmployeeDashboard = () => {
                 </div>
               </div>
 
-              <div className="card border-0" style={{ backgroundColor: '#162E5B', borderRadius: '8px' }}>
-                <div className="card-body p-3 text-white">
-                  <div className="d-flex align-items-center justify-content-between mb-4">
-                    <span className="text-white fs-14 fw-medium">Time Today - {getFormattedDate()}</span>
-                    <Link to={all_routes.attendanceemployee} className="text-white text-decoration-underline fs-14 fw-medium">View All</Link>
-                  </div>
-                  <span className="d-block text-white-50 fs-11 fw-bold tracking-wide mb-1" style={{ letterSpacing: '0.05em' }}>CURRENT TIME</span>
-                  <div className="d-flex align-items-end justify-content-between">
-                    <div className="d-flex align-items-baseline text-white">
-                      <h1 className="display-4 text-white mb-0 fw-normal" style={{ fontSize: '2.5rem', lineHeight: '1' }}>{hhmm}</h1>
-                      <span className="fs-14 ms-1" style={{ opacity: 0.85 }}>{ssAmPm}</span>
-                    </div>
-                    <button onClick={handlePunch} className="btn px-4 py-2 border-0 fw-medium fs-14 rounded-3 text-white" style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s' }}>
-                      {attendanceStatus?.isCheckedIn ? "Clock-out" : "Clock-in"}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <LiveClockWidget handlePunch={handlePunch} attendanceStatus={attendanceStatus} />
 
 
               <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>

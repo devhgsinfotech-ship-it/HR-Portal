@@ -62,6 +62,7 @@ router.get('/', employeeController.getEmployees);
 router.get('/:id', employeeController.getEmployeeById);
 
 // Dynamic Social Feed and Event routes for dashboard
+router.get('/dashboard/summary', employeeController.getDashboardSummary);
 router.get('/dashboard/events', employeeController.getCompanyEvents);
 router.get('/dashboard/posts', employeeController.getPosts);
 router.post('/dashboard/posts', upload.single('postImage'), employeeController.createPost);
