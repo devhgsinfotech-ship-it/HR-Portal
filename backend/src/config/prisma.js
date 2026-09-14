@@ -1,63 +1,87 @@
 // backend/src/config/prisma.js
-// Resilient Prisma Client wrapper with automatic recovery from Hostinger/Passenger thread panics
+// Prisma 5.x — uses library engine with keepalive ping to prevent
+// Hostinger Passenger from suspending the Tokio timer thread.
 
 const { PrismaClient } = require('@prisma/client');
 
-let prismaInstance = new PrismaClient();
+let prisma = new PrismaClient();
+let keepaliveTimer = null;
 
-function resetPrismaClient() {
-    try {
-        prismaInstance.$disconnect().catch(() => {});
-    } catch (e) {}
-    prismaInstance = new PrismaClient();
-    return prismaInstance;
+// Ping DB every 30 seconds to keep the Prisma Rust engine timer alive.
+// Hostinger Passenger suspends idle processes, destroying Tokio timers.
+function startKeepalive() {
+    if (keepaliveTimer) return;
+    keepaliveTimer = setInterval(async () => {
+        try {
+            await prisma.user.findFirst({ select: { id: true } });
+        } catch (err) {
+            // If panic happens on keepalive, recreate client
+            if (err.message && (err.message.includes('timer has gone away') || err.message.includes('PANIC'))) {
+                console.warn('[Prisma] Timer panic detected. Recreating client...');
+                await recreatePrisma();
+            }
+        }
+    }, 30000); // every 30 seconds
+    keepaliveTimer.unref(); // don't block process exit
 }
 
-const prismaProxy = new Proxy({}, {
-    get(_target, prop) {
-        const currentValue = prismaInstance[prop];
+async function recreatePrisma() {
+    try {
+        clearInterval(keepaliveTimer);
+        keepaliveTimer = null;
+        await prisma.$disconnect();
+    } catch (_) {}
+    prisma = new PrismaClient();
+    startKeepalive();
+}
 
-        if (typeof currentValue === 'function') {
+// Start keepalive on load
+startKeepalive();
+
+// Export a proxy that auto-recovers on Tokio panic
+const handler = {
+    get(target, prop) {
+        const value = prisma[prop];
+        if (prop === 'then' || prop === 'catch' || prop === 'finally') return undefined;
+
+        if (typeof value === 'object' && value !== null && prop !== '_') {
+            return new Proxy(value, {
+                get(modelTarget, modelProp) {
+                    const fn = prisma[prop][modelProp];
+                    if (typeof fn !== 'function') return fn;
+                    return async function (...args) {
+                        try {
+                            return await fn.apply(prisma[prop], args);
+                        } catch (err) {
+                            if (err.message && (err.message.includes('timer has gone away') || err.message.includes('PANIC'))) {
+                                console.warn(`[Prisma] Panic on ${prop}.${modelProp}. Recovering...`);
+                                await recreatePrisma();
+                                return await prisma[prop][modelProp].apply(prisma[prop], args);
+                            }
+                            throw err;
+                        }
+                    };
+                }
+            });
+        }
+
+        if (typeof value === 'function') {
             return async function (...args) {
                 try {
-                    return await currentValue.apply(prismaInstance, args);
+                    return await value.apply(prisma, args);
                 } catch (err) {
-                    if (err && err.message && (err.message.includes('timer has gone away') || err.message.includes('PANIC') || err.message.includes('Query Engine'))) {
-                        console.warn(`Prisma engine panic on '${String(prop)}'. Re-initializing client...`);
-                        resetPrismaClient();
-                        return await prismaInstance[prop].apply(prismaInstance, args);
+                    if (err.message && (err.message.includes('timer has gone away') || err.message.includes('PANIC'))) {
+                        console.warn(`[Prisma] Panic on ${prop}. Recovering...`);
+                        await recreatePrisma();
+                        return await prisma[prop].apply(prisma, args);
                     }
                     throw err;
                 }
             };
         }
 
-        if (typeof currentValue === 'object' && currentValue !== null) {
-            return new Proxy(currentValue, {
-                get(modelTarget, modelProp) {
-                    const method = modelTarget[modelProp];
-                    if (typeof method === 'function') {
-                        return async function (...args) {
-                            try {
-                                return await method.apply(modelTarget, args);
-                            } catch (err) {
-                                if (err && err.message && (err.message.includes('timer has gone away') || err.message.includes('PANIC') || err.message.includes('Query Engine'))) {
-                                    console.warn(`Prisma engine panic on '${String(prop)}.${String(modelProp)}'. Re-initializing client...`);
-                                    resetPrismaClient();
-                                    const freshModel = prismaInstance[prop];
-                                    return await freshModel[modelProp].apply(freshModel, args);
-                                }
-                                throw err;
-                            }
-                        };
-                    }
-                    return method;
-                }
-            });
-        }
-
-        return currentValue;
+        return value;
     }
-});
+};
 
-module.exports = prismaProxy;
+module.exports = new Proxy({}, handler);
