@@ -146,7 +146,6 @@ app.get('/health', async (req, res) => {
 
 // Auto-run prisma db push on startup to sync schema with database
 const { execSync } = require('child_process');
-const path = require('path');
 
 function getPrismaCmd() {
     const prismaCli = require.resolve('prisma/build/index.js');
