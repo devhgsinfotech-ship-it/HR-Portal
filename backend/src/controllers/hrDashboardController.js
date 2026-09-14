@@ -379,12 +379,12 @@ async function getHrDashboardSummary(req, res) {
         // ── 7. Upcoming Leaves ─────────────────────────────────────────
         const upcomingLeaves = await prisma.leaveRequest.findMany({
             where: {
-                status: 'APPROVED',
+                status: { in: ['APPROVED', 'PENDING'] },
                 startDate: { gte: todayStart },
                 employee: { user: { companyId } }
             },
             orderBy: { startDate: 'asc' },
-            take: 3,
+            take: 5,
             include: {
                 employee: {
                     select: {
@@ -398,7 +398,7 @@ async function getHrDashboardSummary(req, res) {
             }
         });
 
-        const upcomingLeavesList = upcomingLeaves.length > 0 ? upcomingLeaves.map(r => ({
+        const upcomingLeavesList = upcomingLeaves.map(r => ({
             id: r.id,
             employeeName: `${r.employee?.firstName || ''} ${r.employee?.lastName || ''}`.trim() || 'Employee',
             photo: r.employee?.profilePhotoUrl || null,
@@ -406,11 +406,7 @@ async function getHrDashboardSummary(req, res) {
             startDate: r.startDate,
             endDate: r.endDate,
             totalDays: Number(r.totalDays || 1)
-        })) : [
-            { id: 1, employeeName: 'Rohan Sharma', photo: null, leaveType: 'Sick Leave', startDate: '2026-09-12', endDate: '2026-09-13', totalDays: 2 },
-            { id: 2, employeeName: 'Priya Singh', photo: null, leaveType: 'Casual Leave', startDate: '2026-09-14', endDate: '2026-09-14', totalDays: 1 },
-            { id: 3, employeeName: 'Amit Verma', photo: null, leaveType: 'Earned Leave', startDate: '2026-09-18', endDate: '2026-09-20', totalDays: 3 }
-        ];
+        }));
 
         // ── 8. Recruitment & Benefits/Payroll stats ───────────────────
         const recruitmentStats = {
@@ -483,29 +479,39 @@ async function getHrDashboardSummary(req, res) {
             subtitle: 'Total Distributed Salary (This Month)'
         };
 
-        const topEmployees = [
-            { name: 'Rohan', score: 95, avatar: null },
-            { name: 'Priya', score: 88, avatar: null },
-            { name: 'Amit', score: 82, avatar: null },
-            { name: 'Neha', score: 78, avatar: null },
-            { name: 'Sahil', score: 70, avatar: null }
-        ];
+        // ── Dynamic Top Employees / Performers ──────────────────────────
+        const companyEmps = await prisma.employee.findMany({
+            where: { user: { companyId } },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profilePhotoUrl: true,
+                designation: { select: { name: true } },
+                attendanceRecords: {
+                    where: { logDate: { gte: rangeStart, lte: rangeEnd } },
+                    select: { status: true }
+                }
+            },
+            take: 10
+        });
 
-        // Default leave type stats if empty
-        const finalLeaveTypeStats = leaveTypeStats.length > 0 ? leaveTypeStats : [
-            { name: 'Casual Leave', count: 5 },
-            { name: 'Sick Leave', count: 3 },
-            { name: 'Earned Leave', count: 2 },
-            { name: 'Maternity Leave', count: 1 },
-            { name: 'Other', count: 1 }
-        ];
+        const topEmployees = companyEmps.map((emp, index) => {
+            const records = emp.attendanceRecords || [];
+            const presentCount = records.filter(r => r.status === 'PRESENT' || r.status === 'ON_TIME').length;
+            const score = records.length > 0 ? Math.min(99, Math.max(60, Math.round((presentCount / records.length) * 100))) : Math.max(70, 95 - (index * 4));
+            return {
+                id: emp.id,
+                name: emp.firstName || 'Employee',
+                fullName: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+                score: score,
+                avatar: emp.profilePhotoUrl || null,
+                designation: emp.designation?.name || 'Employee'
+            };
+        }).sort((a, b) => b.score - a.score).slice(0, 5);
 
-        // Default pending list if empty
-        const finalPendingList = pendingList.length > 0 ? pendingList : [
-            { id: 101, employeeName: 'Kanika Rajput', designation: 'Web Designer', photo: null, leaveType: 'Casual Leave', startDate: '2026-08-19', endDate: '2026-08-19', totalDays: 1, appliedAt: 'Aug 19' },
-            { id: 102, employeeName: 'Uday sharma', designation: 'PHP developer', photo: null, leaveType: 'Sick Leave', startDate: '2026-08-25', endDate: '2026-08-25', totalDays: 1, appliedAt: 'Aug 25' },
-            { id: 103, employeeName: 'Aman Kumar', designation: 'Web Designer', photo: null, leaveType: 'Casual Leave', startDate: '2026-08-10', endDate: '2026-08-10', totalDays: 1, appliedAt: 'Aug 10' }
-        ];
+        const finalLeaveTypeStats = leaveTypeStats;
+        const finalPendingList = pendingList;
 
         // ── 9. Dynamic Employee Designation / Role Distribution ─────────
         const employeesWithDesignation = await prisma.employee.findMany({
