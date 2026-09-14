@@ -848,7 +848,9 @@ const EmployeeDashboard = () => {
                     {employeeData?.firstName ? `${employeeData.firstName} ${employeeData.lastName}` : "Loading..."}
                   </h5>
                   <p className="text-gray-5 fs-13 mb-0 fw-medium">
-                    {employeeData?.designation?.name || "N/A"} • {employeeData?.department?.name || "N/A"}
+                    {employeeData?.designation?.name && employeeData?.department?.name
+                      ? `${employeeData.designation.name} • ${employeeData.department.name}`
+                      : (employeeData?.designation?.name || employeeData?.department?.name || employeeData?.user?.role || "Employee")}
                   </p>
 
                   <hr className="my-3 border-light-subtle" />
