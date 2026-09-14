@@ -12,18 +12,9 @@ interface Props {
 }
 
 const LeaveTypeChart: React.FC<Props> = ({ stats = [] }) => {
-  const defaultStats = [
-    { name: "Casual Leave", count: 5 },
-    { name: "Sick Leave", count: 3 },
-    { name: "Earned Leave", count: 2 },
-    { name: "Maternity Leave", count: 1 },
-    { name: "Other", count: 1 },
-  ];
-
-  const dataList = stats.length > 0 ? stats : defaultStats;
-  const series = dataList.map((s) => s.count);
-  const labels = dataList.map((s) => s.name);
-  const total = series.reduce((a, b) => a + b, 0);
+  const series = stats.length > 0 ? stats.map((s) => s.count) : [0];
+  const labels = stats.length > 0 ? stats.map((s) => s.name) : ["No Leaves"];
+  const total = stats.reduce((a, b) => a + b.count, 0);
 
   const options: ApexOptions = {
     chart: {

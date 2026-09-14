@@ -13,19 +13,19 @@ interface Props {
 }
 
 const TopEmployeeChart: React.FC<Props> = ({ employees = [] }) => {
-  const defaultEmps: TopEmp[] = [
-    { name: "Rohan", score: 95 },
-    { name: "Priya", score: 88 },
-    { name: "Amit", score: 82 },
-    { name: "Neha", score: 78 },
-    { name: "Sahil", score: 70 },
-  ];
+  if (employees.length === 0) {
+    return (
+      <div className="text-center text-muted py-4 fs-12">
+        <i className="ti ti-chart-bar-off fs-24 mb-1 d-block text-secondary opacity-50" />
+        No employee performance data available
+      </div>
+    );
+  }
 
-  const list = employees.length > 0 ? employees : defaultEmps;
   const series = [
     {
       name: "Performance",
-      data: list.map((e) => e.score),
+      data: employees.map((e) => e.score),
     },
   ];
 
@@ -46,7 +46,7 @@ const TopEmployeeChart: React.FC<Props> = ({ employees = [] }) => {
     },
     dataLabels: { enabled: false },
     xaxis: {
-      categories: list.map((e) => e.name),
+      categories: employees.map((e) => e.name),
       axisBorder: { show: false },
       axisTicks: { show: false },
       labels: {
@@ -76,7 +76,7 @@ const TopEmployeeChart: React.FC<Props> = ({ employees = [] }) => {
     <div id="top-employees-chart">
       <ReactApexChart options={options} series={series} type="bar" height={140} />
       <div className="d-flex justify-content-around text-center mt-1">
-        {list.map((emp, i) => (
+        {employees.map((emp: TopEmp, i: number) => (
           <div key={i} className="d-flex flex-column align-items-center">
             <div
               className="rounded-circle bg-primary-100 text-primary fw-bold d-flex align-items-center justify-content-center"

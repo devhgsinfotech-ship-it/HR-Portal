@@ -105,21 +105,11 @@ const defaultDash: DashData = {
     { id: 102, employeeName: 'Uday sharma', designation: 'PHP developer', photo: null, leaveType: 'Sick Leave', startDate: '2026-08-25', endDate: '2026-08-25', totalDays: 1, reason: '' },
     { id: 103, employeeName: 'Aman Kumar', designation: 'Web Designer', photo: null, leaveType: 'Casual Leave', startDate: '2026-08-10', endDate: '2026-08-10', totalDays: 1, reason: '' }
   ],
-  upcomingLeaves: [
-    { id: 1, employeeName: 'Rohan Sharma', photo: null, leaveType: 'Sick Leave', startDate: '2026-09-12', endDate: '2026-09-13', totalDays: 2 },
-    { id: 2, employeeName: 'Priya Singh', photo: null, leaveType: 'Casual Leave', startDate: '2026-09-14', endDate: '2026-09-14', totalDays: 1 },
-    { id: 3, employeeName: 'Amit Verma', photo: null, leaveType: 'Earned Leave', startDate: '2026-09-18', endDate: '2026-09-20', totalDays: 3 }
-  ],
+  upcomingLeaves: [],
   recruitmentStats: { applicants: 12, hired: 3, avgTimeDays: 8, interviewPositions: 2 },
   benefitsDeductions: { amount: 45000, formattedAmount: '₹ 45,000', subtitle: 'Insurance + 401(k)' },
   payrollStats: { amount: 325000, formattedAmount: '₹ 3,25,000', subtitle: 'Salary processing & reports' },
-  topEmployees: [
-    { name: 'Rohan', score: 95 },
-    { name: 'Priya', score: 88 },
-    { name: 'Amit', score: 82 },
-    { name: 'Neha', score: 78 },
-    { name: 'Sahil', score: 70 }
-  ]
+  topEmployees: []
 }
 
 const HrDashboard = () => {
@@ -639,31 +629,38 @@ const HrDashboard = () => {
                 </div>
 
                 <div className="d-flex flex-column gap-3">
-                  {dashData.upcomingLeaves.map((item) => {
-                    const tagStyle = item.leaveType.toLowerCase().includes('sick')
-                      ? 'bg-danger-subtle text-danger'
-                      : item.leaveType.toLowerCase().includes('casual')
-                      ? 'bg-info-subtle text-info'
-                      : 'bg-success-subtle text-success'
+                  {dashData.upcomingLeaves && dashData.upcomingLeaves.length > 0 ? (
+                    dashData.upcomingLeaves.map((item) => {
+                      const tagStyle = item.leaveType.toLowerCase().includes('sick')
+                        ? 'bg-danger-subtle text-danger'
+                        : item.leaveType.toLowerCase().includes('casual')
+                        ? 'bg-info-subtle text-info'
+                        : 'bg-success-subtle text-success'
 
-                    return (
-                      <div key={item.id} className="d-flex align-items-center justify-content-between p-2 rounded-3 border bg-light-subtle">
-                        <div className="d-flex align-items-center gap-2">
-                          <div className="rounded-circle bg-primary-subtle text-primary fw-bold d-flex align-items-center justify-content-center" style={{ width: 36, height: 36, fontSize: 13 }}>
-                            {item.employeeName.charAt(0)}
+                      return (
+                        <div key={item.id} className="d-flex align-items-center justify-content-between p-2 rounded-3 border bg-light-subtle">
+                          <div className="d-flex align-items-center gap-2">
+                            <div className="rounded-circle bg-primary-subtle text-primary fw-bold d-flex align-items-center justify-content-center" style={{ width: 36, height: 36, fontSize: 13 }}>
+                              {item.employeeName.charAt(0)}
+                            </div>
+                            <div>
+                              <h6 className="fw-semibold text-dark mb-0 fs-13">{item.employeeName}</h6>
+                              <span className="fs-11 text-muted">{item.leaveType} • {item.totalDays} day{item.totalDays > 1 ? 's' : ''}</span>
+                              <span className="fs-11 text-secondary d-block">{formatDateShort(item.startDate)}</span>
+                            </div>
                           </div>
-                          <div>
-                            <h6 className="fw-semibold text-dark mb-0 fs-13">{item.employeeName}</h6>
-                            <span className="fs-11 text-muted">{item.leaveType} • {item.totalDays} day{item.totalDays > 1 ? 's' : ''}</span>
-                            <span className="fs-11 text-secondary d-block">{formatDateShort(item.startDate)}</span>
-                          </div>
+                          <span className={`badge rounded-pill fs-11 ${tagStyle}`}>
+                            {item.leaveType.split(' ')[0]}
+                          </span>
                         </div>
-                        <span className={`badge rounded-pill fs-11 ${tagStyle}`}>
-                          {item.leaveType.split(' ')[0]}
-                        </span>
-                      </div>
-                    )
-                  })}
+                      )
+                    })
+                  ) : (
+                    <div className="text-center text-muted py-4 fs-13">
+                      <i className="ti ti-calendar-off fs-24 mb-1 d-block text-secondary opacity-50" />
+                      No upcoming leaves scheduled
+                    </div>
+                  )}
                 </div>
 
               </div>
