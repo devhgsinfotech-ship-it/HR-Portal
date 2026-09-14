@@ -144,5 +144,46 @@ app.get('/health', async (req, res) => {
     }
 });
 
+// Auto-run prisma db push on startup to sync schema with database
+const { execSync } = require('child_process');
+const path = require('path');
+
+function getPrismaCmd() {
+    const prismaCli = require.resolve('prisma/build/index.js');
+    return `"${process.execPath}" "${prismaCli}" db push --accept-data-loss`;
+}
+
+function runDbPush() {
+    try {
+        console.log('[DB] Running prisma db push to sync schema...');
+        const output = execSync(getPrismaCmd(), {
+            cwd: __dirname,
+            timeout: 60000,
+            env: { ...process.env }
+        }).toString();
+        console.log('[DB] Schema sync complete:', output.trim());
+    } catch (err) {
+        console.error('[DB] Schema sync failed:', err.message, err.stderr?.toString());
+    }
+}
+
+// TEMPORARY admin endpoint — remove after first successful sync
+app.get('/admin/db-push', async (req, res) => {
+    try {
+        const output = execSync(getPrismaCmd(), {
+            cwd: __dirname,
+            timeout: 60000,
+            env: { ...process.env }
+        }).toString();
+        res.json({ success: true, output });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message, stderr: err.stderr?.toString() });
+    }
+});
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    // Sync database schema after server starts
+    runDbPush();
+});
