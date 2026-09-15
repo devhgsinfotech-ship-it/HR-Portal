@@ -12,19 +12,18 @@ interface EmployeeDistributionChartProps {
   distribution?: DistributionItem[];
 }
 
-const defaultDist: DistributionItem[] = [
-  { label: 'Web Developer', count: 4, percentage: 36 },
-  { label: 'SEO', count: 2, percentage: 18 },
-  { label: 'IT', count: 2, percentage: 18 },
-  { label: 'Web Designer', count: 2, percentage: 18 },
-  { label: 'PHP Developer', count: 1, percentage: 10 }
-];
-
 const EmployeeDistributionChart: React.FC<EmployeeDistributionChartProps> = ({ distribution }) => {
-  const dataToUse = (distribution && distribution.length > 0) ? distribution : defaultDist;
+  const dataToUse = distribution || [];
+  if (dataToUse.length === 0) {
+    return (
+      <div className="d-flex align-items-center justify-content-center text-muted fs-13 py-5">
+        No employee role distribution data available
+      </div>
+    );
+  }
   const categories = dataToUse.map(d => d.label);
   const dataSeries = dataToUse.map(d => d.percentage);
-  const maxPercentage = Math.max(...dataSeries, 40) + 15;
+  const maxPercentage = Math.max(...dataSeries, 10) + 15;
 
   const series = [
     {

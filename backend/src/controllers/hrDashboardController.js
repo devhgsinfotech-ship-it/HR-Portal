@@ -3,7 +3,13 @@ const prisma = require('../config/prisma');
 
 async function getHrDashboardSummary(req, res) {
     try {
-        const companyId = parseInt(req.user.companyId, 10);
+        let companyId = parseInt(req.user.companyId, 10);
+        if (isNaN(companyId) || !companyId) {
+            const u = await prisma.user.findUnique({ where: { id: req.user.id }, select: { companyId: true } });
+            if (u && u.companyId) {
+                companyId = u.companyId;
+            }
+        }
 
         // ── Date range from query params (defaults to today) ──────────
         const now = new Date();
@@ -32,8 +38,25 @@ async function getHrDashboardSummary(req, res) {
         }
 
         // ── 1. Total employees ────────────────────────────────────────
-        const totalEmployees = await prisma.employee.count({
+        let totalEmployees = await prisma.employee.count({
             where: { user: { companyId } }
+        });
+
+        if (companyId) {
+            const activeUserCount = await prisma.user.count({
+                where: { companyId, accountStatus: 'ACTIVE' }
+            });
+            totalEmployees = Math.max(totalEmployees, activeUserCount);
+        }
+
+        // ── 1b. On Leave Today Count ──────────────────────────────────
+        const onLeaveTodayCount = await prisma.leaveRequest.count({
+            where: {
+                employee: { user: { companyId } },
+                status: 'APPROVED',
+                startDate: { lte: rangeEnd },
+                endDate: { gte: rangeStart }
+            }
         });
 
         // ── 2. New joinees in the date range ─────────────────────────
@@ -57,6 +80,9 @@ async function getHrDashboardSummary(req, res) {
             else if (t === 'PART_TIME' || t === 'INTERN') probationCount++;
             else fullTimeCount++; // FULL_TIME or default
         });
+        if (fullTimeCount === 0 && totalEmployees > 0) {
+            fullTimeCount = totalEmployees;
+        }
 
         // ── 4. Today's / Date Range attendance summary ───────────────
         const todayStart = rangeStart;
@@ -153,8 +179,78 @@ async function getHrDashboardSummary(req, res) {
             }
         });
 
-        // Absent = employees with no attendance record today
-        const absentCount = Math.max(0, (totalEmployees || 11) - (onTimeCount + lateCount));
+        // Absent = employees with no attendance record today and not on approved leave today
+        const absentCount = Math.max(0, totalEmployees - (onTimeCount + lateCount + onLeaveTodayCount));
+
+        // ── 4a-2. Dynamic KPI Trends (Comparing today vs yesterday) ──
+        let kpiTrends = {
+            totalEmployees: { text: 'Headcount', type: 'success' },
+            newJoinees: { text: newJoinees > 0 ? `+${newJoinees}` : 'No change', type: newJoinees > 0 ? 'success' : 'secondary' },
+            onLeaveToday: { text: 'No change', type: 'secondary' },
+            lateCount: { text: 'No change', type: 'secondary' },
+            absentCount: { text: 'No change', type: 'secondary' }
+        };
+        try {
+            const yesterdayStart = new Date(todayStart);
+            yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+            const yesterdayEnd = new Date(todayEnd);
+            yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
+
+            const yesterdayRecords = await prisma.attendanceRecord.findMany({
+                where: {
+                    employee: { user: { companyId } },
+                    OR: [
+                        { date: { gte: yesterdayStart, lte: yesterdayEnd } },
+                        { checkIn: { gte: yesterdayStart, lte: yesterdayEnd } }
+                    ]
+                }
+            });
+
+            let yesterdayLate = 0, yesterdayOnTime = 0;
+            yesterdayRecords.forEach(r => {
+                if (r.checkIn) {
+                    if (isLateRecord(r)) yesterdayLate++;
+                    else yesterdayOnTime++;
+                }
+            });
+
+            const yesterdayLeaveCount = await prisma.leaveRequest.count({
+                where: {
+                    employee: { user: { companyId } },
+                    status: 'APPROVED',
+                    startDate: { lte: yesterdayEnd },
+                    endDate: { gte: yesterdayStart }
+                }
+            });
+
+            const yesterdayAbsent = Math.max(0, totalEmployees - (yesterdayOnTime + yesterdayLate + yesterdayLeaveCount));
+
+            const activeCount = await prisma.user.count({ where: { companyId, accountStatus: 'ACTIVE' } });
+
+            const calcTrendBadge = (current, previous, isReverse = true) => {
+                if (previous === 0) {
+                    if (current === 0) return { text: '0% Change', type: 'secondary' };
+                    return { text: `+${current}`, type: isReverse ? 'danger' : 'success' };
+                }
+                const diff = current - previous;
+                if (diff === 0) {
+                    return { text: '0% Change', type: 'secondary' };
+                }
+                const pct = Math.round((Math.abs(diff) / previous) * 100);
+                if (diff > 0) return { text: `↑ ${pct}%`, type: isReverse ? 'danger' : 'success' };
+                return { text: `↓ ${pct}%`, type: isReverse ? 'success' : 'danger' };
+            };
+
+            kpiTrends = {
+                totalEmployees: { text: `${activeCount} Active`, type: 'success' },
+                newJoinees: { text: newJoinees > 0 ? `+${newJoinees}` : '0% Change', type: newJoinees > 0 ? 'success' : 'secondary' },
+                onLeaveToday: calcTrendBadge(onLeaveTodayCount, yesterdayLeaveCount, true),
+                lateCount: calcTrendBadge(lateCount, yesterdayLate, true),
+                absentCount: calcTrendBadge(absentCount, yesterdayAbsent, true)
+            };
+        } catch (tErr) {
+            console.error('Error calculating KPI trends:', tErr);
+        }
 
         // ── 4b. Dynamic Attendance Trend (Week / Month / Year) ─────────
         const isSameDay = (d1, d2) => {
@@ -221,7 +317,7 @@ async function getHrDashboardSummary(req, res) {
 
             if (i <= todayIndexInWeek) {
                 const checkedInTotal = dayOnTime + dayLate;
-                weekAbsent[i] = Math.max(0, (totalEmployees || 11) - checkedInTotal);
+                weekAbsent[i] = Math.max(0, totalEmployees - checkedInTotal);
             } else {
                 weekAbsent[i] = 0;
             }
@@ -261,7 +357,7 @@ async function getHrDashboardSummary(req, res) {
 
         for (let w = 0; w <= currentWeekNumInMonth; w++) {
             const recordedTotal = monthPresent[w] + monthLate[w];
-            const weekMaxPossible = (totalEmployees || 11) * 5;
+            const weekMaxPossible = totalEmployees * 5;
             monthAbsent[w] = Math.max(0, weekMaxPossible - recordedTotal);
         }
 
@@ -297,7 +393,7 @@ async function getHrDashboardSummary(req, res) {
 
         for (let m = 0; m <= currentMonthIdx; m++) {
             const recordedTotal = yearPresent[m] + yearLate[m];
-            const monthMaxPossible = (totalEmployees || 11) * 22;
+            const monthMaxPossible = totalEmployees * 22;
             yearAbsent[m] = Math.max(0, monthMaxPossible - recordedTotal);
         }
 
@@ -307,21 +403,21 @@ async function getHrDashboardSummary(req, res) {
                 present: weekPresent,
                 late: weekLate,
                 absent: weekAbsent,
-                maxScale: Math.max((totalEmployees || 11) + 2, 12)
+                maxScale: Math.max(totalEmployees + 2, 5)
             },
             month: {
                 categories: monthWeeks,
                 present: monthPresent,
                 late: monthLate,
                 absent: monthAbsent,
-                maxScale: Math.max((totalEmployees || 11) * 5 + 5, 50)
+                maxScale: Math.max(totalEmployees * 5 + 5, 20)
             },
             year: {
                 categories: yearMonths,
                 present: yearPresent,
                 late: yearLate,
                 absent: yearAbsent,
-                maxScale: Math.max((totalEmployees || 11) * 22 + 20, 250)
+                maxScale: Math.max(totalEmployees * 22 + 20, 50)
             }
         };
 
@@ -408,18 +504,68 @@ async function getHrDashboardSummary(req, res) {
             totalDays: Number(r.totalDays || 1)
         }));
 
-        // ── 8. Recruitment & Benefits/Payroll stats ───────────────────
-        const recruitmentStats = {
-            applicants: 12,
-            hired: 3,
-            avgTimeDays: 8,
-            interviewPositions: 2
-        };
+        // ── 8. Recruitment & Benefits/Payroll stats (Dynamic from SQL DB) ────────
+        let recruitmentStats = { applicants: 0, hired: 0, avgTimeDays: 0, interviewPositions: 0 };
+        try {
+            const pendingOnboarding = await prisma.employee.count({
+                where: {
+                    user: { companyId },
+                    onboardingStatus: { in: ['INVITED', 'PROFILE_SUBMITTED', 'DOCS_SUBMITTED', 'HR_REVIEW', 'CORRECTION_REQUESTED'] }
+                }
+            });
+            const completedOnboarding = await prisma.employee.findMany({
+                where: {
+                    user: { companyId },
+                    onboardingStatus: 'COMPLETED'
+                },
+                select: { createdAt: true, updatedAt: true }
+            });
+            const activeDesignations = await prisma.designation.count({ where: { companyId } });
+
+            let avgTimeDays = 0;
+            if (completedOnboarding.length > 0) {
+                const totalDays = completedOnboarding.reduce((sum, emp) => {
+                    const created = new Date(emp.createdAt).getTime();
+                    const updated = new Date(emp.updatedAt).getTime();
+                    return sum + Math.max(1, Math.round((updated - created) / (1000 * 60 * 60 * 24)));
+                }, 0);
+                avgTimeDays = Math.round(totalDays / completedOnboarding.length);
+            }
+
+            recruitmentStats = {
+                applicants: pendingOnboarding,
+                hired: completedOnboarding.length,
+                avgTimeDays: avgTimeDays,
+                interviewPositions: activeDesignations
+            };
+        } catch (rErr) {
+            console.error('Error fetching recruitment stats:', rErr);
+        }
+
+        let totalBenefitsDeductions = 0;
+        try {
+            const compSalaries = await prisma.salaryStructure.findMany({
+                where: {
+                    employee: { user: { companyId } },
+                    effectiveFrom: { lte: rangeEnd }
+                },
+                select: { pfDeduction: true, professionalTax: true, tdsDeduction: true, otherDeductions: true }
+            });
+            compSalaries.forEach(s => {
+                const pf = parseFloat(s.pfDeduction) || 0;
+                const pt = parseFloat(s.professionalTax) || 0;
+                const tds = parseFloat(s.tdsDeduction) || 0;
+                const other = parseFloat(s.otherDeductions) || 0;
+                totalBenefitsDeductions += (pf + pt + tds + other);
+            });
+        } catch (bErr) {
+            console.error('Error calculating benefits deductions:', bErr);
+        }
 
         const benefitsDeductions = {
-            amount: 45000,
-            formattedAmount: '₹ 45,000',
-            subtitle: 'Insurance + 401(k)'
+            amount: totalBenefitsDeductions,
+            formattedAmount: `₹ ${Number(totalBenefitsDeductions.toFixed(2)).toLocaleString('en-IN', { minimumFractionDigits: totalBenefitsDeductions % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 })}`,
+            subtitle: 'PF, Tax & Insurance Deductions'
         };
 
         // Calculate total salary expense / distributed salary for current month:
@@ -459,7 +605,10 @@ async function getHrDashboardSummary(req, res) {
                 thisMonthSalaryTotal = monthPayslips.reduce((sum, p) => sum + (parseFloat(p.netPay) || 0), 0);
             } else {
                 const salaryStructures = await prisma.salaryStructure.findMany({
-                    where: { employee: { user: { companyId } } },
+                    where: {
+                        employee: { user: { companyId } },
+                        effectiveFrom: { lte: rangeEnd }
+                    },
                     select: { netSalary: true, grossSalary: true }
                 });
                 if (salaryStructures.length > 0) {
@@ -489,7 +638,7 @@ async function getHrDashboardSummary(req, res) {
                 profilePhotoUrl: true,
                 designation: { select: { name: true } },
                 attendanceRecords: {
-                    where: { logDate: { gte: rangeStart, lte: rangeEnd } },
+                    where: { date: { gte: rangeStart, lte: rangeEnd } },
                     select: { status: true }
                 }
             },
@@ -540,24 +689,19 @@ async function getHrDashboardSummary(req, res) {
             percentage: Math.round((count / totalEmpCountForDist) * 100)
         }));
 
-        const finalEmployeeDistribution = employeeDistribution.length > 0 ? employeeDistribution : [
-            { label: 'Web Developer', count: 4, percentage: 36 },
-            { label: 'SEO', count: 2, percentage: 18 },
-            { label: 'IT', count: 2, percentage: 18 },
-            { label: 'Web Designer', count: 2, percentage: 18 },
-            { label: 'PHP Developer', count: 1, percentage: 10 }
-        ];
+        const finalEmployeeDistribution = employeeDistribution;
 
-        const dbHasEmployees = totalEmployees > 0;
         res.json({
-            totalEmployees: dbHasEmployees ? totalEmployees : 11,
+            totalEmployees: totalEmployees,
             newJoinees: newJoinees || 0,
-            fullTimeCount: dbHasEmployees ? fullTimeCount : 11,
-            contractCount: dbHasEmployees ? contractCount : 0,
-            probationCount: dbHasEmployees ? probationCount : 0,
+            fullTimeCount: fullTimeCount,
+            contractCount: contractCount || 0,
+            probationCount: probationCount || 0,
             onTimeCount: onTimeCount || 0,
             lateCount: lateCount || 0,
-            absentCount: dbHasEmployees ? Math.max(0, totalEmployees - onTimeCount - lateCount) : 11,
+            onLeaveTodayCount: onLeaveTodayCount || 0,
+            absentCount: Math.max(0, totalEmployees - onTimeCount - lateCount - onLeaveTodayCount),
+            kpiTrends,
             lateArrivalsList,
             attendanceTrend,
             employeeDistribution: finalEmployeeDistribution,
@@ -690,67 +834,12 @@ async function getAdminDashboardSummary(req, res) {
         let empList = [];
 
         if (allCompanyEmployees.length === 0) {
-            // Seeding/Fallback data for empty DB
-            clockedInList = [
-                {
-                    id: 'seed-1',
-                    name: 'Daniel Esbella',
-                    designation: 'UI/UX Designer',
-                    department: 'UI/UX Design',
-                    photo: null,
-                    checkIn: '09:15 AM',
-                    checkOut: '—',
-                    production: '—',
-                    isLate: false
-                },
-                {
-                    id: 'seed-2',
-                    name: 'Doglas Martini',
-                    designation: 'Project Manager',
-                    department: 'Management',
-                    photo: null,
-                    checkIn: '09:36 AM',
-                    checkOut: '—',
-                    production: '—',
-                    isLate: false
-                },
-                {
-                    id: 'seed-3',
-                    name: 'Brian Villalobos',
-                    designation: 'PHP Developer',
-                    department: 'Development',
-                    photo: null,
-                    checkIn: '09:15 AM',
-                    checkOut: '—',
-                    production: '—',
-                    isLate: false
-                }
-            ];
-            lateList = [
-                {
-                    id: 'seed-4',
-                    name: 'Anthony Lewis',
-                    designation: 'Marketing Head',
-                    department: 'Marketing',
-                    photo: null,
-                    checkIn: '08:35 AM',
-                    checkOut: '—',
-                    production: '—',
-                    isLate: true,
-                    lateMinutes: '30 Min'
-                }
-            ];
-            firstCheckIn = '10:30 AM';
-            lastCheckOut = '09:45 AM';
-            totalProduction = '09:21 Hrs';
-
-            empList = [
-                { id: 'seed-e1', name: 'Anthony Lewis', designation: 'Finance', department: 'Finance', photo: null },
-                { id: 'seed-e2', name: 'Brian Villalobos', designation: 'PHP Developer', department: 'Development', photo: null },
-                { id: 'seed-e3', name: 'Stephan Peralt', designation: 'Executive', department: 'Marketing', photo: null },
-                { id: 'seed-e4', name: 'Doglas Martini', designation: 'Project Manager', department: 'Manager', photo: null },
-                { id: 'seed-e5', name: 'Anthony Lewis', designation: 'UI/UX Designer', department: 'UI/UX Design', photo: null }
-            ];
+            clockedInList = [];
+            lateList = [];
+            firstCheckIn = '—';
+            lastCheckOut = '—';
+            totalProduction = '—';
+            empList = [];
         } else {
             // Map today's attendance records by employeeId
             const attendanceMap = {};

@@ -10,17 +10,16 @@ interface Props {
 }
 
 const EmployeeStatusChart: React.FC<Props> = ({ 
-  fullTime = 6, 
-  contract = 3, 
-  partTime = 2, 
-  totalCount = 11 
+  fullTime = 0, 
+  contract = 0, 
+  partTime = 0, 
+  totalCount = 0 
 }) => {
-  const displayTotal = totalCount || 11;
-  const ft = fullTime || 6;
-  const ct = contract || 3;
-  // Ensure the third segment balances so that ft + ct + pt strictly equals displayTotal (e.g. 6 + 3 + 2 = 11)
-  const pt = Math.max(0, displayTotal - ft - ct);
-  const series = [ft, ct, pt];
+  const displayTotal = totalCount !== undefined ? totalCount : (fullTime + contract + partTime);
+  const ft = fullTime ?? 0;
+  const ct = contract ?? 0;
+  const pt = partTime ?? 0;
+  const series = displayTotal > 0 ? [ft, ct, pt] : [1];
 
   const options: ApexOptions = {
     chart: {
@@ -28,7 +27,7 @@ const EmployeeStatusChart: React.FC<Props> = ({
       height: 180,
       sparkline: { enabled: false },
     },
-    colors: ["#3b82f6", "#8b5cf6", "#10b981"],
+    colors: displayTotal > 0 ? ["#3b82f6", "#8b5cf6", "#10b981"] : ["#e2e8f0"],
     labels: ["Full-Time", "Contract", "Part-Time/Intern"],
     legend: { show: false },
     dataLabels: { enabled: false },
