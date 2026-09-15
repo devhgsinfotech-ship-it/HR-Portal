@@ -34,6 +34,11 @@ interface UpcomingLeave {
   totalDays: number
 }
 
+interface KpiTrend {
+  text: string
+  type: string
+}
+
 interface DashData {
   totalEmployees: number
   newJoinees: number
@@ -42,7 +47,15 @@ interface DashData {
   probationCount: number
   onTimeCount: number
   lateCount: number
+  onLeaveTodayCount: number
   absentCount: number
+  kpiTrends?: {
+    totalEmployees: KpiTrend
+    newJoinees: KpiTrend
+    onLeaveToday: KpiTrend
+    lateCount: KpiTrend
+    absentCount: KpiTrend
+  }
   attendanceTrend?: Record<string, any>
   employeeDistribution?: { label: string; count: number; percentage: number }[]
   leaveTypeStats: { name: string; count: number }[]
@@ -55,60 +68,52 @@ interface DashData {
 }
 
 const defaultDash: DashData = {
-  totalEmployees: 11,
+  totalEmployees: 0,
   newJoinees: 0,
-  fullTimeCount: 11,
+  fullTimeCount: 0,
   contractCount: 0,
   probationCount: 0,
   onTimeCount: 0,
-  lateCount: 1,
-  absentCount: 10,
+  lateCount: 0,
+  onLeaveTodayCount: 0,
+  absentCount: 0,
+  kpiTrends: {
+    totalEmployees: { text: 'Headcount', type: 'success' },
+    newJoinees: { text: 'No change', type: 'secondary' },
+    onLeaveToday: { text: 'No change', type: 'secondary' },
+    lateCount: { text: 'No change', type: 'secondary' },
+    absentCount: { text: 'No change', type: 'secondary' }
+  },
   attendanceTrend: {
     week: {
       categories: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
       present: [0, 0, 0, 0, 0, 0, 0],
-      late: [1, 0, 0, 0, 0, 0, 0],
-      absent: [10, 0, 0, 0, 0, 0, 0],
-      maxScale: 15
+      late: [0, 0, 0, 0, 0, 0, 0],
+      absent: [0, 0, 0, 0, 0, 0, 0],
+      maxScale: 10
     },
     month: {
       categories: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-      present: [5, 0, 0, 0],
+      present: [0, 0, 0, 0],
       late: [0, 0, 0, 0],
-      absent: [50, 0, 0, 0],
-      maxScale: 60
+      absent: [0, 0, 0, 0],
+      maxScale: 20
     },
     year: {
       categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-      present: [0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0],
+      present: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       late: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      absent: [0, 0, 0, 0, 0, 0, 0, 0, 230, 0, 0, 0],
-      maxScale: 250
+      absent: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      maxScale: 100
     }
   },
-  employeeDistribution: [
-    { label: 'Web Developer', count: 4, percentage: 36 },
-    { label: 'SEO', count: 2, percentage: 18 },
-    { label: 'IT', count: 2, percentage: 18 },
-    { label: 'Web Designer', count: 2, percentage: 18 },
-    { label: 'PHP Developer', count: 1, percentage: 10 }
-  ],
-  leaveTypeStats: [
-    { name: 'Casual Leave', count: 5 },
-    { name: 'Sick Leave', count: 3 },
-    { name: 'Earned Leave', count: 2 },
-    { name: 'Maternity Leave', count: 1 },
-    { name: 'Other', count: 1 }
-  ],
-  pendingLeaves: [
-    { id: 101, employeeName: 'Kanika Rajput', designation: 'Web Designer', photo: null, leaveType: 'Casual Leave', startDate: '2026-08-19', endDate: '2026-08-19', totalDays: 1, reason: '' },
-    { id: 102, employeeName: 'Uday sharma', designation: 'PHP developer', photo: null, leaveType: 'Sick Leave', startDate: '2026-08-25', endDate: '2026-08-25', totalDays: 1, reason: '' },
-    { id: 103, employeeName: 'Aman Kumar', designation: 'Web Designer', photo: null, leaveType: 'Casual Leave', startDate: '2026-08-10', endDate: '2026-08-10', totalDays: 1, reason: '' }
-  ],
+  employeeDistribution: [],
+  leaveTypeStats: [],
+  pendingLeaves: [],
   upcomingLeaves: [],
-  recruitmentStats: { applicants: 12, hired: 3, avgTimeDays: 8, interviewPositions: 2 },
-  benefitsDeductions: { amount: 45000, formattedAmount: '₹ 45,000', subtitle: 'Insurance + 401(k)' },
-  payrollStats: { amount: 325000, formattedAmount: '₹ 3,25,000', subtitle: 'Salary processing & reports' },
+  recruitmentStats: { applicants: 0, hired: 0, avgTimeDays: 0, interviewPositions: 0 },
+  benefitsDeductions: { amount: 0, formattedAmount: '₹ 0', subtitle: 'Insurance + 401(k)' },
+  payrollStats: { amount: 0, formattedAmount: '₹ 0', subtitle: 'Salary processing & reports' },
   topEmployees: []
 }
 
@@ -352,8 +357,8 @@ const HrDashboard = () => {
                   <div className="hr-icon-circle hr-icon-blue">
                     <i className="ti ti-users-group" />
                   </div>
-                  <span className="badge rounded-pill bg-success-subtle text-success border border-success-subtle fs-11 fw-semibold">
-                    ↑ 12%
+                  <span className={`badge rounded-pill bg-${dashData.kpiTrends?.totalEmployees?.type || 'success'}-subtle text-${dashData.kpiTrends?.totalEmployees?.type || 'success'} border border-${dashData.kpiTrends?.totalEmployees?.type || 'success'}-subtle fs-11 fw-semibold`}>
+                    {dashData.kpiTrends?.totalEmployees?.text || 'Headcount'}
                   </span>
                 </div>
                 <p className="fs-12 text-muted mb-1 fw-medium">Total Employees</p>
@@ -371,8 +376,8 @@ const HrDashboard = () => {
                   <div className="hr-icon-circle hr-icon-green">
                     <i className="ti ti-user-plus" />
                   </div>
-                  <span className="badge rounded-pill bg-secondary-subtle text-secondary border fs-11 fw-medium">
-                    No change
+                  <span className={`badge rounded-pill bg-${dashData.kpiTrends?.newJoinees?.type || 'secondary'}-subtle text-${dashData.kpiTrends?.newJoinees?.type || 'secondary'} border fs-11 fw-medium`}>
+                    {dashData.kpiTrends?.newJoinees?.text || 'No change'}
                   </span>
                 </div>
                 <p className="fs-12 text-muted mb-1 fw-medium">New Joiners</p>
@@ -390,12 +395,12 @@ const HrDashboard = () => {
                   <div className="hr-icon-circle hr-icon-orange">
                     <i className="ti ti-calendar-event" />
                   </div>
-                  <span className="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle fs-11 fw-semibold">
-                    ↓ 50%
+                  <span className={`badge rounded-pill bg-${dashData.kpiTrends?.onLeaveToday?.type || 'secondary'}-subtle text-${dashData.kpiTrends?.onLeaveToday?.type || 'secondary'} border fs-11 fw-semibold`}>
+                    {dashData.kpiTrends?.onLeaveToday?.text || 'No change'}
                   </span>
                 </div>
                 <p className="fs-12 text-muted mb-1 fw-medium">On Leave Today</p>
-                <h3 className="fw-bold mb-1 text-dark fs-24">2</h3>
+                <h3 className="fw-bold mb-1 text-dark fs-24">{dashData.onLeaveTodayCount ?? 0}</h3>
                 <span className="fs-11 text-secondary">From last period</span>
               </div>
             </div>
@@ -409,8 +414,8 @@ const HrDashboard = () => {
                   <div className="hr-icon-circle hr-icon-rose">
                     <i className="ti ti-clock-x" />
                   </div>
-                  <span className="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle fs-11 fw-semibold">
-                    ↓ 100%
+                  <span className={`badge rounded-pill bg-${dashData.kpiTrends?.lateCount?.type || 'secondary'}-subtle text-${dashData.kpiTrends?.lateCount?.type || 'secondary'} border fs-11 fw-semibold`}>
+                    {dashData.kpiTrends?.lateCount?.text || 'No change'}
                   </span>
                 </div>
                 <p className="fs-12 text-muted mb-1 fw-medium">Late Arrivals Today</p>
@@ -428,8 +433,8 @@ const HrDashboard = () => {
                   <div className="hr-icon-circle hr-icon-purple">
                     <i className="ti ti-user-off" />
                   </div>
-                  <span className="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle fs-11 fw-semibold">
-                    ↑ 10%
+                  <span className={`badge rounded-pill bg-${dashData.kpiTrends?.absentCount?.type || 'secondary'}-subtle text-${dashData.kpiTrends?.absentCount?.type || 'secondary'} border fs-11 fw-semibold`}>
+                    {dashData.kpiTrends?.absentCount?.text || 'No change'}
                   </span>
                 </div>
                 <p className="fs-12 text-muted mb-1 fw-medium">Absent Today</p>
@@ -455,10 +460,10 @@ const HrDashboard = () => {
 
                 <div className="row align-items-center">
                   {(() => {
-                    const totalEmp = dashData.totalEmployees || 11;
-                    const ft = dashData.fullTimeCount !== undefined ? dashData.fullTimeCount : 11;
-                    const ct = dashData.contractCount !== undefined ? dashData.contractCount : 0;
-                    const pt = dashData.probationCount !== undefined ? dashData.probationCount : Math.max(0, totalEmp - ft - ct);
+                    const totalEmp = dashData.totalEmployees ?? 0;
+                    const ft = dashData.fullTimeCount ?? 0;
+                    const ct = dashData.contractCount ?? 0;
+                    const pt = dashData.probationCount ?? Math.max(0, totalEmp - ft - ct);
                     const ftPct = totalEmp > 0 ? Math.round((ft / totalEmp) * 100) : 100;
                     const ctPct = totalEmp > 0 ? Math.round((ct / totalEmp) * 100) : 0;
                     const ptPct = totalEmp > 0 ? Math.max(0, 100 - ftPct - ctPct) : 0;
@@ -679,25 +684,27 @@ const HrDashboard = () => {
                 <div className="row text-center my-3">
                   <div className="col-4">
                     <span className="fs-11 text-muted d-block mb-1">Applicants</span>
-                    <h4 className="fw-bold text-dark m-0">12</h4>
-                    <span className="fs-10 text-success">↑ 20%</span>
+                    <h4 className="fw-bold text-dark m-0">{dashData.recruitmentStats?.applicants || 0}</h4>
+                    <span className="fs-10 text-muted">Active</span>
                   </div>
                   <div className="col-4">
                     <span className="fs-11 text-muted d-block mb-1">Hired</span>
-                    <h4 className="fw-bold text-dark m-0">3</h4>
-                    <span className="fs-10 text-success">↑ 50%</span>
+                    <h4 className="fw-bold text-dark m-0">{dashData.recruitmentStats?.hired || 0}</h4>
+                    <span className="fs-10 text-success">Completed</span>
                   </div>
                   <div className="col-4">
                     <span className="fs-11 text-muted d-block mb-1">Avg Time</span>
-                    <h4 className="fw-bold text-dark m-0">8 days</h4>
-                    <span className="fs-10 text-success">↓ 30%</span>
+                    <h4 className="fw-bold text-dark m-0">{dashData.recruitmentStats?.avgTimeDays || 0} days</h4>
+                    <span className="fs-10 text-muted">Onboarding</span>
                   </div>
                 </div>
 
                 <div className="p-3 rounded-3 border border-primary-subtle bg-primary-subtle d-flex align-items-center justify-content-between mt-auto">
                   <div className="d-flex align-items-center gap-2">
                     <i className="ti ti-briefcase text-primary fs-18" />
-                    <span className="fs-12 text-dark font-medium">2 positions are in interview stage</span>
+                    <span className="fs-12 text-dark font-medium">
+                      {dashData.recruitmentStats?.interviewPositions || 0} active designation{(dashData.recruitmentStats?.interviewPositions || 0) === 1 ? '' : 's'}
+                    </span>
                   </div>
                   <Link to={all_routes.candidatesGrid} className="fs-12 fw-semibold text-primary text-decoration-none">
                     View Details →
@@ -812,14 +819,14 @@ const HrDashboard = () => {
                     <i className="ti ti-shield-check fs-24" />
                   </div>
                   <div>
-                    <h6 className="fw-semibold text-dark mb-0 fs-13">Insurance + 401(k)</h6>
+                    <h6 className="fw-semibold text-dark mb-0 fs-13">{dashData.benefitsDeductions?.subtitle || 'PF, Tax & Deductions'}</h6>
                     <span className="fs-11 text-muted">Employee benefits &amp; deductions</span>
                   </div>
                 </div>
 
                 <div className="mt-3">
-                  <h4 className="fw-bold text-dark m-0">₹ 45,000</h4>
-                  <span className="fs-11 text-muted">This month</span>
+                  <h4 className="fw-bold text-dark m-0">{dashData.benefitsDeductions?.formattedAmount || '₹ 0'}</h4>
+                  <span className="fs-11 text-muted">Total deductions</span>
                 </div>
               </div>
             </div>
@@ -845,7 +852,7 @@ const HrDashboard = () => {
                 </div>
 
                 <div className="mt-3">
-                  <h4 className="fw-bold text-dark m-0">{dashData.payrollStats?.formattedAmount || '₹ 3,25,000'}</h4>
+                  <h4 className="fw-bold text-dark m-0">{dashData.payrollStats?.formattedAmount || '₹ 0'}</h4>
                   <span className="fs-11 text-muted">Total Distributed Salary (This month)</span>
                 </div>
               </div>
