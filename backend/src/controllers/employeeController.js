@@ -244,7 +244,7 @@ async function updateEmployee(req, res) {
         const companyId = req.user.companyId;
         const { 
             firstName, lastName, phone, departmentId, designationId, dateOfJoining, email, password, role, reportingManagerId, companyRoleId,
-            basic, hra, conveyance, medicalAllowance, specialAllowance, pfDeduction, professionalTax, otherDeductions, grossSalary, netSalary,
+            basic, hra, conveyance, medicalAllowance, specialAllowance, bonus, pfDeduction, pfEmployer, professionalTax, tdsDeduction, otherDeductions, grossSalary, netSalary,
             // Profile & Bio
             about, education, experience,
             // Personal Information
@@ -369,8 +369,11 @@ async function updateEmployee(req, res) {
                     conveyance: conveyance ? parseFloat(conveyance) : 0,
                     medicalAllowance: medicalAllowance ? parseFloat(medicalAllowance) : 0,
                     specialAllowance: specialAllowance ? parseFloat(specialAllowance) : 0,
+                    bonus: bonus ? parseFloat(bonus) : 0,
                     pfDeduction: pfDeduction ? parseFloat(pfDeduction) : 0,
+                    pfEmployer: pfEmployer ? parseFloat(pfEmployer) : 0,
                     professionalTax: professionalTax ? parseFloat(professionalTax) : 0,
+                    tdsDeduction: tdsDeduction ? parseFloat(tdsDeduction) : 0,
                     otherDeductions: otherDeductions ? parseFloat(otherDeductions) : 0,
                     grossSalary: parseFloat(grossSalary),
                     netSalary: netSalary ? parseFloat(netSalary) : 0
@@ -382,8 +385,11 @@ async function updateEmployee(req, res) {
                     conveyance: conveyance ? parseFloat(conveyance) : 0,
                     medicalAllowance: medicalAllowance ? parseFloat(medicalAllowance) : 0,
                     specialAllowance: specialAllowance ? parseFloat(specialAllowance) : 0,
+                    bonus: bonus ? parseFloat(bonus) : 0,
                     pfDeduction: pfDeduction ? parseFloat(pfDeduction) : 0,
+                    pfEmployer: pfEmployer ? parseFloat(pfEmployer) : 0,
                     professionalTax: professionalTax ? parseFloat(professionalTax) : 0,
+                    tdsDeduction: tdsDeduction ? parseFloat(tdsDeduction) : 0,
                     otherDeductions: otherDeductions ? parseFloat(otherDeductions) : 0,
                     grossSalary: parseFloat(grossSalary),
                     netSalary: netSalary ? parseFloat(netSalary) : 0
