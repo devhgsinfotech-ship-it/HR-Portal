@@ -423,10 +423,13 @@ async function acceptInvite(req, res) {
         // Secondary operations (Cleanup tokens & employee onboarding status) wrapped safely
         try {
             if (targetEmployeeId) {
-                await prisma.employee.update({
-                    where: { id: targetEmployeeId },
-                    data: { onboardingStatus: 'COMPLETED' }
-                }).catch(e => console.warn('Employee onboardingStatus update notice:', e.message));
+                const emp = await prisma.employee.findUnique({ where: { id: targetEmployeeId } });
+                if (emp && emp.onboardingStatus === 'INVITED') {
+                    await prisma.employee.update({
+                        where: { id: targetEmployeeId },
+                        data: { onboardingStatus: 'PROFILE_SUBMITTED' }
+                    }).catch(e => console.warn('Employee onboardingStatus update notice:', e.message));
+                }
             }
 
             if (inviteTokenIdToDelete) {
