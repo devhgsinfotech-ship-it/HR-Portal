@@ -299,6 +299,61 @@ async function verifyEmail(req, res) {
     }
 }
 
+async function verifyInviteToken(req, res) {
+    try {
+        const rawToken = (req.query.token || req.body.token || '').trim();
+        if (!rawToken) {
+            return res.status(400).json({ valid: false, message: 'Token is required' });
+        }
+
+        let invite = await prisma.inviteToken.findFirst({
+            where: { token: rawToken },
+            include: { user: { include: { company: true } }, employee: true }
+        });
+
+        if (invite) {
+            if (new Date() > invite.expiresAt) {
+                return res.status(400).json({ valid: false, message: 'Invitation link has expired (valid for 48 hours). Please ask HR to resend the invitation link.' });
+            }
+            return res.json({
+                valid: true,
+                type: 'INVITE',
+                employeeName: invite.employee ? `${invite.employee.firstName} ${invite.employee.lastName || ''}`.trim() : invite.user.name,
+                companyName: invite.user.company?.name || 'Company',
+                logoUrl: invite.user.company?.logoUrl || null,
+                subdomain: invite.user.company?.subdomain || null
+            });
+        }
+
+        const resetTokenRecord = await prisma.passwordResetToken.findFirst({
+            where: { token: rawToken, used: false },
+            include: { user: { include: { company: true } } }
+        });
+
+        if (resetTokenRecord) {
+            if (new Date() > resetTokenRecord.expiresAt) {
+                return res.status(400).json({ valid: false, message: 'Password reset link has expired. Please request a new link.' });
+            }
+            return res.json({
+                valid: true,
+                type: 'RESET',
+                employeeName: resetTokenRecord.user.name,
+                companyName: resetTokenRecord.user.company?.name || 'Company',
+                logoUrl: resetTokenRecord.user.company?.logoUrl || null,
+                subdomain: resetTokenRecord.user.company?.subdomain || null
+            });
+        }
+
+        return res.status(400).json({
+            valid: false,
+            message: 'This invitation or setup link is invalid, expired, or was already used. If you have already set up your password, please log in.'
+        });
+    } catch (error) {
+        console.error('Verify Invite Token Error:', error);
+        res.status(500).json({ valid: false, message: 'Internal server error' });
+    }
+}
+
 async function acceptInvite(req, res) {
     try {
         const { token, password } = req.body;
@@ -306,35 +361,80 @@ async function acceptInvite(req, res) {
             return res.status(400).json({ message: 'Token and password are required' });
         }
 
-        const invite = await prisma.inviteToken.findUnique({
-            where: { token },
+        const cleanToken = token.trim();
+
+        if (password.length < 8) {
+            return res.status(400).json({ message: 'Password must be at least 8 characters long' });
+        }
+
+        let invite = await prisma.inviteToken.findFirst({
+            where: { token: cleanToken },
             include: { user: true, employee: true }
         });
 
-        if (!invite) {
-            return res.status(400).json({ message: 'Invalid or expired invite token' });
+        if (invite) {
+            if (new Date() > invite.expiresAt) {
+                return res.status(400).json({ message: 'Invitation link has expired. Please ask HR to resend the invite.' });
+            }
+
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            await prisma.$transaction([
+                prisma.user.update({
+                    where: { id: invite.userId },
+                    data: {
+                        password: hashedPassword,
+                        accountStatus: 'ACTIVE'
+                    }
+                }),
+                prisma.employee.updateMany({
+                    where: { userId: invite.userId },
+                    data: { onboardingStatus: 'COMPLETED' }
+                }),
+                prisma.inviteToken.delete({
+                    where: { id: invite.id }
+                })
+            ]);
+
+            return res.json({ message: 'Account set up successfully! You can now log in.' });
         }
 
-        if (new Date() > invite.expiresAt) {
-            return res.status(400).json({ message: 'Invite token has expired' });
+        const resetTokenRecord = await prisma.passwordResetToken.findFirst({
+            where: { token: cleanToken, used: false },
+            include: { user: true }
+        });
+
+        if (resetTokenRecord) {
+            if (new Date() > resetTokenRecord.expiresAt) {
+                return res.status(400).json({ message: 'Reset token has expired. Please request a new link.' });
+            }
+
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            await prisma.$transaction([
+                prisma.user.update({
+                    where: { id: resetTokenRecord.userId },
+                    data: {
+                        password: hashedPassword,
+                        accountStatus: 'ACTIVE'
+                    }
+                }),
+                prisma.employee.updateMany({
+                    where: { userId: resetTokenRecord.userId },
+                    data: { onboardingStatus: 'COMPLETED' }
+                }),
+                prisma.passwordResetToken.update({
+                    where: { id: resetTokenRecord.id },
+                    data: { used: true }
+                })
+            ]);
+
+            return res.json({ message: 'Account set up successfully! You can now log in.' });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        await prisma.$transaction([
-            prisma.user.update({
-                where: { id: invite.userId },
-                data: {
-                    password: hashedPassword,
-                    accountStatus: 'ACTIVE'
-                }
-            }),
-            prisma.inviteToken.delete({
-                where: { id: invite.id }
-            })
-        ]);
-
-        res.json({ message: 'Account set up successfully! You can now login.' });
+        return res.status(400).json({
+            message: 'This invitation link is invalid, expired, or has already been used. If you have already set up your account, please log in.'
+        });
     } catch (error) {
         console.error('Accept Invite Error:', error);
         res.status(500).json({ message: 'Internal server error' });
@@ -555,6 +655,7 @@ module.exports = {
     login,
     register,
     verifyEmail,
+    verifyInviteToken,
     acceptInvite,
     resendVerification,
     forgotPassword,
