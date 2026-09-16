@@ -957,6 +957,52 @@ async function getCompanyEvents(req, res) {
     }
 }
 
+async function resolveEmployeeForUser(reqUser) {
+    if (!reqUser) return null;
+    let employee = await prisma.employee.findFirst({
+        where: {
+            OR: [
+                { userId: reqUser.id },
+                { email: reqUser.email }
+            ]
+        },
+        include: { designation: true }
+    });
+
+    if (!employee && reqUser.companyId) {
+        const nameParts = (reqUser.name || 'Company Admin').trim().split(' ');
+        const firstName = nameParts[0] || 'Company';
+        const lastName = nameParts.slice(1).join(' ') || 'Admin';
+        try {
+            employee = await prisma.employee.create({
+                data: {
+                    userId: reqUser.id,
+                    companyId: reqUser.companyId,
+                    firstName,
+                    lastName,
+                    email: reqUser.email,
+                    onboardingStatus: 'COMPLETED'
+                },
+                include: { designation: true }
+            });
+        } catch (e) {
+            console.error('Error auto-creating employee for user:', e);
+        }
+    } else if (employee && !employee.userId && reqUser.id) {
+        try {
+            employee = await prisma.employee.update({
+                where: { id: employee.id },
+                data: { userId: reqUser.id },
+                include: { designation: true }
+            });
+        } catch (e) {
+            console.error('Error linking employee to userId:', e);
+        }
+    }
+
+    return employee;
+}
+
 function formatPostsList(posts, currentEmployeeId) {
     return posts.map(post => {
         const likedByMe = currentEmployeeId && post.likes
@@ -968,7 +1014,7 @@ function formatPostsList(posts, currentEmployeeId) {
                 ? c.likes.some(like => like.employeeId === currentEmployeeId)
                 : false;
             const cAuthor = c.employee
-                ? `${c.employee.firstName || ''} ${c.employee.lastName || ''}`.trim()
+                ? (`${c.employee.firstName || ''} ${c.employee.lastName || ''}`.trim() || c.employee.user?.name)
                 : 'Company Member';
 
             return {
@@ -1000,15 +1046,15 @@ function formatPostsList(posts, currentEmployeeId) {
         }
 
         const pAuthor = post.employee
-            ? `${post.employee.firstName || ''} ${post.employee.lastName || ''}`.trim()
-            : 'Company Member';
+            ? (`${post.employee.firstName || ''} ${post.employee.lastName || ''}`.trim() || post.employee.user?.name)
+            : 'Company Management';
 
         return {
             id: post.id,
             employeeId: post.employeeId,
-            author: pAuthor || 'Company Member',
+            author: pAuthor || 'Company Management',
             profilePhotoUrl: post.employee?.profilePhotoUrl || null,
-            designation: post.employee?.designation?.name || 'N/A',
+            designation: post.employee?.designation?.name || 'HR / Admin',
             timestamp: post.createdAt,
             createdAt: post.createdAt,
             content: post.content,
@@ -1024,14 +1070,7 @@ function formatPostsList(posts, currentEmployeeId) {
 async function getPosts(req, res) {
     try {
         const companyId = req.user.companyId;
-        const userId = req.user.id;
-
-        const currentEmployee = await prisma.employee.findUnique({
-            where: { userId }
-        });
-        if (!currentEmployee) {
-            return res.status(404).json({ message: 'Employee profile not found' });
-        }
+        const currentEmployee = await resolveEmployeeForUser(req.user);
 
         const posts = await prisma.post.findMany({
             where: { companyId },
@@ -1058,7 +1097,7 @@ async function getPosts(req, res) {
             orderBy: { createdAt: 'desc' }
         });
 
-        const enrichedPosts = formatPostsList(posts, currentEmployee.id);
+        const enrichedPosts = formatPostsList(posts, currentEmployee?.id || null);
         res.json(enrichedPosts);
     } catch (error) {
         console.error('Get Posts Error:', error);
@@ -1069,22 +1108,16 @@ async function getPosts(req, res) {
 async function createPost(req, res) {
     try {
         const companyId = req.user.companyId;
-        const userId = req.user.id;
         const { content } = req.body;
 
-        const currentEmployee = await prisma.employee.findUnique({
-            where: { userId }
-        });
-        if (!currentEmployee) {
-            return res.status(404).json({ message: 'Employee profile not found' });
-        }
+        const currentEmployee = await resolveEmployeeForUser(req.user);
 
         const imagePath = req.file ? `/uploads/posts/${req.file.filename}` : null;
 
         const newPost = await prisma.post.create({
             data: {
                 companyId,
-                employeeId: currentEmployee.id,
+                employeeId: currentEmployee?.id || null,
                 content: content || '',
                 image: imagePath
             },
@@ -1100,13 +1133,16 @@ async function createPost(req, res) {
 
         await cache.del(`dashboard:posts:${companyId}`);
 
-        const pAuthor = `${newPost.employee?.firstName || ''} ${newPost.employee?.lastName || ''}`.trim();
+        const pAuthor = currentEmployee
+            ? `${currentEmployee.firstName || ''} ${currentEmployee.lastName || ''}`.trim()
+            : (req.user.name || 'Company Management');
+
         res.status(201).json({
             id: newPost.id,
             employeeId: newPost.employeeId,
-            author: pAuthor || 'Company Member',
-            profilePhotoUrl: newPost.employee?.profilePhotoUrl || null,
-            designation: newPost.employee?.designation?.name || 'N/A',
+            author: pAuthor || 'Company Management',
+            profilePhotoUrl: currentEmployee?.profilePhotoUrl || null,
+            designation: currentEmployee?.designation?.name || 'HR / Admin',
             timestamp: newPost.createdAt,
             createdAt: newPost.createdAt,
             content: newPost.content,
@@ -1124,14 +1160,11 @@ async function createPost(req, res) {
 
 async function toggleLikePost(req, res) {
     try {
-        const userId = req.user.id;
         const postId = parseInt(req.params.id, 10);
+        const currentEmployee = await resolveEmployeeForUser(req.user);
 
-        const currentEmployee = await prisma.employee.findUnique({
-            where: { userId }
-        });
         if (!currentEmployee) {
-            return res.status(404).json({ message: 'Employee profile not found' });
+            return res.status(400).json({ message: 'Employee profile required to like posts' });
         }
 
         const existingLike = await prisma.postLike.findUnique({
@@ -1166,7 +1199,6 @@ async function toggleLikePost(req, res) {
 
 async function addCommentPost(req, res) {
     try {
-        const userId = req.user.id;
         const postId = parseInt(req.params.id, 10);
         const { content, parentId } = req.body;
 
@@ -1174,17 +1206,12 @@ async function addCommentPost(req, res) {
             return res.status(400).json({ message: 'Comment content is required' });
         }
 
-        const currentEmployee = await prisma.employee.findUnique({
-            where: { userId }
-        });
-        if (!currentEmployee) {
-            return res.status(404).json({ message: 'Employee profile not found' });
-        }
+        const currentEmployee = await resolveEmployeeForUser(req.user);
 
         const newComment = await prisma.postComment.create({
             data: {
                 postId,
-                employeeId: currentEmployee.id,
+                employeeId: currentEmployee?.id || null,
                 content,
                 parentId: parentId ? parseInt(parentId, 10) : null
             },
@@ -1198,13 +1225,16 @@ async function addCommentPost(req, res) {
         });
 
         await cache.del(`dashboard:posts:${req.user.companyId}`);
-        const cAuthor = `${newComment.employee?.firstName || ''} ${newComment.employee?.lastName || ''}`.trim();
+        const cAuthor = currentEmployee
+            ? `${currentEmployee.firstName || ''} ${currentEmployee.lastName || ''}`.trim()
+            : (req.user.name || 'Company Management');
+
         res.status(201).json({
             id: newComment.id,
             parentId: newComment.parentId,
             employeeId: newComment.employeeId,
-            author: cAuthor || 'Company Member',
-            profilePhotoUrl: newComment.employee?.profilePhotoUrl || null,
+            author: cAuthor || 'Company Management',
+            profilePhotoUrl: currentEmployee?.profilePhotoUrl || null,
             timestamp: newComment.createdAt,
             createdAt: newComment.createdAt,
             content: newComment.content,
@@ -1219,19 +1249,11 @@ async function addCommentPost(req, res) {
     }
 }
 
-
 async function editPost(req, res) {
     try {
         const postId = parseInt(req.params.id, 10);
-        const userId = req.user.id;
+        const currentEmployee = await resolveEmployeeForUser(req.user);
         const { content, imageRemoved } = req.body;
-
-        const currentEmployee = await prisma.employee.findUnique({
-            where: { userId }
-        });
-        if (!currentEmployee) {
-            return res.status(404).json({ message: 'Employee profile not found' });
-        }
 
         const post = await prisma.post.findUnique({
             where: { id: postId }
@@ -1240,7 +1262,10 @@ async function editPost(req, res) {
             return res.status(404).json({ message: 'Post not found' });
         }
 
-        if (post.employeeId !== currentEmployee.id) {
+        const isAuthor = currentEmployee && post.employeeId === currentEmployee.id;
+        const isHR = req.user.role === 'HR' || req.user.role === 'SUPER_ADMIN';
+
+        if (!isAuthor && !isHR) {
             return res.status(403).json({ message: 'Forbidden: You are not authorized to edit this post' });
         }
 
@@ -1267,14 +1292,7 @@ async function editPost(req, res) {
 async function deletePost(req, res) {
     try {
         const postId = parseInt(req.params.id, 10);
-        const userId = req.user.id;
-
-        const currentEmployee = await prisma.employee.findUnique({
-            where: { userId }
-        });
-        if (!currentEmployee) {
-            return res.status(404).json({ message: 'Employee profile not found' });
-        }
+        const currentEmployee = await resolveEmployeeForUser(req.user);
 
         const post = await prisma.post.findUnique({
             where: { id: postId }
@@ -1283,7 +1301,10 @@ async function deletePost(req, res) {
             return res.status(404).json({ message: 'Post not found' });
         }
 
-        if (post.employeeId !== currentEmployee.id && req.user.role !== 'HR' && req.user.role !== 'SUPER_ADMIN') {
+        const isAuthor = currentEmployee && post.employeeId === currentEmployee.id;
+        const isHR = req.user.role === 'HR' || req.user.role === 'SUPER_ADMIN';
+
+        if (!isAuthor && !isHR) {
             return res.status(403).json({ message: 'Forbidden: You are not authorized to delete this post' });
         }
 

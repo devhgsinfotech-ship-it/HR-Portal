@@ -37,17 +37,10 @@ async function getHrDashboardSummary(req, res) {
             }
         }
 
-        // ── 1. Total employees ────────────────────────────────────────
-        let totalEmployees = await prisma.employee.count({
+        // ── 1. Total employees (direct count from database) ──────────
+        const totalEmployees = await prisma.employee.count({
             where: { user: { companyId } }
         });
-
-        if (companyId) {
-            const activeUserCount = await prisma.user.count({
-                where: { companyId, accountStatus: 'ACTIVE' }
-            });
-            totalEmployees = Math.max(totalEmployees, activeUserCount);
-        }
 
         // ── 1b. On Leave Today Count ──────────────────────────────────
         const onLeaveTodayCount = await prisma.leaveRequest.count({
@@ -139,10 +132,7 @@ async function getHrDashboardSummary(req, res) {
         const todayRecords = await prisma.attendanceRecord.findMany({
             where: {
                 employee: { user: { companyId } },
-                OR: [
-                    { date: { gte: todayStart, lte: todayEnd } },
-                    { checkIn: { gte: todayStart, lte: todayEnd } }
-                ]
+                checkIn: { not: null, gte: todayStart, lte: todayEnd }
             },
             include: {
                 employee: {
@@ -199,10 +189,7 @@ async function getHrDashboardSummary(req, res) {
             const yesterdayRecords = await prisma.attendanceRecord.findMany({
                 where: {
                     employee: { user: { companyId } },
-                    OR: [
-                        { date: { gte: yesterdayStart, lte: yesterdayEnd } },
-                        { checkIn: { gte: yesterdayStart, lte: yesterdayEnd } }
-                    ]
+                    checkIn: { not: null, gte: yesterdayStart, lte: yesterdayEnd }
                 }
             });
 
