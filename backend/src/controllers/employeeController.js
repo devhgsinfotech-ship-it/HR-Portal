@@ -595,7 +595,7 @@ async function updateMe(req, res) {
             if (password.length < 6) {
                 return res.status(400).json({ message: 'Password must be at least 6 characters long' });
             }
-            userUpdateData.password = await require('bcrypt').hash(password, 10);
+            userUpdateData.password = await bcrypt.hash(password, 10);
         }
 
         if (Object.keys(userUpdateData).length > 0) {
@@ -958,49 +958,17 @@ async function getCompanyEvents(req, res) {
 }
 
 async function resolveEmployeeForUser(reqUser) {
-    if (!reqUser) return null;
-    let employee = await prisma.employee.findFirst({
-        where: {
-            OR: [
-                { userId: reqUser.id },
-                { email: reqUser.email }
-            ]
-        },
-        include: { designation: true }
-    });
-
-    if (!employee && reqUser.companyId) {
-        const nameParts = (reqUser.name || 'Company Admin').trim().split(' ');
-        const firstName = nameParts[0] || 'Company';
-        const lastName = nameParts.slice(1).join(' ') || 'Admin';
-        try {
-            employee = await prisma.employee.create({
-                data: {
-                    userId: reqUser.id,
-                    companyId: reqUser.companyId,
-                    firstName,
-                    lastName,
-                    email: reqUser.email,
-                    onboardingStatus: 'COMPLETED'
-                },
-                include: { designation: true }
-            });
-        } catch (e) {
-            console.error('Error auto-creating employee for user:', e);
-        }
-    } else if (employee && !employee.userId && reqUser.id) {
-        try {
-            employee = await prisma.employee.update({
-                where: { id: employee.id },
-                data: { userId: reqUser.id },
-                include: { designation: true }
-            });
-        } catch (e) {
-            console.error('Error linking employee to userId:', e);
-        }
+    if (!reqUser || !reqUser.id) return null;
+    try {
+        const employee = await prisma.employee.findUnique({
+            where: { userId: reqUser.id },
+            include: { designation: true }
+        });
+        return employee || null;
+    } catch (e) {
+        console.error('resolveEmployeeForUser error:', e.message);
+        return null;
     }
-
-    return employee;
 }
 
 function formatPostsList(posts, currentEmployeeId) {
