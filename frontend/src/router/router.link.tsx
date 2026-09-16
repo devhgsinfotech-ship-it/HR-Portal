@@ -197,6 +197,9 @@ import {
   PayRoll,
   PayRollOvertime,
   PayRollDeduction,
+  PayrollProcess,
+  PayrollSalaryConfig,
+  PayrollPayslips,
   Termination,
   Resignation,
   Promotion,
@@ -1517,7 +1520,7 @@ export const publicRoutes = [
   },
   {
     path: routes.payslip,
-    element: <PaySlip />,
+    element: <PayrollPayslips />,
     route: Route,
   },
   {
@@ -1533,6 +1536,26 @@ export const publicRoutes = [
   {
     path: routes.payrollDeduction,
     element: <PayRollDeduction />,
+    route: Route,
+  },
+  {
+    path: routes.payrollProcess,
+    element: <PayrollProcess />,
+    route: Route,
+  },
+  {
+    path: routes.payrollSalaryConfig,
+    element: <PayrollSalaryConfig />,
+    route: Route,
+  },
+  {
+    path: routes.payrollPayslips,
+    element: <PayrollPayslips />,
+    route: Route,
+  },
+  {
+    path: routes.payrollMyPayslips,
+    element: <PayrollPayslips />,
     route: Route,
   },
   {

@@ -3,7 +3,13 @@ const prisma = require('../config/prisma');
 
 async function getHrDashboardSummary(req, res) {
     try {
-        const companyId = parseInt(req.user.companyId, 10);
+        let companyId = parseInt(req.user.companyId, 10);
+        if (isNaN(companyId) || !companyId) {
+            const u = await prisma.user.findUnique({ where: { id: req.user.id }, select: { companyId: true } });
+            if (u && u.companyId) {
+                companyId = u.companyId;
+            }
+        }
 
         // ── Date range from query params (defaults to today) ──────────
         const now = new Date();
@@ -13,17 +19,44 @@ async function getHrDashboardSummary(req, res) {
         rangeEnd.setHours(23, 59, 59, 999);
 
         if (req.query.startDate) {
-            rangeStart = new Date(req.query.startDate);
-            rangeStart.setHours(0, 0, 0, 0);
+            const parts = req.query.startDate.split('-');
+            if (parts.length === 3) {
+                rangeStart = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 0, 0, 0, 0);
+            } else {
+                rangeStart = new Date(req.query.startDate);
+                rangeStart.setHours(0, 0, 0, 0);
+            }
         }
         if (req.query.endDate) {
-            rangeEnd = new Date(req.query.endDate);
-            rangeEnd.setHours(23, 59, 59, 999);
+            const parts = req.query.endDate.split('-');
+            if (parts.length === 3) {
+                rangeEnd = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 23, 59, 59, 999);
+            } else {
+                rangeEnd = new Date(req.query.endDate);
+                rangeEnd.setHours(23, 59, 59, 999);
+            }
         }
 
         // ── 1. Total employees ────────────────────────────────────────
-        const totalEmployees = await prisma.employee.count({
+        let totalEmployees = await prisma.employee.count({
             where: { user: { companyId } }
+        });
+
+        if (companyId) {
+            const activeUserCount = await prisma.user.count({
+                where: { companyId, accountStatus: 'ACTIVE' }
+            });
+            totalEmployees = Math.max(totalEmployees, activeUserCount);
+        }
+
+        // ── 1b. On Leave Today Count ──────────────────────────────────
+        const onLeaveTodayCount = await prisma.leaveRequest.count({
+            where: {
+                employee: { user: { companyId } },
+                status: 'APPROVED',
+                startDate: { lte: rangeEnd },
+                endDate: { gte: rangeStart }
+            }
         });
 
         // ── 2. New joinees in the date range ─────────────────────────
@@ -47,36 +80,69 @@ async function getHrDashboardSummary(req, res) {
             else if (t === 'PART_TIME' || t === 'INTERN') probationCount++;
             else fullTimeCount++; // FULL_TIME or default
         });
+        if (fullTimeCount === 0 && totalEmployees > 0) {
+            fullTimeCount = totalEmployees;
+        }
 
-        // ── 4. Today's attendance summary ────────────────────────────
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
+        // ── 4. Today's / Date Range attendance summary ───────────────
+        const todayStart = rangeStart;
+        const todayEnd = rangeEnd;
 
-        // Get attendance policy for late threshold
+        // Get attendance policy for late threshold & timezone
         let officeStartHour = 9, officeStartMin = 0, gracePeriod = 15;
+        let companyTimezone = 'Asia/Kolkata';
         try {
             const policy = await prisma.attendancePolicy.findUnique({ where: { companyId } });
             if (policy) gracePeriod = policy.lateGracePeriod || 15;
             const setting = await prisma.companySetting.findUnique({ where: { companyId } });
-            if (setting && setting.officeStartTime) {
-                const parts = setting.officeStartTime.split(':');
-                officeStartHour = parseInt(parts[0], 10);
-                officeStartMin = parseInt(parts[1], 10);
+            if (setting) {
+                if (setting.timezone) companyTimezone = setting.timezone;
+                if (setting.officeStartTime) {
+                    const parts = setting.officeStartTime.split(':');
+                    officeStartHour = parseInt(parts[0], 10);
+                    officeStartMin = parseInt(parts[1], 10);
+                }
             }
         } catch (e) {
             // Use defaults if settings not found
         }
 
-        // Late threshold = officeStartTime + gracePeriod minutes
+        // Late threshold helper function (timezone aware)
+        const isLateRecord = (record) => {
+            if (record && record.status === 'LATE') return true;
+            if (!record || !record.checkIn) return false;
+            const cIn = new Date(record.checkIn);
+            let cInHours, cInMins;
+            try {
+                const timeStr = cIn.toLocaleTimeString('en-US', { timeZone: companyTimezone, hour12: false });
+                const parts = timeStr.split(':');
+                cInHours = parseInt(parts[0], 10);
+                cInMins = parseInt(parts[1], 10);
+                if (cInHours === 24) cInHours = 0;
+            } catch (tzErr) {
+                cInHours = cIn.getHours();
+                cInMins = cIn.getMinutes();
+            }
+
+            const thresholdMins = officeStartMin + gracePeriod;
+            const thresholdHour = officeStartHour + Math.floor(thresholdMins / 60);
+            const finalThresholdMin = thresholdMins % 60;
+
+            if (cInHours > thresholdHour) return true;
+            if (cInHours === thresholdHour && cInMins > finalThresholdMin) return true;
+            return false;
+        };
+
         const lateThresholdToday = new Date();
         lateThresholdToday.setHours(officeStartHour, officeStartMin + gracePeriod, 0, 0);
 
         const todayRecords = await prisma.attendanceRecord.findMany({
             where: {
                 employee: { user: { companyId } },
-                date: { gte: todayStart, lte: todayEnd }
+                OR: [
+                    { date: { gte: todayStart, lte: todayEnd } },
+                    { checkIn: { gte: todayStart, lte: todayEnd } }
+                ]
             },
             include: {
                 employee: {
@@ -95,17 +161,17 @@ async function getHrDashboardSummary(req, res) {
         todayRecords.forEach(record => {
             if (!record.checkIn) return;
             const checkIn = new Date(record.checkIn);
-            if (checkIn > lateThresholdToday) {
+            if (isLateRecord(record)) {
                 lateCount++;
                 const delayMs = checkIn.getTime() - lateThresholdToday.getTime();
                 const delayMinutes = Math.max(1, Math.round(delayMs / 60000));
                 lateArrivalsList.push({
                     id: record.id,
-                    name: `${record.employee.firstName || ''} ${record.employee.lastName || ''}`.trim()
-                        || record.employee.user?.name || 'Employee',
-                    department: record.employee.department?.name || record.employee.designation?.name || '—',
-                    photo: record.employee.profilePhotoUrl || null,
-                    checkIn: checkIn.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+                    name: `${record.employee?.firstName || ''} ${record.employee?.lastName || ''}`.trim()
+                        || record.employee?.user?.name || 'Employee',
+                    department: record.employee?.department?.name || record.employee?.designation?.name || '—',
+                    photo: record.employee?.profilePhotoUrl || null,
+                    checkIn: checkIn.toLocaleTimeString('en-US', { timeZone: companyTimezone, hour: '2-digit', minute: '2-digit', hour12: true }),
                     delayMinutes
                 });
             } else {
@@ -113,8 +179,247 @@ async function getHrDashboardSummary(req, res) {
             }
         });
 
-        // Absent = employees with no attendance record today
-        const absentCount = Math.max(0, totalEmployees - todayRecords.length);
+        // Absent = employees with no attendance record today and not on approved leave today
+        const absentCount = Math.max(0, totalEmployees - (onTimeCount + lateCount + onLeaveTodayCount));
+
+        // ── 4a-2. Dynamic KPI Trends (Comparing today vs yesterday) ──
+        let kpiTrends = {
+            totalEmployees: { text: 'Headcount', type: 'success' },
+            newJoinees: { text: newJoinees > 0 ? `+${newJoinees}` : 'No change', type: newJoinees > 0 ? 'success' : 'secondary' },
+            onLeaveToday: { text: 'No change', type: 'secondary' },
+            lateCount: { text: 'No change', type: 'secondary' },
+            absentCount: { text: 'No change', type: 'secondary' }
+        };
+        try {
+            const yesterdayStart = new Date(todayStart);
+            yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+            const yesterdayEnd = new Date(todayEnd);
+            yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
+
+            const yesterdayRecords = await prisma.attendanceRecord.findMany({
+                where: {
+                    employee: { user: { companyId } },
+                    OR: [
+                        { date: { gte: yesterdayStart, lte: yesterdayEnd } },
+                        { checkIn: { gte: yesterdayStart, lte: yesterdayEnd } }
+                    ]
+                }
+            });
+
+            let yesterdayLate = 0, yesterdayOnTime = 0;
+            yesterdayRecords.forEach(r => {
+                if (r.checkIn) {
+                    if (isLateRecord(r)) yesterdayLate++;
+                    else yesterdayOnTime++;
+                }
+            });
+
+            const yesterdayLeaveCount = await prisma.leaveRequest.count({
+                where: {
+                    employee: { user: { companyId } },
+                    status: 'APPROVED',
+                    startDate: { lte: yesterdayEnd },
+                    endDate: { gte: yesterdayStart }
+                }
+            });
+
+            const yesterdayAbsent = Math.max(0, totalEmployees - (yesterdayOnTime + yesterdayLate + yesterdayLeaveCount));
+
+            const activeCount = await prisma.user.count({ where: { companyId, accountStatus: 'ACTIVE' } });
+
+            const calcTrendBadge = (current, previous, isReverse = true) => {
+                if (previous === 0) {
+                    if (current === 0) return { text: '0% Change', type: 'secondary' };
+                    return { text: `+${current}`, type: isReverse ? 'danger' : 'success' };
+                }
+                const diff = current - previous;
+                if (diff === 0) {
+                    return { text: '0% Change', type: 'secondary' };
+                }
+                const pct = Math.round((Math.abs(diff) / previous) * 100);
+                if (diff > 0) return { text: `↑ ${pct}%`, type: isReverse ? 'danger' : 'success' };
+                return { text: `↓ ${pct}%`, type: isReverse ? 'success' : 'danger' };
+            };
+
+            kpiTrends = {
+                totalEmployees: { text: `${activeCount} Active`, type: 'success' },
+                newJoinees: { text: newJoinees > 0 ? `+${newJoinees}` : '0% Change', type: newJoinees > 0 ? 'success' : 'secondary' },
+                onLeaveToday: calcTrendBadge(onLeaveTodayCount, yesterdayLeaveCount, true),
+                lateCount: calcTrendBadge(lateCount, yesterdayLate, true),
+                absentCount: calcTrendBadge(absentCount, yesterdayAbsent, true)
+            };
+        } catch (tErr) {
+            console.error('Error calculating KPI trends:', tErr);
+        }
+
+        // ── 4b. Dynamic Attendance Trend (Week / Month / Year) ─────────
+        const isSameDay = (d1, d2) => {
+            if (!d1 || !d2) return false;
+            const date1 = new Date(d1);
+            const date2 = new Date(d2);
+            return date1.getFullYear() === date2.getFullYear() &&
+                   date1.getMonth() === date2.getMonth() &&
+                   date1.getDate() === date2.getDate();
+        };
+
+        // Calculate current week range (Monday to Sunday)
+        const currentWeekStart = new Date(now);
+        const currentDayOfWeek = currentWeekStart.getDay(); // 0 is Sun, 1 is Mon...
+        const distToMon = (currentDayOfWeek + 6) % 7;
+        currentWeekStart.setDate(currentWeekStart.getDate() - distToMon);
+        currentWeekStart.setHours(0, 0, 0, 0);
+
+        const currentWeekEnd = new Date(currentWeekStart);
+        currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+        currentWeekEnd.setHours(23, 59, 59, 999);
+
+        const weekRecords = await prisma.attendanceRecord.findMany({
+            where: {
+                employee: { user: { companyId } },
+                OR: [
+                    { date: { gte: new Date(currentWeekStart.getTime() - 86400000), lte: new Date(currentWeekEnd.getTime() + 86400000) } },
+                    { checkIn: { gte: new Date(currentWeekStart.getTime() - 86400000), lte: new Date(currentWeekEnd.getTime() + 86400000) } }
+                ]
+            }
+        });
+
+        const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const weekPresent = [0, 0, 0, 0, 0, 0, 0];
+        const weekLate = [0, 0, 0, 0, 0, 0, 0];
+        const weekAbsent = [0, 0, 0, 0, 0, 0, 0];
+
+        const todayIndexInWeek = distToMon;
+
+        for (let i = 0; i <= 6; i++) {
+            const targetDay = new Date(currentWeekStart);
+            targetDay.setDate(currentWeekStart.getDate() + i);
+
+            const dayRecs = weekRecords.filter(r => 
+                isSameDay(r.date, targetDay) || isSameDay(r.checkIn, targetDay)
+            );
+
+            let dayOnTime = 0;
+            let dayLate = 0;
+            dayRecs.forEach(r => {
+                if (r.checkIn) {
+                    if (isLateRecord(r)) {
+                        dayLate++;
+                    } else {
+                        dayOnTime++;
+                    }
+                } else {
+                    dayOnTime++;
+                }
+            });
+
+            weekPresent[i] = dayOnTime;
+            weekLate[i] = dayLate;
+
+            if (i <= todayIndexInWeek) {
+                const checkedInTotal = dayOnTime + dayLate;
+                weekAbsent[i] = Math.max(0, totalEmployees - checkedInTotal);
+            } else {
+                weekAbsent[i] = 0;
+            }
+        }
+
+        // Calculate Month Attendance (Weeks 1 to 4 of current month)
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+        const monthRecords = await prisma.attendanceRecord.findMany({
+            where: {
+                employee: { user: { companyId } },
+                date: { gte: monthStart, lte: monthEnd }
+            }
+        });
+
+        const monthWeeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+        const monthPresent = [0, 0, 0, 0];
+        const monthLate = [0, 0, 0, 0];
+        const monthAbsent = [0, 0, 0, 0];
+
+        const currentWeekNumInMonth = Math.min(3, Math.floor((now.getDate() - 1) / 7));
+
+        monthRecords.forEach(r => {
+            const rDate = new Date(r.checkIn || r.date);
+            const dayNum = rDate.getDate();
+            const weekIdx = Math.min(3, Math.floor((dayNum - 1) / 7));
+            const dayLateThreshold = new Date(rDate);
+            dayLateThreshold.setHours(officeStartHour, officeStartMin + gracePeriod, 0, 0);
+
+            if (r.checkIn && new Date(r.checkIn) > dayLateThreshold) {
+                monthLate[weekIdx]++;
+            } else {
+                monthPresent[weekIdx]++;
+            }
+        });
+
+        for (let w = 0; w <= currentWeekNumInMonth; w++) {
+            const recordedTotal = monthPresent[w] + monthLate[w];
+            const weekMaxPossible = totalEmployees * 5;
+            monthAbsent[w] = Math.max(0, weekMaxPossible - recordedTotal);
+        }
+
+        // Calculate Year Attendance (Months Jan - Dec)
+        const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+        const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+
+        const yearRecords = await prisma.attendanceRecord.findMany({
+            where: {
+                employee: { user: { companyId } },
+                date: { gte: yearStart, lte: yearEnd }
+            }
+        });
+
+        const yearMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const yearPresent = new Array(12).fill(0);
+        const yearLate = new Array(12).fill(0);
+        const yearAbsent = new Array(12).fill(0);
+        const currentMonthIdx = now.getMonth();
+
+        yearRecords.forEach(r => {
+            const rDate = new Date(r.checkIn || r.date);
+            const mIdx = rDate.getMonth();
+            const dayLateThreshold = new Date(rDate);
+            dayLateThreshold.setHours(officeStartHour, officeStartMin + gracePeriod, 0, 0);
+
+            if (r.checkIn && new Date(r.checkIn) > dayLateThreshold) {
+                yearLate[mIdx]++;
+            } else {
+                yearPresent[mIdx]++;
+            }
+        });
+
+        for (let m = 0; m <= currentMonthIdx; m++) {
+            const recordedTotal = yearPresent[m] + yearLate[m];
+            const monthMaxPossible = totalEmployees * 22;
+            yearAbsent[m] = Math.max(0, monthMaxPossible - recordedTotal);
+        }
+
+        const attendanceTrend = {
+            week: {
+                categories: weekDays,
+                present: weekPresent,
+                late: weekLate,
+                absent: weekAbsent,
+                maxScale: Math.max(totalEmployees + 2, 5)
+            },
+            month: {
+                categories: monthWeeks,
+                present: monthPresent,
+                late: monthLate,
+                absent: monthAbsent,
+                maxScale: Math.max(totalEmployees * 5 + 5, 20)
+            },
+            year: {
+                categories: yearMonths,
+                present: yearPresent,
+                late: yearLate,
+                absent: yearAbsent,
+                maxScale: Math.max(totalEmployees * 22 + 20, 50)
+            }
+        };
 
         // ── 5. Leave type distribution (in date range) ────────────────
         const leaveRequests = await prisma.leaveRequest.findMany({
@@ -167,18 +472,246 @@ async function getHrDashboardSummary(req, res) {
             reason: r.reason || ''
         }));
 
+        // ── 7. Upcoming Leaves ─────────────────────────────────────────
+        const upcomingLeaves = await prisma.leaveRequest.findMany({
+            where: {
+                status: { in: ['APPROVED', 'PENDING'] },
+                startDate: { gte: todayStart },
+                employee: { user: { companyId } }
+            },
+            orderBy: { startDate: 'asc' },
+            take: 5,
+            include: {
+                employee: {
+                    select: {
+                        firstName: true,
+                        lastName: true,
+                        profilePhotoUrl: true,
+                        designation: { select: { name: true } }
+                    }
+                },
+                leaveType: { select: { name: true } }
+            }
+        });
+
+        const upcomingLeavesList = upcomingLeaves.map(r => ({
+            id: r.id,
+            employeeName: `${r.employee?.firstName || ''} ${r.employee?.lastName || ''}`.trim() || 'Employee',
+            photo: r.employee?.profilePhotoUrl || null,
+            leaveType: r.leaveType?.name || 'Leave',
+            startDate: r.startDate,
+            endDate: r.endDate,
+            totalDays: Number(r.totalDays || 1)
+        }));
+
+        // ── 8. Recruitment & Benefits/Payroll stats (Dynamic from SQL DB) ────────
+        let recruitmentStats = { applicants: 0, hired: 0, avgTimeDays: 0, interviewPositions: 0 };
+        try {
+            const pendingOnboarding = await prisma.employee.count({
+                where: {
+                    user: { companyId },
+                    onboardingStatus: { in: ['INVITED', 'PROFILE_SUBMITTED', 'DOCS_SUBMITTED', 'HR_REVIEW', 'CORRECTION_REQUESTED'] }
+                }
+            });
+            const completedOnboarding = await prisma.employee.findMany({
+                where: {
+                    user: { companyId },
+                    onboardingStatus: 'COMPLETED'
+                },
+                select: { createdAt: true, updatedAt: true }
+            });
+            const activeDesignations = await prisma.designation.count({ where: { companyId } });
+
+            let avgTimeDays = 0;
+            if (completedOnboarding.length > 0) {
+                const totalDays = completedOnboarding.reduce((sum, emp) => {
+                    const created = new Date(emp.createdAt).getTime();
+                    const updated = new Date(emp.updatedAt).getTime();
+                    return sum + Math.max(1, Math.round((updated - created) / (1000 * 60 * 60 * 24)));
+                }, 0);
+                avgTimeDays = Math.round(totalDays / completedOnboarding.length);
+            }
+
+            recruitmentStats = {
+                applicants: pendingOnboarding,
+                hired: completedOnboarding.length,
+                avgTimeDays: avgTimeDays,
+                interviewPositions: activeDesignations
+            };
+        } catch (rErr) {
+            console.error('Error fetching recruitment stats:', rErr);
+        }
+
+        let totalBenefitsDeductions = 0;
+        try {
+            const compSalaries = await prisma.salaryStructure.findMany({
+                where: {
+                    employee: { user: { companyId } },
+                    effectiveFrom: { lte: rangeEnd }
+                },
+                select: { pfDeduction: true, professionalTax: true, tdsDeduction: true, otherDeductions: true }
+            });
+            compSalaries.forEach(s => {
+                const pf = parseFloat(s.pfDeduction) || 0;
+                const pt = parseFloat(s.professionalTax) || 0;
+                const tds = parseFloat(s.tdsDeduction) || 0;
+                const other = parseFloat(s.otherDeductions) || 0;
+                totalBenefitsDeductions += (pf + pt + tds + other);
+            });
+        } catch (bErr) {
+            console.error('Error calculating benefits deductions:', bErr);
+        }
+
+        const benefitsDeductions = {
+            amount: totalBenefitsDeductions,
+            formattedAmount: `₹ ${Number(totalBenefitsDeductions.toFixed(2)).toLocaleString('en-IN', { minimumFractionDigits: totalBenefitsDeductions % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 })}`,
+            subtitle: 'PF, Tax & Insurance Deductions'
+        };
+
+        // Calculate total salary expense / distributed salary for current month:
+        let thisMonthSalaryTotal = 0;
+        try {
+            const currentMonthInt = now.getMonth() + 1;
+            const currentYearInt = now.getFullYear();
+
+            let monthPayslips = await prisma.payslip.findMany({
+                where: {
+                    employee: { user: { companyId } },
+                    month: currentMonthInt,
+                    year: currentYearInt
+                },
+                select: { netPay: true }
+            });
+
+            if (monthPayslips.length === 0) {
+                // If no payslips for current month, fetch latest generated payslips for the company
+                const latestPayslip = await prisma.payslip.findFirst({
+                    where: { employee: { user: { companyId } } },
+                    orderBy: [{ year: 'desc' }, { month: 'desc' }]
+                });
+                if (latestPayslip) {
+                    monthPayslips = await prisma.payslip.findMany({
+                        where: {
+                            employee: { user: { companyId } },
+                            month: latestPayslip.month,
+                            year: latestPayslip.year
+                        },
+                        select: { netPay: true }
+                    });
+                }
+            }
+
+            if (monthPayslips.length > 0) {
+                thisMonthSalaryTotal = monthPayslips.reduce((sum, p) => sum + (parseFloat(p.netPay) || 0), 0);
+            } else {
+                const salaryStructures = await prisma.salaryStructure.findMany({
+                    where: {
+                        employee: { user: { companyId } },
+                        effectiveFrom: { lte: rangeEnd }
+                    },
+                    select: { netSalary: true, grossSalary: true }
+                });
+                if (salaryStructures.length > 0) {
+                    thisMonthSalaryTotal = salaryStructures.reduce((sum, s) => sum + (parseFloat(s.netSalary) || parseFloat(s.grossSalary) || 0), 0);
+                }
+            }
+        } catch (sErr) {
+            console.error('Error calculating monthly salary total:', sErr);
+        }
+
+        const displaySalaryAmount = thisMonthSalaryTotal;
+        const formattedSalaryAmount = `₹ ${Number(displaySalaryAmount.toFixed(2)).toLocaleString('en-IN', { minimumFractionDigits: displaySalaryAmount % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 })}`;
+
+        const payrollStats = {
+            amount: displaySalaryAmount,
+            formattedAmount: formattedSalaryAmount,
+            subtitle: 'Total Distributed Salary (This Month)'
+        };
+
+        // ── Dynamic Top Employees / Performers ──────────────────────────
+        const companyEmps = await prisma.employee.findMany({
+            where: { user: { companyId } },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profilePhotoUrl: true,
+                designation: { select: { name: true } },
+                attendanceRecords: {
+                    where: { date: { gte: rangeStart, lte: rangeEnd } },
+                    select: { status: true }
+                }
+            },
+            take: 10
+        });
+
+        const topEmployees = companyEmps.map((emp, index) => {
+            const records = emp.attendanceRecords || [];
+            const presentCount = records.filter(r => r.status === 'PRESENT' || r.status === 'ON_TIME').length;
+            const score = records.length > 0 ? Math.min(99, Math.max(60, Math.round((presentCount / records.length) * 100))) : Math.max(70, 95 - (index * 4));
+            return {
+                id: emp.id,
+                name: emp.firstName || 'Employee',
+                fullName: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+                score: score,
+                avatar: emp.profilePhotoUrl || null,
+                designation: emp.designation?.name || 'Employee'
+            };
+        }).sort((a, b) => b.score - a.score).slice(0, 5);
+
+        const finalLeaveTypeStats = leaveTypeStats;
+        const finalPendingList = pendingList;
+
+        // ── 9. Dynamic Employee Designation / Role Distribution ─────────
+        const employeesWithDesignation = await prisma.employee.findMany({
+            where: { user: { companyId } },
+            select: {
+                designation: { select: { name: true } },
+                department: { select: { name: true } }
+            }
+        });
+
+        const desigCounts = {};
+        employeesWithDesignation.forEach(emp => {
+            const label = emp.designation?.name || emp.department?.name || 'General';
+            desigCounts[label] = (desigCounts[label] || 0) + 1;
+        });
+
+        const totalEmpCountForDist = employeesWithDesignation.length || totalEmployees || 1;
+        
+        const sortedDesigs = Object.entries(desigCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+
+        const employeeDistribution = sortedDesigs.map(([name, count]) => ({
+            label: name,
+            count: count,
+            percentage: Math.round((count / totalEmpCountForDist) * 100)
+        }));
+
+        const finalEmployeeDistribution = employeeDistribution;
+
         res.json({
-            totalEmployees,
-            newJoinees,
-            fullTimeCount,
-            contractCount,
-            probationCount,
-            onTimeCount,
-            lateCount,
-            absentCount,
+            totalEmployees: totalEmployees,
+            newJoinees: newJoinees || 0,
+            fullTimeCount: fullTimeCount,
+            contractCount: contractCount || 0,
+            probationCount: probationCount || 0,
+            onTimeCount: onTimeCount || 0,
+            lateCount: lateCount || 0,
+            onLeaveTodayCount: onLeaveTodayCount || 0,
+            absentCount: Math.max(0, totalEmployees - onTimeCount - lateCount - onLeaveTodayCount),
+            kpiTrends,
             lateArrivalsList,
-            leaveTypeStats,
-            pendingLeaves: pendingList
+            attendanceTrend,
+            employeeDistribution: finalEmployeeDistribution,
+            leaveTypeStats: finalLeaveTypeStats,
+            pendingLeaves: finalPendingList,
+            upcomingLeaves: upcomingLeavesList,
+            recruitmentStats,
+            benefitsDeductions,
+            payrollStats,
+            topEmployees
         });
 
     } catch (error) {
@@ -301,67 +834,12 @@ async function getAdminDashboardSummary(req, res) {
         let empList = [];
 
         if (allCompanyEmployees.length === 0) {
-            // Seeding/Fallback data for empty DB
-            clockedInList = [
-                {
-                    id: 'seed-1',
-                    name: 'Daniel Esbella',
-                    designation: 'UI/UX Designer',
-                    department: 'UI/UX Design',
-                    photo: null,
-                    checkIn: '09:15 AM',
-                    checkOut: '—',
-                    production: '—',
-                    isLate: false
-                },
-                {
-                    id: 'seed-2',
-                    name: 'Doglas Martini',
-                    designation: 'Project Manager',
-                    department: 'Management',
-                    photo: null,
-                    checkIn: '09:36 AM',
-                    checkOut: '—',
-                    production: '—',
-                    isLate: false
-                },
-                {
-                    id: 'seed-3',
-                    name: 'Brian Villalobos',
-                    designation: 'PHP Developer',
-                    department: 'Development',
-                    photo: null,
-                    checkIn: '09:15 AM',
-                    checkOut: '—',
-                    production: '—',
-                    isLate: false
-                }
-            ];
-            lateList = [
-                {
-                    id: 'seed-4',
-                    name: 'Anthony Lewis',
-                    designation: 'Marketing Head',
-                    department: 'Marketing',
-                    photo: null,
-                    checkIn: '08:35 AM',
-                    checkOut: '—',
-                    production: '—',
-                    isLate: true,
-                    lateMinutes: '30 Min'
-                }
-            ];
-            firstCheckIn = '10:30 AM';
-            lastCheckOut = '09:45 AM';
-            totalProduction = '09:21 Hrs';
-
-            empList = [
-                { id: 'seed-e1', name: 'Anthony Lewis', designation: 'Finance', department: 'Finance', photo: null },
-                { id: 'seed-e2', name: 'Brian Villalobos', designation: 'PHP Developer', department: 'Development', photo: null },
-                { id: 'seed-e3', name: 'Stephan Peralt', designation: 'Executive', department: 'Marketing', photo: null },
-                { id: 'seed-e4', name: 'Doglas Martini', designation: 'Project Manager', department: 'Manager', photo: null },
-                { id: 'seed-e5', name: 'Anthony Lewis', designation: 'UI/UX Designer', department: 'UI/UX Design', photo: null }
-            ];
+            clockedInList = [];
+            lateList = [];
+            firstCheckIn = '—';
+            lastCheckOut = '—';
+            totalProduction = '—';
+            empList = [];
         } else {
             // Map today's attendance records by employeeId
             const attendanceMap = {};

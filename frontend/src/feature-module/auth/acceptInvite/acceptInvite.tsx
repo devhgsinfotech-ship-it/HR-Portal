@@ -37,6 +37,25 @@ const AcceptInvite = () => {
     fetchSubdomainLogo();
   }, [subdomain]);
 
+  useEffect(() => {
+    const verifyToken = async () => {
+      if (!token) return;
+      try {
+        const apiUrl = APP_CONFIG.getBackendUrl();
+        const res = await axios.get(`${apiUrl}/auth/verify-invite-token?token=${encodeURIComponent(token.trim())}`);
+        if (res.data?.valid) {
+          if (res.data.companyName) setResolvedCompanyName(res.data.companyName);
+          if (res.data.logoUrl) setResolvedLogo(res.data.logoUrl);
+        }
+      } catch (err: any) {
+        if (err.response?.data?.message) {
+          setErrorMsg(err.response.data.message);
+        }
+      }
+    };
+    verifyToken();
+  }, [token]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -52,10 +71,9 @@ const AcceptInvite = () => {
 
     setLoading(true);
     try {
-      // Get the correct backend URL
       const apiUrl = APP_CONFIG.getBackendUrl();
       const res = await axios.post(`${apiUrl}/auth/accept-invite`, {
-        token,
+        token: (token || '').trim(),
         password
       });
 

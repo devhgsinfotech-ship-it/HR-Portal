@@ -2,69 +2,75 @@ import React from "react";
 import ReactApexChart from "react-apexcharts";
 import { ApexOptions } from "apexcharts";
 
-const LeaveTypeChart: React.FC = () => {
-  const series = [85, 50, 20]; // Sick, Casual, Unpaid
+interface LeaveStat {
+  name: string;
+  count: number;
+}
+
+interface Props {
+  stats?: LeaveStat[];
+}
+
+const LeaveTypeChart: React.FC<Props> = ({ stats = [] }) => {
+  const series = stats.length > 0 ? stats.map((s) => s.count) : [0];
+  const labels = stats.length > 0 ? stats.map((s) => s.name) : ["No Leaves"];
+  const total = stats.reduce((a, b) => a + b.count, 0);
 
   const options: ApexOptions = {
     chart: {
-      type: "radialBar",
-      width: 150,
-      height: 150,
-      sparkline: {
-        enabled: true,
-      },
+      type: "donut",
+      height: 180,
+      sparkline: { enabled: false },
     },
-
+    colors: ["#3b82f6", "#06b6d4", "#f59e0b", "#a855f7", "#64748b"],
+    labels,
+    legend: { show: false },
+    dataLabels: { enabled: false },
+    stroke: { width: 3, colors: ["var(--bs-card-bg, #ffffff)"] },
     plotOptions: {
-      radialBar: {
-        startAngle: -90,
-        endAngle: 90,
-        offsetY: 0,
-        hollow: {
-          margin: 0,
-          size: "40%",
-          background: "transparent",
-        },
-        track: {
-          show: true,
-          background: "#F3F4F6",
-          strokeWidth: "97%",
-          margin: 5,
-        },
-        dataLabels: {
-          show: false,
+      pie: {
+        donut: {
+          size: "72%",
+          labels: {
+            show: true,
+            name: {
+              show: true,
+              fontSize: "11px",
+              color: "#6b7280",
+              offsetY: -5,
+            },
+            value: {
+              show: true,
+              fontSize: "20px",
+              fontWeight: 700,
+              color: "var(--bs-body-color, #111827)",
+              offsetY: 2,
+              formatter: () => `${total}`,
+            },
+            total: {
+              show: true,
+              label: "Total Requests",
+              color: "#6b7280",
+              fontSize: "11px",
+              formatter: () => `${total}`,
+            },
+          },
         },
       },
     },
-
-    fill: {
-      colors: ["#F37438", "#F5844E", "#F69364"],
-    },
-
-    labels: ["Sick", "Casual", "Unpaid"],
-
-    grid: {
-      padding: {
-        top: -50,
-        left: -10,
-        bottom: -150,
+    tooltip: {
+      y: {
+        formatter: (val: number) => {
+          const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+          return `${val} (${pct}%)`;
+        },
       },
-    },
-
-    legend: {
-      show: false,
     },
   };
 
   return (
-    <div id="leave-chart">
-      <ReactApexChart
-        options={options}
-        series={series}
-        type="radialBar"
-        width={150}
-        height={150}
-      />
+    <div id="leave-type-donut-chart" className="d-flex align-items-center justify-content-center">
+      <ReactApexChart options={options} series={series} type="donut" height={180} />
     </div>
   );
 };

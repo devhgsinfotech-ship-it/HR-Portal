@@ -2,8 +2,7 @@
 
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-1.1.x"]
-  engineType    = "binary"
+  binaryTargets = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -117,6 +116,21 @@ enum ProjectHealth {
   CRITICAL
 }
 
+enum PayrollPeriodStatus {
+  DRAFT
+  INPUTS_REVIEWED
+  CALCULATED
+  APPROVED
+  LOCKED
+}
+
+enum PayrollEntryStatus {
+  DRAFT
+  OVERRIDDEN
+  APPROVED
+  LOCKED
+}
+
 enum TaskStatus {
   TODO
   PENDING
@@ -163,6 +177,7 @@ model Company {
   tasks            Task[]
   timeLogs         TimeLog[]
   companyRoles     CompanyRole[]
+  payrollPeriods   PayrollPeriod[]
 
   @@map("companies")
 }
@@ -260,6 +275,7 @@ model Employee {
 
   salaryStructure     SalaryStructure?
   payslips            Payslip[]
+  payrollEntries      PayrollEntry[]
   leaveRequests       LeaveRequest[]
   leaveBalances       LeaveBalance[]
   attendanceRecords   AttendanceRecord[]
@@ -464,8 +480,14 @@ model SalaryStructure {
   conveyance       Decimal  @default(0) @db.Decimal(12, 2)
   medicalAllowance Decimal  @default(0) @db.Decimal(12, 2)
   specialAllowance Decimal  @default(0) @db.Decimal(12, 2)
+  // New: bonus/incentives
+  bonus            Decimal  @default(0) @db.Decimal(12, 2)
   pfDeduction      Decimal  @default(0) @db.Decimal(12, 2)
+  // New: employer PF contribution (informational)
+  pfEmployer       Decimal  @default(0) @db.Decimal(12, 2)
   professionalTax  Decimal  @default(0) @db.Decimal(12, 2)
+  // New: TDS
+  tdsDeduction     Decimal  @default(0) @db.Decimal(12, 2)
   otherDeductions  Decimal  @default(0) @db.Decimal(12, 2)
   grossSalary      Decimal  @default(0) @db.Decimal(12, 2)
   netSalary        Decimal  @default(0) @db.Decimal(12, 2)
@@ -491,6 +513,8 @@ model Payslip {
   netPay          Decimal  @db.Decimal(12, 2)
   filePath        String?
   generatedAt     DateTime @default(now())
+  payrollEntryId  Int?     @unique
+  payrollEntry    PayrollEntry? @relation(fields: [payrollEntryId], references: [id], onDelete: SetNull)
 
   @@unique([employeeId, month, year])
   @@map("payslips")
@@ -668,14 +692,16 @@ model Announcement {
 // ============================================================
 
 model CompanySetting {
-  id              Int     @id @default(autoincrement())
-  companyId       Int     @unique
-  company         Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  workingDays     String  @default("Mon,Tue,Wed,Thu,Fri")
-  officeStartTime String  @default("09:00")
-  officeEndTime   String  @default("18:00")
-  timezone        String  @default("Asia/Kolkata")
-  currency        String  @default("INR")
+  id                   Int     @id @default(autoincrement())
+  companyId            Int     @unique
+  company              Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  workingDays          String  @default("Mon,Tue,Wed,Thu,Fri")
+  officeStartTime      String  @default("09:00")
+  officeEndTime        String  @default("18:00")
+  timezone             String  @default("Asia/Kolkata")
+  currency             String  @default("INR")
+  // Payroll cycle: day of month on which payroll period starts (1-28, default=1)
+  payrollCycleStartDay Int     @default(1)
 
   @@map("company_settings")
 }
@@ -1092,3 +1118,108 @@ model CommentLike {
   @@unique([commentId, employeeId])
   @@map("comment_likes")
 }
+
+// ============================================================
+// PAYROLL PERIOD — one per company per pay cycle
+// ============================================================
+
+model PayrollPeriod {
+  id              Int                  @id @default(autoincrement())
+  companyId       Int
+  company         Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Cycle dates (e.g. 2025-08-26 to 2025-09-25 for Sept payroll)
+  periodStart     DateTime             @db.Date
+  periodEnd       DateTime             @db.Date
+
+  // The calendar label (e.g. "September 2025")
+  label           String
+
+  // Total calendar days in this cycle (28–31 depending on month & start day)
+  totalDays       Int
+
+  // Counts for quick reference
+  weekoffDays     Int                  @default(0)
+  holidayDays     Int                  @default(0)
+  workingDays     Int                  @default(0)
+
+  status          PayrollPeriodStatus  @default(DRAFT)
+
+  // Aggregate totals (populated after CALCULATED step)
+  totalGross      Decimal              @default(0) @db.Decimal(14, 2)
+  totalDeductions Decimal              @default(0) @db.Decimal(14, 2)
+  totalNetPay     Decimal              @default(0) @db.Decimal(14, 2)
+
+  approvedAt      DateTime?
+  approvedById    Int?
+
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  entries         PayrollEntry[]
+
+  @@unique([companyId, periodStart])
+  @@map("payroll_periods")
+}
+
+// ============================================================
+// PAYROLL ENTRY — one per employee per payroll period
+// ============================================================
+
+model PayrollEntry {
+  id               Int                 @id @default(autoincrement())
+  payrollPeriodId  Int
+  payrollPeriod    PayrollPeriod       @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  employeeId       Int
+  employee         Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  // ── Earnings ─────────────────────────────
+  basic            Decimal             @default(0) @db.Decimal(12, 2)
+  hra              Decimal             @default(0) @db.Decimal(12, 2)
+  conveyance       Decimal             @default(0) @db.Decimal(12, 2)
+  medicalAllowance Decimal             @default(0) @db.Decimal(12, 2)
+  specialAllowance Decimal             @default(0) @db.Decimal(12, 2)
+  bonus            Decimal             @default(0) @db.Decimal(12, 2)
+  grossEarnings    Decimal             @default(0) @db.Decimal(12, 2)
+
+  // ── Attendance Reconciliation ─────────────
+  // Days in cycle (same as period.totalDays)
+  totalDays        Int                 @default(0)
+  // Week-offs + holidays in the cycle (no deduction)
+  protectedDays    Int                 @default(0)
+  // Approved paid leave days (no deduction)
+  paidLeaveDays    Decimal             @default(0) @db.Decimal(5, 2)
+  // Present (full + half) counted days
+  presentDays      Decimal             @default(0) @db.Decimal(5, 2)
+  // Half-day count (informational)
+  halfDays         Decimal             @default(0) @db.Decimal(5, 2)
+  // Unpaid/Loss of Pay days
+  lopDays          Decimal             @default(0) @db.Decimal(5, 2)
+
+  // LOP deduction amount = (grossSalary / totalDays) × lopDays
+  lopDeduction     Decimal             @default(0) @db.Decimal(12, 2)
+
+  // ── Statutory Deductions ──────────────────
+  pfDeduction      Decimal             @default(0) @db.Decimal(12, 2)
+  professionalTax  Decimal             @default(0) @db.Decimal(12, 2)
+  tdsDeduction     Decimal             @default(0) @db.Decimal(12, 2)
+  otherDeductions  Decimal             @default(0) @db.Decimal(12, 2)
+  totalDeductions  Decimal             @default(0) @db.Decimal(12, 2)
+
+  // ── Net Pay ───────────────────────────────
+  netPay           Decimal             @default(0) @db.Decimal(12, 2)
+
+  // HR override notes
+  hrRemarks        String?
+
+  status           PayrollEntryStatus  @default(DRAFT)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  // Link to generated payslip
+  payslip          Payslip?
+
+  @@unique([payrollPeriodId, employeeId])
+  @@map("payroll_entries")
+}
+

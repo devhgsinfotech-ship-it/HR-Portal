@@ -3,6 +3,7 @@ const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const emailService = require('../utils/emailService');
+const cache = require('../config/cache');
 
 function getCompanyPrefix(companyName) {
     if (!companyName) return 'EMP';
@@ -473,41 +474,58 @@ async function getMe(req, res) {
             }
         });
 
-        // If the logged-in user is an HR or SUPER_ADMIN and does not have an employee profile yet,
-        // auto-create one so their profile page is editable and displays correctly.
+        // If the logged-in user (HR, SUPER_ADMIN, MANAGER, etc.) does not have an employee profile yet,
+        // attempt to auto-create one or return a synthesized profile.
         if (!employee) {
             const user = await prisma.user.findUnique({ 
                 where: { id: userId },
                 include: { company: true }
             });
-            if (user && (user.role === 'HR' || user.role === 'SUPER_ADMIN')) {
-                const nameParts = user.name.trim().split(/\s+/);
-                const firstName = nameParts[0] || 'Admin';
-                const lastName = nameParts.slice(1).join(' ') || 'User';
-                const employeeCode = user.company 
-                    ? `${getCompanyPrefix(user.company.name)}-HR-${Date.now().toString().slice(-6)}`
-                    : `HR-${Date.now().toString().slice(-6)}`;
+            if (user) {
+                const nameParts = (user.name || '').trim().split(/\s+/).filter(Boolean);
+                const firstName = nameParts[0] || (user.role === 'HR' ? 'HR' : user.role === 'SUPER_ADMIN' ? 'Admin' : 'User');
+                const lastName = nameParts.slice(1).join(' ') || (user.role === 'HR' ? 'Manager' : '');
+                const companyPrefix = user.company ? getCompanyPrefix(user.company.name) : 'EMP';
+                const employeeCode = `${companyPrefix}-${user.role}-${Date.now().toString().slice(-6)}`;
 
-                employee = await prisma.employee.create({
-                    data: {
-                        userId,
+                try {
+                    employee = await prisma.employee.create({
+                        data: {
+                            userId,
+                            employeeCode,
+                            firstName,
+                            lastName,
+                            phone: user.company?.phone || null,
+                            address: user.company?.address || null,
+                            onboardingStatus: 'COMPLETED'
+                        },
+                        include: {
+                            user: { select: { id: true, name: true, email: true, role: true, company: true } },
+                            department: true,
+                            designation: true,
+                            bankDetails: true,
+                            salaryStructure: true
+                        }
+                    });
+                } catch (createErr) {
+                    console.error('Auto-creation of employee profile failed, returning virtual profile:', createErr);
+                    return res.json({
+                        id: 0,
+                        userId: user.id,
                         employeeCode,
                         firstName,
                         lastName,
-                        phone: user.company?.phone || null,
-                        address: user.company?.address || null,
-                        onboardingStatus: 'COMPLETED'
-                    },
-                    include: {
-                        user: { select: { id: true, name: true, email: true, role: true, company: true } },
-                        department: true,
-                        designation: true,
-                        bankDetails: true,
-                        salaryStructure: true
-                    }
-                });
+                        phone: user.company?.phone || 'N/A',
+                        address: user.company?.address || 'N/A',
+                        user: { id: user.id, name: user.name || `${firstName} ${lastName}`, email: user.email, role: user.role, company: user.company },
+                        department: { name: user.role === 'HR' ? 'Human Resources' : user.role },
+                        designation: { name: user.role === 'HR' ? 'HR Manager' : user.role },
+                        reportingManager: null,
+                        dateOfJoining: user.createdAt
+                    });
+                }
             } else {
-                return res.status(404).json({ message: 'Employee profile not found' });
+                return res.status(404).json({ message: 'User not found' });
             }
         } else if (employee && (employee.user?.role === 'HR' || employee.user?.role === 'SUPER_ADMIN')) {
             // Self-heal: If profile already exists but phone/address are missing, copy them from the company
@@ -939,6 +957,70 @@ async function getCompanyEvents(req, res) {
     }
 }
 
+function formatPostsList(posts, currentEmployeeId) {
+    return posts.map(post => {
+        const likedByMe = currentEmployeeId && post.likes
+            ? post.likes.some(like => like.employeeId === currentEmployeeId)
+            : false;
+        
+        const allComments = (post.comments || []).map(c => {
+            const commentLikedByMe = currentEmployeeId && c.likes
+                ? c.likes.some(like => like.employeeId === currentEmployeeId)
+                : false;
+            const cAuthor = c.employee
+                ? `${c.employee.firstName || ''} ${c.employee.lastName || ''}`.trim()
+                : 'Company Member';
+
+            return {
+                id: c.id,
+                parentId: c.parentId,
+                employeeId: c.employeeId,
+                author: cAuthor || 'Company Member',
+                profilePhotoUrl: c.employee?.profilePhotoUrl || null,
+                timestamp: c.createdAt,
+                createdAt: c.createdAt,
+                content: c.content,
+                likesCount: Array.isArray(c.likes) ? c.likes.length : 0,
+                liked: commentLikedByMe,
+                replies: [],
+                employee: c.employee
+            };
+        });
+
+        const commentMap = new Map();
+        allComments.forEach(c => commentMap.set(c.id, c));
+
+        const parentComments = [];
+        for (const c of allComments) {
+            if (c.parentId && commentMap.has(c.parentId)) {
+                commentMap.get(c.parentId).replies.push(c);
+            } else {
+                parentComments.push(c);
+            }
+        }
+
+        const pAuthor = post.employee
+            ? `${post.employee.firstName || ''} ${post.employee.lastName || ''}`.trim()
+            : 'Company Member';
+
+        return {
+            id: post.id,
+            employeeId: post.employeeId,
+            author: pAuthor || 'Company Member',
+            profilePhotoUrl: post.employee?.profilePhotoUrl || null,
+            designation: post.employee?.designation?.name || 'N/A',
+            timestamp: post.createdAt,
+            createdAt: post.createdAt,
+            content: post.content,
+            image: post.image,
+            likes: Array.isArray(post.likes) ? post.likes.length : 0,
+            liked: likedByMe,
+            comments: parentComments,
+            employee: post.employee
+        };
+    });
+}
+
 async function getPosts(req, res) {
     try {
         const companyId = req.user.companyId;
@@ -976,50 +1058,7 @@ async function getPosts(req, res) {
             orderBy: { createdAt: 'desc' }
         });
 
-        const enrichedPosts = posts.map(post => {
-            const likedByMe = post.likes.some(like => like.employeeId === currentEmployee.id);
-            
-            const allComments = post.comments.map(c => {
-                const commentLikedByMe = c.likes.some(like => like.employeeId === currentEmployee.id);
-                return {
-                    id: c.id,
-                    parentId: c.parentId,
-                    employeeId: c.employeeId,
-                    author: `${c.employee.firstName} ${c.employee.lastName || ''}`.trim(),
-                    profilePhotoUrl: c.employee.profilePhotoUrl,
-                    timestamp: c.createdAt,
-                    content: c.content,
-                    likesCount: c.likes.length,
-                    liked: commentLikedByMe,
-                    replies: []
-                };
-            });
-
-            const parentComments = allComments.filter(c => !c.parentId);
-            const replies = allComments.filter(c => c.parentId);
-
-            for (const reply of replies) {
-                const parent = parentComments.find(p => p.id === reply.parentId);
-                if (parent) {
-                    parent.replies.push(reply);
-                }
-            }
-
-            return {
-                id: post.id,
-                employeeId: post.employeeId,
-                author: `${post.employee.firstName} ${post.employee.lastName || ''}`.trim(),
-                profilePhotoUrl: post.employee.profilePhotoUrl,
-                designation: post.employee.designation?.name || 'N/A',
-                timestamp: post.createdAt,
-                content: post.content,
-                image: post.image,
-                likes: post.likes.length,
-                liked: likedByMe,
-                comments: parentComments
-            };
-        });
-
+        const enrichedPosts = formatPostsList(posts, currentEmployee.id);
         res.json(enrichedPosts);
     } catch (error) {
         console.error('Get Posts Error:', error);
@@ -1059,7 +1098,24 @@ async function createPost(req, res) {
             }
         });
 
-        res.status(201).json(newPost);
+        await cache.del(`dashboard:posts:${companyId}`);
+
+        const pAuthor = `${newPost.employee?.firstName || ''} ${newPost.employee?.lastName || ''}`.trim();
+        res.status(201).json({
+            id: newPost.id,
+            employeeId: newPost.employeeId,
+            author: pAuthor || 'Company Member',
+            profilePhotoUrl: newPost.employee?.profilePhotoUrl || null,
+            designation: newPost.employee?.designation?.name || 'N/A',
+            timestamp: newPost.createdAt,
+            createdAt: newPost.createdAt,
+            content: newPost.content,
+            image: newPost.image,
+            likes: 0,
+            liked: false,
+            comments: [],
+            employee: newPost.employee
+        });
     } catch (error) {
         console.error('Create Post Error:', error);
         res.status(500).json({ message: 'Internal server error' });
@@ -1087,6 +1143,7 @@ async function toggleLikePost(req, res) {
             }
         });
 
+        await cache.del(`dashboard:posts:${req.user.companyId}`);
         if (existingLike) {
             await prisma.postLike.delete({
                 where: { id: existingLike.id }
@@ -1140,12 +1197,21 @@ async function addCommentPost(req, res) {
             }
         });
 
+        await cache.del(`dashboard:posts:${req.user.companyId}`);
+        const cAuthor = `${newComment.employee?.firstName || ''} ${newComment.employee?.lastName || ''}`.trim();
         res.status(201).json({
             id: newComment.id,
             parentId: newComment.parentId,
-            author: `${newComment.employee.firstName} ${newComment.employee.lastName || ''}`.trim(),
+            employeeId: newComment.employeeId,
+            author: cAuthor || 'Company Member',
+            profilePhotoUrl: newComment.employee?.profilePhotoUrl || null,
             timestamp: newComment.createdAt,
-            content: newComment.content
+            createdAt: newComment.createdAt,
+            content: newComment.content,
+            likesCount: 0,
+            liked: false,
+            replies: [],
+            employee: newComment.employee
         });
     } catch (error) {
         console.error('Add Comment Post Error:', error);
@@ -1190,6 +1256,7 @@ async function editPost(req, res) {
             data: dataToUpdate
         });
 
+        await cache.del(`dashboard:posts:${req.user.companyId}`);
         res.json(updated);
     } catch (error) {
         console.error('Edit Post Error:', error);
@@ -1224,6 +1291,7 @@ async function deletePost(req, res) {
             where: { id: postId }
         });
 
+        await cache.del(`dashboard:posts:${req.user.companyId}`);
         res.json({ message: 'Post deleted successfully' });
     } catch (error) {
         console.error('Delete Post Error:', error);
@@ -1265,6 +1333,7 @@ async function editComment(req, res) {
             data: { content }
         });
 
+        await cache.del(`dashboard:posts:${req.user.companyId}`);
         res.json(updated);
     } catch (error) {
         console.error('Edit Comment Error:', error);
@@ -1299,6 +1368,7 @@ async function deleteComment(req, res) {
             where: { id: commentId }
         });
 
+        await cache.del(`dashboard:posts:${req.user.companyId}`);
         res.json({ message: 'Comment deleted successfully' });
     } catch (error) {
         console.error('Delete Comment Error:', error);
@@ -1416,6 +1486,274 @@ async function getNextHoliday(req, res) {
     }
 }
 
+async function getDashboardSummary(req, res) {
+    try {
+        const userId = req.user.id;
+        const companyId = req.user.companyId;
+
+        // Shared data cached in memory per company
+        const eventsKey = `events:${companyId}`;
+        const holidayKey = `holiday:${companyId}`;
+        const leaveTodayKey = `leaveToday:${companyId}`;
+        const announceKey = `announcements:${companyId}`;
+        const postsKey = `posts:${companyId}`;
+
+        const eventsPromise = cache.get(eventsKey).then(async cached => {
+            if (cached) return cached;
+            const employees = await prisma.employee.findMany({
+                where: { user: { companyId } },
+                include: { user: { select: { name: true, email: true } }, designation: true }
+            });
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const birthdaysToday = [];
+            const upcomingBirthdays = [];
+            const anniversaries = [];
+            const joinees = [];
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+
+            for (const emp of employees) {
+                if (emp.dateOfBirth) {
+                    const dob = new Date(emp.dateOfBirth);
+                    const bdayThisYear = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
+                    bdayThisYear.setHours(0, 0, 0, 0);
+                    let nextBday = bdayThisYear;
+                    if (bdayThisYear.getTime() < today.getTime()) {
+                        nextBday = new Date(today.getFullYear() + 1, dob.getMonth(), dob.getDate());
+                    }
+                    const diffDays = Math.ceil((nextBday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                    const empBdayInfo = {
+                        id: emp.id,
+                        firstName: emp.firstName,
+                        lastName: emp.lastName,
+                        profilePhotoUrl: emp.profilePhotoUrl,
+                        designation: emp.designation?.name || 'Employee',
+                        date: nextBday.toLocaleDateString('en-GB', { day: '2-digit', month: 'long' }),
+                        daysLeft: diffDays
+                    };
+                    if (diffDays === 0) birthdaysToday.push(empBdayInfo);
+                    else if (diffDays <= 30) upcomingBirthdays.push(empBdayInfo);
+                }
+
+                if (emp.dateOfJoining) {
+                    const doj = new Date(emp.dateOfJoining);
+                    if (doj >= thirtyDaysAgo) {
+                        joinees.push({
+                            id: emp.id,
+                            firstName: emp.firstName,
+                            lastName: emp.lastName,
+                            profilePhotoUrl: emp.profilePhotoUrl,
+                            designation: emp.designation?.name || 'Employee',
+                            date: doj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                        });
+                    }
+                    const annThisYear = new Date(today.getFullYear(), doj.getMonth(), doj.getDate());
+                    annThisYear.setHours(0, 0, 0, 0);
+                    let nextAnn = annThisYear;
+                    if (annThisYear.getTime() < today.getTime()) {
+                        nextAnn = new Date(today.getFullYear() + 1, doj.getMonth(), doj.getDate());
+                    }
+                    const diffDaysAnn = Math.ceil((nextAnn.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                    const yearsCompleted = today.getFullYear() - doj.getFullYear();
+                    if (diffDaysAnn <= 30 && yearsCompleted > 0) {
+                        anniversaries.push({
+                            id: emp.id,
+                            firstName: emp.firstName,
+                            lastName: emp.lastName,
+                            profilePhotoUrl: emp.profilePhotoUrl,
+                            designation: emp.designation?.name || 'Employee',
+                            yearsCompleted,
+                            date: nextAnn.toLocaleDateString('en-GB', { day: '2-digit', month: 'long' })
+                        });
+                    }
+                }
+            }
+
+            const data = { birthdays: { today: birthdaysToday, upcoming: upcomingBirthdays }, anniversaries, joinees };
+            await cache.set(eventsKey, data, 600); // 10 mins cache
+            return data;
+        });
+
+        const holidayPromise = cache.get(holidayKey).then(async cached => {
+            if (cached) return cached;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const holiday = await prisma.holiday.findFirst({
+                where: { companyId, holidayDate: { gte: today } },
+                orderBy: { holidayDate: 'asc' }
+            });
+            await cache.set(holidayKey, holiday || null, 3600); // 1 hour cache
+            return holiday || null;
+        });
+
+        const leaveTodayPromise = cache.get(leaveTodayKey).then(async cached => {
+            if (cached) return cached;
+            const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+            const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+            const onLeave = await prisma.leaveRequest.findMany({
+                where: { status: 'APPROVED', startDate: { lte: todayEnd }, endDate: { gte: todayStart }, employee: { user: { companyId } } },
+                include: { employee: { include: { user: { select: { name: true } }, designation: { select: { name: true } }, department: { select: { name: true } } } }, leaveType: { select: { name: true } } }
+            });
+            const data = onLeave.map(r => ({
+                id: r.id,
+                employeeName: `${r.employee.firstName} ${r.employee.lastName}`,
+                designation: r.employee.designation?.name || null,
+                department: r.employee.department?.name || null,
+                profilePhotoUrl: r.employee.profilePhotoUrl || null,
+                leaveType: r.leaveType?.name || 'Leave',
+                startDate: r.startDate,
+                endDate: r.endDate
+            }));
+            await cache.set(leaveTodayKey, data, 180); // 3 mins cache
+            return data;
+        });
+
+        const announcePromise = cache.get(announceKey).then(async cached => {
+            if (cached) return cached;
+            const now = new Date();
+            const announcements = await prisma.announcement.findMany({
+                where: { companyId, publishedAt: { lte: now }, OR: [{ expiresAt: null }, { expiresAt: { gte: now } }] },
+                include: { createdBy: { select: { firstName: true, lastName: true, profilePhotoUrl: true, designation: { select: { name: true } } } } },
+                orderBy: { publishedAt: 'desc' }
+            });
+            await cache.set(announceKey, announcements, 180); // 3 mins cache
+            return announcements;
+        });
+
+        const postsPromise = cache.get(postsKey).then(async cached => {
+            if (cached) return cached;
+            const currentEmp = await prisma.employee.findUnique({
+                where: { userId },
+                select: { id: true }
+            });
+            const posts = await prisma.post.findMany({
+                where: { companyId },
+                include: {
+                    employee: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true, designation: { select: { name: true } } } },
+                    likes: { select: { id: true, employeeId: true } },
+                    comments: {
+                        include: { employee: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true, designation: { select: { name: true } } } }, likes: { select: { id: true, employeeId: true } } },
+                        orderBy: { createdAt: 'asc' }
+                    }
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 20
+            });
+            const enriched = formatPostsList(posts, currentEmp?.id);
+            await cache.set(postsKey, enriched, 60); // 1 min cache
+            return enriched;
+        });
+
+        // Fetch user profile & attendance in parallel
+        const empPromise = prisma.employee.findUnique({
+            where: { userId },
+            include: { user: { select: { id: true, name: true, email: true, role: true, company: true } }, department: true, designation: true, bankDetails: true, salaryStructure: true }
+        });
+
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+
+        const statusPromise = prisma.attendanceRecord.findFirst({
+            where: { employee: { userId }, date: { gte: todayStart, lte: todayEnd } },
+            orderBy: { createdAt: 'desc' }
+        }).then(log => ({ isCheckedIn: log ? !log.checkOut : false, checkInTime: log?.checkIn, checkOutTime: log?.checkOut }));
+
+        const logsPromise = prisma.attendanceRecord.findMany({
+            where: { employee: { userId } },
+            orderBy: { date: 'desc' },
+            take: 7
+        });
+
+        const currentYear = new Date().getFullYear();
+        const balancesPromise = (async () => {
+            const emp = await prisma.employee.findUnique({ where: { userId }, select: { id: true } });
+            const resolvedCompanyId = companyId || (await prisma.user.findUnique({ where: { id: userId }, select: { companyId: true } }))?.companyId;
+
+            if (!resolvedCompanyId) return [];
+
+            const leaveTypes = await prisma.leaveType.findMany({
+                where: { companyId: resolvedCompanyId }
+            });
+
+            return Promise.all(leaveTypes.map(async (lt) => {
+                let total = Number(lt.totalDaysPerYear) || 0;
+                let used = 0;
+
+                if (emp) {
+                    const bal = await prisma.leaveBalance.findFirst({
+                        where: {
+                            employeeId: emp.id,
+                            leaveTypeId: lt.id,
+                            year: currentYear
+                        }
+                    });
+                    if (bal) {
+                        used = Number(bal.usedDays) || 0;
+                    }
+
+                    const policy = await prisma.leavePolicy.findFirst({
+                        where: {
+                            leaveTypeId: lt.id,
+                            employees: {
+                                some: { id: emp.id }
+                            }
+                        }
+                    });
+                    if (policy) {
+                        total = Number(policy.days) || total;
+                    }
+                }
+
+                return {
+                    leaveTypeId: lt.id,
+                    leaveTypeName: lt.name,
+                    isPaid: lt.isPaid,
+                    totalDays: total,
+                    usedDays: used,
+                    remainingDays: Math.max(0, total - used)
+                };
+            }));
+        })();
+
+        const requestsPromise = prisma.leaveRequest.findMany({
+            where: { employee: { userId } },
+            include: { leaveType: true },
+            orderBy: { appliedAt: 'desc' },
+            take: 10
+        });
+
+        const [employee, attendanceStatus, attendanceLogs, leaveBalances, leaveRequests, events, nextHoliday, onLeaveToday, announcements, posts] = await Promise.all([
+            empPromise,
+            statusPromise,
+            logsPromise,
+            balancesPromise,
+            requestsPromise,
+            eventsPromise,
+            holidayPromise,
+            leaveTodayPromise,
+            announcePromise,
+            postsPromise
+        ]);
+
+        res.json({
+            employee,
+            attendanceStatus,
+            attendanceLogs,
+            leaveBalances,
+            leaveRequests,
+            events,
+            nextHoliday,
+            onLeaveToday,
+            announcements,
+            posts
+        });
+    } catch (error) {
+        console.error('Error fetching dashboard summary:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     checkEmailAvailability,
     createEmployee,
@@ -1443,5 +1781,6 @@ module.exports = {
     deleteComment,
     toggleLikeComment,
     getOnLeaveToday,
-    getNextHoliday
+    getNextHoliday,
+    getDashboardSummary
 };

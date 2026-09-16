@@ -49,11 +49,12 @@ async function getLeaveRequests(req, res) {
         const userId = req.user.id;
         const role = req.user.role;
 
-        let whereClause = {
-            employee: {
+        let whereClause = {};
+        if (companyId) {
+            whereClause.employee = {
                 user: { companyId }
-            }
-        };
+            };
+        }
 
         // Employees only see their own requests unless HR/MANAGER/SUPER_ADMIN, 
         // OR if anyone explicitly requests only their own with ?mine=true
@@ -272,35 +273,44 @@ async function getLeaveBalances(req, res) {
         const currentYear = new Date().getFullYear();
 
         const employee = await prisma.employee.findUnique({ where: { userId } });
-        if (!employee) {
-            return res.status(404).json({ message: 'Employee profile not found' });
+        const companyId = req.user.companyId || (await prisma.user.findUnique({ where: { id: userId }, select: { companyId: true } }))?.companyId;
+
+        if (!companyId) {
+            return res.json([]);
         }
 
         const leaveTypes = await prisma.leaveType.findMany({
-            where: { companyId: req.user.companyId }
+            where: { companyId }
         });
 
         const balances = await Promise.all(leaveTypes.map(async (lt) => {
-            const bal = await prisma.leaveBalance.findFirst({
-                where: {
-                    employeeId: employee.id,
-                    leaveTypeId: lt.id,
-                    year: currentYear
-                }
-            });
+            let total = Number(lt.totalDaysPerYear) || 0;
+            let used = 0;
 
-            // Find if there is an active custom policy override for this employee
-            const policy = await prisma.leavePolicy.findFirst({
-                where: {
-                    leaveTypeId: lt.id,
-                    employees: {
-                        some: { id: employee.id }
+            if (employee) {
+                const bal = await prisma.leaveBalance.findFirst({
+                    where: {
+                        employeeId: employee.id,
+                        leaveTypeId: lt.id,
+                        year: currentYear
                     }
+                });
+                if (bal) {
+                    used = Number(bal.usedDays) || 0;
                 }
-            });
 
-            const total = policy ? Number(policy.days) : Number(lt.totalDaysPerYear);
-            const used = bal ? Number(bal.usedDays) : 0;
+                const policy = await prisma.leavePolicy.findFirst({
+                    where: {
+                        leaveTypeId: lt.id,
+                        employees: {
+                            some: { id: employee.id }
+                        }
+                    }
+                });
+                if (policy) {
+                    total = Number(policy.days) || total;
+                }
+            }
 
             return {
                 leaveTypeId: lt.id,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSelector } from "react-redux";
 import apiClient from "../../../core/utils/apiClient";
 import { Link } from "react-router-dom";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
@@ -12,7 +13,7 @@ import CommonFooter from "@/core/common/commonFooter/footer";
 import CommonTextEditor from "@/core/common/textEditor";
 import { APP_CONFIG } from "../../../environment";
 
-const EmployeeDashboard = () => {
+const LiveClockWidget = ({ handlePunch, attendanceStatus }: { handlePunch: () => void; attendanceStatus: any }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -40,6 +41,31 @@ const EmployeeDashboard = () => {
   };
 
   const { hhmm, ssAmPm } = getFormattedTimeParts();
+
+  return (
+    <div className="card border-0" style={{ backgroundColor: '#162E5B', borderRadius: '8px' }}>
+      <div className="card-body p-3 text-white">
+        <div className="d-flex align-items-center justify-content-between mb-4">
+          <span className="text-white fs-14 fw-medium">Time Today - {getFormattedDate()}</span>
+          <Link to={all_routes.attendanceemployee} className="text-white text-decoration-underline fs-14 fw-medium">View All</Link>
+        </div>
+        <span className="d-block text-white-50 fs-11 fw-bold tracking-wide mb-1" style={{ letterSpacing: '0.05em' }}>CURRENT TIME</span>
+        <div className="d-flex align-items-end justify-content-between">
+          <div className="d-flex align-items-baseline text-white">
+            <h1 className="display-4 text-white mb-0 fw-normal" style={{ fontSize: '2.5rem', lineHeight: '1' }}>{hhmm}</h1>
+            <span className="fs-14 ms-1" style={{ opacity: 0.85 }}>{ssAmPm}</span>
+          </div>
+          <button onClick={handlePunch} className="btn px-4 py-2 border-0 fw-medium fs-14 rounded-3 text-white" style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s' }}>
+            {attendanceStatus?.isCheckedIn ? "Clock-out" : "Clock-in"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EmployeeDashboard = () => {
+  const authUser = useSelector((state: any) => state.auth?.user);
   const [employeeData, setEmployeeData] = useState<any>(null);
   const [attendanceStatus, setAttendanceStatus] = useState<any>(null);
   const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
@@ -67,11 +93,14 @@ const EmployeeDashboard = () => {
   const [replyingToCommentId, setReplyingToCommentId] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
 
-  const formatPostTime = (dateStr: string) => {
+  const formatPostTime = (dateStr: any) => {
+    if (!dateStr) return 'Just now';
     try {
       const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return 'Just now';
       const now = new Date();
       const diffMs = now.getTime() - date.getTime();
+      if (diffMs <= 0) return 'Just now';
       const diffMins = Math.floor(diffMs / 60000);
       if (diffMins < 1) return 'Just now';
       if (diffMins < 60) return `${diffMins}m ago`;
@@ -225,19 +254,58 @@ const EmployeeDashboard = () => {
 
   const fetchData = async () => {
     try {
+      const summaryRes = await apiClient.get('/employees/dashboard/summary').catch(() => null);
+      if (summaryRes?.data) {
+        const d = summaryRes.data;
+        const profileData = d.employee || (authUser ? {
+          firstName: authUser.name ? authUser.name.split(' ')[0] : (authUser.role || 'User'),
+          lastName: authUser.name ? authUser.name.split(' ').slice(1).join(' ') : '',
+          designation: { name: authUser.role === 'HR' ? 'HR Manager' : authUser.role === 'SUPER_ADMIN' ? 'System Administrator' : 'Employee' },
+          department: { name: authUser.role === 'HR' ? 'Human Resources' : 'Management' },
+          user: { email: authUser.email, name: authUser.name, role: authUser.role },
+          phone: 'N/A',
+          dateOfJoining: null,
+          reportingManager: null
+        } : null);
+
+        setEmployeeData(profileData);
+        setAttendanceStatus(d.attendanceStatus);
+        setAttendanceLogs(d.attendanceLogs || []);
+        setLeaveBalances(d.leaveBalances || []);
+        setLeaveRequests(d.leaveRequests || []);
+        setEvents(d.events || { birthdays: { today: [], upcoming: [] }, anniversaries: [], joinees: [] });
+        setPosts(d.posts || []);
+        setOnLeaveToday(d.onLeaveToday || []);
+        setNextHoliday(d.nextHoliday || null);
+        setAnnouncements(d.announcements || []);
+        return;
+      }
+
       const [empRes, statusRes, logsRes, balancesRes, requestsRes, eventsRes, postsRes, onLeaveRes, holidayRes, announceRes] = await Promise.all([
         apiClient.get('/employees/me').catch(() => ({ data: null })),
         apiClient.get('/attendance/today').catch(() => ({ data: null })),
         apiClient.get('/attendance/logs?mine=true').catch(() => ({ data: [] })),
         apiClient.get('/leaves/balances').catch(() => ({ data: [] })),
-        apiClient.get('/leaves/requests').catch(() => ({ data: [] })),
+        apiClient.get('/leaves/requests?mine=true').catch(() => ({ data: [] })),
         apiClient.get('/employees/dashboard/events').catch(() => ({ data: { birthdays: { today: [], upcoming: [] }, anniversaries: [], joinees: [] } })),
         apiClient.get('/employees/dashboard/posts').catch(() => ({ data: [] })),
         apiClient.get('/employees/dashboard/on-leave-today').catch(() => ({ data: [] })),
         apiClient.get('/employees/dashboard/next-holiday').catch(() => ({ data: null })),
         apiClient.get('/announcements').catch(() => ({ data: [] }))
       ]);
-      setEmployeeData(empRes.data);
+
+      const profileData = empRes.data || (authUser ? {
+        firstName: authUser.name ? authUser.name.split(' ')[0] : (authUser.role || 'User'),
+        lastName: authUser.name ? authUser.name.split(' ').slice(1).join(' ') : '',
+        designation: { name: authUser.role === 'HR' ? 'HR Manager' : authUser.role === 'SUPER_ADMIN' ? 'System Administrator' : 'Employee' },
+        department: { name: authUser.role === 'HR' ? 'Human Resources' : 'Management' },
+        user: { email: authUser.email, name: authUser.name, role: authUser.role },
+        phone: 'N/A',
+        dateOfJoining: null,
+        reportingManager: null
+      } : null);
+
+      setEmployeeData(profileData);
       setAttendanceStatus(statusRes.data);
       setAttendanceLogs(logsRes.data || []);
       setLeaveBalances(balancesRes.data || []);
@@ -270,18 +338,16 @@ const EmployeeDashboard = () => {
   };
 
 
-  const LEAVE_COLORS = ['#00A3FF', '#28C76F', '#FF9F43', '#00BCD4', '#9B59B6', '#E74C3C', '#F39C12', '#1ABC9C'];
-
   const renderLeaveBalanceRing = (balance: any, colorIndex: number) => {
-    const color = LEAVE_COLORS[colorIndex % LEAVE_COLORS.length];
+    const color = '#00A3FF';
     const total = Number(balance.totalDays) || 1;
     const used = Number(balance.usedDays) || 0;
     const remaining = Math.max(0, total - used);
     const usedPercent = Math.min(100, (used / total) * 100);
 
-    const size = 72;
-    const radius = 28;
-    const strokeWidth = 5;
+    const size = 94;
+    const radius = 37;
+    const strokeWidth = 7;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (usedPercent / 100) * circumference;
     const cx = size / 2;
@@ -292,8 +358,8 @@ const EmployeeDashboard = () => {
         <div className="position-relative d-inline-flex align-items-center justify-content-center" style={{ width: `${size}px`, height: `${size}px` }}>
           <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
             {/* Background grey track */}
-            <circle cx={cx} cy={cy} r={radius} fill="none" stroke="#EAEEF2" strokeWidth={strokeWidth} />
-            {/* Consumed arc (colored) */}
+            <circle cx={cx} cy={cy} r={radius} fill="none" stroke="#EAEFF5" strokeWidth={strokeWidth} />
+            {/* Consumed arc (blue) */}
             {used > 0 && (
               <circle
                 cx={cx} cy={cy} r={radius}
@@ -309,12 +375,12 @@ const EmployeeDashboard = () => {
           </svg>
           {/* Remaining days in center */}
           <div className="position-absolute text-center" style={{ lineHeight: 1 }}>
-            <span className="fw-bold" style={{ fontSize: '14px', color: '#1a1a2e' }}>{remaining}</span>
+            <span className="fw-bold" style={{ fontSize: '20px', color: '#1E293B' }}>{remaining}</span>
           </div>
         </div>
         {/* Leave type label */}
-        <div className="text-center mt-1">
-          <span className="d-block fw-bold text-uppercase" style={{ fontSize: '8px', letterSpacing: '0.04em', color: '#8a8fb5' }}>
+        <div className="text-center mt-3">
+          <span className="d-block fw-bold text-uppercase text-truncate" style={{ fontSize: '11px', letterSpacing: '0.03em', color: '#8A94A6', maxWidth: '110px' }} title={balance.leaveTypeName}>
             {balance.leaveTypeName}
           </span>
         </div>
@@ -689,7 +755,7 @@ const EmployeeDashboard = () => {
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
               <div className="d-inline-flex align-items-center bg-white border rounded-3 px-3 text-gray-9 fs-14 fw-medium" style={{ height: '40px', borderColor: '#E2E8F0' }}>
                 <i className="ti ti-calendar me-2 text-gray-5 fs-16" />
-                <span>{currentTime.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')}</span>
+                <span>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')}</span>
               </div>
               <div className="ms-2 mt-2 head-icons">
                 <CollapseHeader />
@@ -834,7 +900,9 @@ const EmployeeDashboard = () => {
                     {employeeData?.firstName ? `${employeeData.firstName} ${employeeData.lastName}` : "Loading..."}
                   </h5>
                   <p className="text-gray-5 fs-13 mb-0 fw-medium">
-                    {employeeData?.designation?.name || "N/A"} • {employeeData?.department?.name || "N/A"}
+                    {employeeData?.designation?.name && employeeData?.department?.name
+                      ? `${employeeData.designation.name} • ${employeeData.department.name}`
+                      : (employeeData?.designation?.name || employeeData?.department?.name || employeeData?.user?.role || "Employee")}
                   </p>
 
                   <hr className="my-3 border-light-subtle" />
@@ -936,24 +1004,7 @@ const EmployeeDashboard = () => {
                 </div>
               </div>
 
-              <div className="card border-0" style={{ backgroundColor: '#162E5B', borderRadius: '8px' }}>
-                <div className="card-body p-3 text-white">
-                  <div className="d-flex align-items-center justify-content-between mb-4">
-                    <span className="text-white fs-14 fw-medium">Time Today - {getFormattedDate()}</span>
-                    <Link to={all_routes.attendanceemployee} className="text-white text-decoration-underline fs-14 fw-medium">View All</Link>
-                  </div>
-                  <span className="d-block text-white-50 fs-11 fw-bold tracking-wide mb-1" style={{ letterSpacing: '0.05em' }}>CURRENT TIME</span>
-                  <div className="d-flex align-items-end justify-content-between">
-                    <div className="d-flex align-items-baseline text-white">
-                      <h1 className="display-4 text-white mb-0 fw-normal" style={{ fontSize: '2.5rem', lineHeight: '1' }}>{hhmm}</h1>
-                      <span className="fs-14 ms-1" style={{ opacity: 0.85 }}>{ssAmPm}</span>
-                    </div>
-                    <button onClick={handlePunch} className="btn px-4 py-2 border-0 fw-medium fs-14 rounded-3 text-white" style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s' }}>
-                      {attendanceStatus?.isCheckedIn ? "Clock-out" : "Clock-in"}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <LiveClockWidget handlePunch={handlePunch} attendanceStatus={attendanceStatus} />
 
 
               <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
@@ -976,25 +1027,29 @@ const EmployeeDashboard = () => {
                 </div>
               </div>
 
-              <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-                <div className="card-body p-3">
+              <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '16px', backgroundColor: '#FFFFFF' }}>
+                <div className="card-body p-4">
                   <div className="d-flex align-items-center justify-content-between mb-3">
-                    <h6 className="fw-medium text-gray-9 mb-0">Leave Balances</h6>
+                    <h5 className="fw-bold text-gray-9 mb-0" style={{ fontSize: '20px', color: '#1E293B' }}>Leave Balances</h5>
                     <div className="text-end">
-                      <Link to={all_routes.leaveemployee} className="d-block fs-9 fw-semibold mb-1" style={{ color: '#FE502E' }}>Request Leave</Link>
-                      <Link to={all_routes.leaveemployee} className="d-block fs-8 fw-semibold" style={{ color: '#162E5B' }}>View All Balances</Link>
+                      <Link to={all_routes.leaveemployee} className="d-block fw-semibold mb-1 text-decoration-none" style={{ color: '#FF5630', fontSize: '13px' }}>
+                        Request Leave
+                      </Link>
+                      <Link to={all_routes.leaveemployee} className="d-block fw-bold text-decoration-none" style={{ color: '#162E5B', fontSize: '12px' }}>
+                        View All Balances
+                      </Link>
                     </div>
                   </div>
 
                   {/* Legend */}
-                  <div className="d-flex align-items-center gap-3 mb-3 px-1">
-                    <div className="d-flex align-items-center gap-1">
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#00A3FF', display: 'inline-block' }} />
-                      <span style={{ fontSize: '10px', color: '#8a8fb5' }}>Consumed</span>
+                  <div className="d-flex align-items-center gap-4 mb-4">
+                    <div className="d-flex align-items-center gap-2">
+                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#00A3FF', display: 'inline-block' }} />
+                      <span className="fw-medium" style={{ fontSize: '13px', color: '#8A94A6' }}>Consumed</span>
                     </div>
-                    <div className="d-flex align-items-center gap-1">
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#EAEEF2', border: '1px solid #ccc', display: 'inline-block' }} />
-                      <span style={{ fontSize: '10px', color: '#8a8fb5' }}>Remaining</span>
+                    <div className="d-flex align-items-center gap-2">
+                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#EAEFF5', border: '1px solid #CBD5E1', display: 'inline-block' }} />
+                      <span className="fw-medium" style={{ fontSize: '13px', color: '#8A94A6' }}>Remaining</span>
                     </div>
                   </div>
 
@@ -1002,7 +1057,7 @@ const EmployeeDashboard = () => {
                   {leaveBalances.length === 0 ? (
                     <p className="text-muted text-center fs-13 py-3">No leave balances found</p>
                   ) : (
-                    <div className="row text-center g-3">
+                    <div className="row text-center g-3 justify-content-center">
                       {leaveBalances.map((bal: any, idx: number) => (
                         <div key={bal.leaveTypeId} className={`col-${leaveBalances.length <= 2 ? 6 : leaveBalances.length <= 3 ? 4 : 3} px-1`}>
                           {renderLeaveBalanceRing(bal, idx)}
@@ -1128,11 +1183,24 @@ const EmployeeDashboard = () => {
                   {/* CREATE POST CARD */}
                   <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
                     <div className="card-body p-4">
-                      <div className="d-flex align-items-center gap-2 mb-3">
-                        <span className="d-inline-flex align-items-center justify-content-center rounded-circle" style={{ width: '32px', height: '32px', color: '#00BCD4', backgroundColor: '#E0F7FA' }}>
-                          <i className="ti ti-edit fs-16" />
-                        </span>
-                        <h6 className="fw-semibold text-gray-9 mb-0">Create Post</h6>
+                      <div className="d-flex align-items-center justify-content-between mb-3">
+                        <div className="d-flex align-items-center gap-3">
+                          <span className="avatar avatar-md avatar-rounded border border-white shadow-sm overflow-hidden flex-shrink-0" style={{ width: '42px', height: '42px' }}>
+                            {employeeData?.profilePhotoUrl ? (
+                              <img src={employeeData.profilePhotoUrl.startsWith('http') ? employeeData.profilePhotoUrl : `${apiUrl}${employeeData.profilePhotoUrl}`} alt="Img" className="img-fluid rounded-circle" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <ImageWithBasePath src="assets/img/users/user-01.jpg" alt="Img" className="img-fluid rounded-circle" />
+                            )}
+                          </span>
+                          <div>
+                            <h6 className="fw-bold text-gray-9 mb-0 fs-14">
+                              {employeeData ? `${employeeData.firstName || ''} ${employeeData.lastName || ''}`.trim() : (authUser?.name || 'Create Post')}
+                            </h6>
+                            <span className="fs-12 text-gray-5">
+                              {employeeData?.designation?.name || 'Share an update with your team'}
+                            </span>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Rich Text Editor */}
@@ -1408,16 +1476,22 @@ const EmployeeDashboard = () => {
                           {/* Post Header */}
                           <div className="d-flex align-items-center justify-content-between mb-3">
                             <div className="d-flex align-items-center gap-2">
-                              <span className="avatar avatar-md avatar-rounded border border-white shadow-sm overflow-hidden" style={{ width: '40px', height: '40px' }}>
+                              <span className="avatar avatar-md avatar-rounded border border-white shadow-sm overflow-hidden flex-shrink-0" style={{ width: '40px', height: '40px' }}>
                                 {post.profilePhotoUrl ? (
                                   <img src={post.profilePhotoUrl.startsWith('http') ? post.profilePhotoUrl : `${apiUrl}${post.profilePhotoUrl}`} alt="Img" className="img-fluid rounded-circle" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : post.employee?.profilePhotoUrl ? (
+                                  <img src={post.employee.profilePhotoUrl.startsWith('http') ? post.employee.profilePhotoUrl : `${apiUrl}${post.employee.profilePhotoUrl}`} alt="Img" className="img-fluid rounded-circle" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                 ) : (
                                   <ImageWithBasePath src="assets/img/users/user-01.jpg" alt="Img" className="img-fluid rounded-circle" />
                                 )}
                               </span>
                               <div>
-                                <h6 className="fw-bold text-gray-9 mb-0 fs-14">{post.author}</h6>
-                                <p className="text-gray-5 fs-12 mb-0">{formatPostTime(post.timestamp)} • <span className="fw-medium text-gray-4">{post.designation}</span></p>
+                                <h6 className="fw-bold text-gray-9 mb-0 fs-14">
+                                  {post.author || (post.employee ? `${post.employee.firstName || ''} ${post.employee.lastName || ''}`.trim() : 'Company Member')}
+                                </h6>
+                                <p className="text-gray-5 fs-12 mb-0">
+                                  {formatPostTime(post.timestamp || post.createdAt)} • <span className="fw-medium text-gray-4">{post.designation || post.employee?.designation?.name || 'Member'}</span>
+                                </p>
                               </div>
                             </div>
                             {employeeData && (post.employeeId === employeeData.id || employeeData.user?.role === 'HR' || employeeData.user?.role === 'SUPER_ADMIN') && (
@@ -1566,17 +1640,21 @@ const EmployeeDashboard = () => {
                                 <div key={comment.id} className="comment-item mb-3 pb-3 border-bottom border-light last-border-0">
                                   <div className="d-flex align-items-center justify-content-between mb-1">
                                     <div className="d-flex align-items-center gap-2">
-                                      <span className="avatar avatar-xs avatar-rounded overflow-hidden" style={{ width: '20px', height: '20px' }}>
+                                      <span className="avatar avatar-xs avatar-rounded overflow-hidden flex-shrink-0" style={{ width: '22px', height: '22px' }}>
                                         {comment.profilePhotoUrl ? (
                                           <img src={comment.profilePhotoUrl.startsWith('http') ? comment.profilePhotoUrl : `${apiUrl}${comment.profilePhotoUrl}`} alt="Img" className="img-fluid rounded-circle" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        ) : comment.employee?.profilePhotoUrl ? (
+                                          <img src={comment.employee.profilePhotoUrl.startsWith('http') ? comment.employee.profilePhotoUrl : `${apiUrl}${comment.employee.profilePhotoUrl}`} alt="Img" className="img-fluid rounded-circle" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                         ) : (
                                           <ImageWithBasePath src="assets/img/users/user-01.jpg" alt="Img" className="img-fluid rounded-circle" />
                                         )}
                                       </span>
-                                      <span className="fw-semibold text-gray-9 fs-12">{comment.author}</span>
+                                      <span className="fw-semibold text-gray-9 fs-12">
+                                        {comment.author || (comment.employee ? `${comment.employee.firstName || ''} ${comment.employee.lastName || ''}`.trim() : 'Company Member')}
+                                      </span>
                                     </div>
                                     <div className="d-flex align-items-center gap-2">
-                                      <span className="text-gray-4 fs-11">{formatPostTime(comment.timestamp)}</span>
+                                      <span className="text-gray-4 fs-11">{formatPostTime(comment.timestamp || comment.createdAt)}</span>
                                       {employeeData && (comment.employeeId === employeeData.id || employeeData.user?.role === 'HR' || employeeData.user?.role === 'SUPER_ADMIN') && (
                                         <div className="dropdown">
                                           <Link to="#" className="text-gray-4 p-0 fs-10" data-bs-toggle="dropdown" style={{ outline: 'none' }}>
@@ -1657,23 +1735,28 @@ const EmployeeDashboard = () => {
                                   </div>
 
                                   {/* Nested Replies Rendering */}
+                              {/* Nested Replies Rendering */}
                                   {comment.replies && comment.replies.length > 0 && (
                                     <div className="replies-list ms-4 ps-3 border-start border-light mb-2">
                                       {comment.replies.map((reply: any) => (
                                         <div key={reply.id} className="reply-item mt-2 pb-1 border-bottom border-light last-border-0">
                                           <div className="d-flex align-items-center justify-content-between mb-1">
                                             <div className="d-flex align-items-center gap-2">
-                                              <span className="avatar avatar-xs avatar-rounded overflow-hidden" style={{ width: '18px', height: '18px' }}>
+                                              <span className="avatar avatar-xs avatar-rounded overflow-hidden flex-shrink-0" style={{ width: '20px', height: '20px' }}>
                                                 {reply.profilePhotoUrl ? (
                                                   <img src={reply.profilePhotoUrl.startsWith('http') ? reply.profilePhotoUrl : `${apiUrl}${reply.profilePhotoUrl}`} alt="Img" className="img-fluid rounded-circle" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                ) : reply.employee?.profilePhotoUrl ? (
+                                                  <img src={reply.employee.profilePhotoUrl.startsWith('http') ? reply.employee.profilePhotoUrl : `${apiUrl}${reply.employee.profilePhotoUrl}`} alt="Img" className="img-fluid rounded-circle" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                 ) : (
                                                   <ImageWithBasePath src="assets/img/users/user-01.jpg" alt="Img" className="img-fluid rounded-circle" />
                                                 )}
                                               </span>
-                                              <span className="fw-semibold text-gray-9 fs-11">{reply.author}</span>
+                                              <span className="fw-semibold text-gray-9 fs-11">
+                                                {reply.author || (reply.employee ? `${reply.employee.firstName || ''} ${reply.employee.lastName || ''}`.trim() : 'Company Member')}
+                                              </span>
                                             </div>
                                             <div className="d-flex align-items-center gap-2">
-                                              <span className="text-gray-4 fs-10">{formatPostTime(reply.timestamp)}</span>
+                                              <span className="text-gray-4 fs-10">{formatPostTime(reply.timestamp || reply.createdAt)}</span>
                                               {employeeData && (reply.employeeId === employeeData.id || employeeData.user?.role === 'HR' || employeeData.user?.role === 'SUPER_ADMIN') && (
                                                 <div className="dropdown">
                                                   <Link to="#" className="text-gray-4 p-0 fs-10" data-bs-toggle="dropdown" style={{ outline: 'none' }}>
