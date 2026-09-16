@@ -4,7 +4,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { login, register, verifyEmail, acceptInvite, resendVerification, forgotPassword, resetPassword, getCompanyLogo } = require('../controllers/authController');
+const { login, register, verifyEmail, verifyInviteToken, acceptInvite, resendVerification, forgotPassword, resetPassword, getCompanyLogo } = require('../controllers/authController');
 
 // Use persistent upload directory configured in env (falls back to local uploads folder)
 const UPLOAD_BASE = process.env.UPLOAD_PATH 
@@ -43,6 +43,8 @@ router.post('/login', login);
 router.post('/register', register);
 // POST /auth/verify-email — verify email token
 router.post('/verify-email', verifyEmail);
+// GET /auth/verify-invite-token
+router.get('/verify-invite-token', verifyInviteToken);
 // POST /auth/accept-invite
 router.post('/accept-invite', acceptInvite);
 // POST /auth/resend-verification — resend the verification email
