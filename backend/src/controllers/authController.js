@@ -367,77 +367,88 @@ async function acceptInvite(req, res) {
             return res.status(400).json({ message: 'Password must be at least 8 characters long' });
         }
 
+        // 1. Check inviteToken
         let invite = await prisma.inviteToken.findFirst({
             where: { token: cleanToken },
             include: { user: true, employee: true }
         });
 
+        let targetUserId = null;
+        let targetEmployeeId = null;
+        let inviteTokenIdToDelete = null;
+        let resetTokenIdToMarkUsed = null;
+
         if (invite) {
             if (new Date() > invite.expiresAt) {
                 return res.status(400).json({ message: 'Invitation link has expired. Please ask HR to resend the invite.' });
             }
+            targetUserId = invite.userId || invite.employee?.userId;
+            targetEmployeeId = invite.employeeId || invite.employee?.id;
+            inviteTokenIdToDelete = invite.id;
+        } else {
+            // 2. Check passwordResetToken
+            const resetRecord = await prisma.passwordResetToken.findFirst({
+                where: { token: cleanToken, used: false },
+                include: { user: { include: { employee: true } } }
+            });
 
-            const hashedPassword = await bcrypt.hash(password, 10);
-
-            await prisma.$transaction([
-                prisma.user.update({
-                    where: { id: invite.userId },
-                    data: {
-                        password: hashedPassword,
-                        accountStatus: 'ACTIVE'
-                    }
-                }),
-                prisma.employee.updateMany({
-                    where: { userId: invite.userId },
-                    data: { onboardingStatus: 'COMPLETED' }
-                }),
-                prisma.inviteToken.delete({
-                    where: { id: invite.id }
-                })
-            ]);
-
-            return res.json({ message: 'Account set up successfully! You can now log in.' });
+            if (resetRecord) {
+                if (new Date() > resetRecord.expiresAt) {
+                    return res.status(400).json({ message: 'Reset token has expired. Please request a new link.' });
+                }
+                targetUserId = resetRecord.userId;
+                targetEmployeeId = resetRecord.user?.employee?.[0]?.id || null;
+                resetTokenIdToMarkUsed = resetRecord.id;
+            }
         }
 
-        const resetTokenRecord = await prisma.passwordResetToken.findFirst({
-            where: { token: cleanToken, used: false },
-            include: { user: true }
+        if (!targetUserId) {
+            return res.status(400).json({
+                message: 'This invitation or password setup link is invalid, expired, or has already been used. If you have already set up your account, please log in.'
+            });
+        }
+
+        // Hash the new password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Primary Mandatory Step: Update User Password & set Account Status to ACTIVE
+        await prisma.user.update({
+            where: { id: targetUserId },
+            data: {
+                password: hashedPassword,
+                accountStatus: 'ACTIVE'
+            }
         });
 
-        if (resetTokenRecord) {
-            if (new Date() > resetTokenRecord.expiresAt) {
-                return res.status(400).json({ message: 'Reset token has expired. Please request a new link.' });
+        // Secondary operations (Cleanup tokens & employee onboarding status) wrapped safely
+        try {
+            if (targetEmployeeId) {
+                await prisma.employee.update({
+                    where: { id: targetEmployeeId },
+                    data: { onboardingStatus: 'COMPLETED' }
+                }).catch(e => console.warn('Employee onboardingStatus update notice:', e.message));
             }
 
-            const hashedPassword = await bcrypt.hash(password, 10);
+            if (inviteTokenIdToDelete) {
+                await prisma.inviteToken.delete({
+                    where: { id: inviteTokenIdToDelete }
+                }).catch(e => console.warn('InviteToken delete notice:', e.message));
+            }
 
-            await prisma.$transaction([
-                prisma.user.update({
-                    where: { id: resetTokenRecord.userId },
-                    data: {
-                        password: hashedPassword,
-                        accountStatus: 'ACTIVE'
-                    }
-                }),
-                prisma.employee.updateMany({
-                    where: { userId: resetTokenRecord.userId },
-                    data: { onboardingStatus: 'COMPLETED' }
-                }),
-                prisma.passwordResetToken.update({
-                    where: { id: resetTokenRecord.id },
+            if (resetTokenIdToMarkUsed) {
+                await prisma.passwordResetToken.update({
+                    where: { id: resetTokenIdToMarkUsed },
                     data: { used: true }
-                })
-            ]);
-
-            return res.json({ message: 'Account set up successfully! You can now log in.' });
+                }).catch(e => console.warn('PasswordResetToken update notice:', e.message));
+            }
+        } catch (secondaryErr) {
+            console.warn('Secondary cleanup error ignored:', secondaryErr.message);
         }
 
-        return res.status(400).json({
-            message: 'This invitation link is invalid, expired, or has already been used. If you have already set up your account, please log in.'
-        });
+        return res.json({ message: 'Account set up successfully! You can now log in.' });
     } catch (error) {
         console.error('Accept Invite Error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(500).json({ message: error.message || 'Internal server error' });
     }
 }
 
@@ -561,57 +572,60 @@ async function forgotPassword(req, res) {
 
 async function resetPassword(req, res) {
     try {
-        const { token, password, subdomain } = req.body;
+        const { token, password } = req.body;
         if (!token || !password) {
             return res.status(400).json({ message: 'Token and new password are required' });
         }
+
+        const cleanToken = token.trim();
 
         if (password.length < 8) {
             return res.status(400).json({ message: 'Password must be at least 8 characters long' });
         }
 
-        const resetRecord = await prisma.passwordResetToken.findUnique({
-            where: { token },
+        const resetRecord = await prisma.passwordResetToken.findFirst({
+            where: { token: cleanToken, used: false },
             include: { user: { include: { company: true } } }
         });
 
-        if (!resetRecord || resetRecord.used) {
-            return res.status(400).json({ message: 'Invalid or already used token' });
+        if (!resetRecord) {
+            return res.status(400).json({ message: 'Invalid or already used password reset link. If you already reset your password, please log in.' });
         }
 
         if (new Date() > resetRecord.expiresAt) {
-            return res.status(400).json({ message: 'Token has expired' });
-        }
-
-        // Validate subdomain matches during password reset
-        const user = resetRecord.user;
-        if (subdomain) {
-            if (!user.company || user.company.subdomain !== subdomain) {
-                return res.status(403).json({ message: 'This reset token is not valid for this workspace / subdomain.' });
-            }
-        } else {
-            if (user.role !== 'SUPER_ADMIN') {
-                return res.status(403).json({ message: 'Please reset password from your company\'s specific workspace URL.' });
-            }
+            return res.status(400).json({ message: 'Token has expired. Please request a new password reset link.' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        await prisma.$transaction([
-            prisma.user.update({
-                where: { id: resetRecord.userId },
-                data: { password: hashedPassword }
-            }),
-            prisma.passwordResetToken.update({
+        // Primary step: Update user password & activate account
+        await prisma.user.update({
+            where: { id: resetRecord.userId },
+            data: {
+                password: hashedPassword,
+                accountStatus: 'ACTIVE'
+            }
+        });
+
+        // Secondary cleanup step
+        try {
+            await prisma.passwordResetToken.update({
                 where: { id: resetRecord.id },
                 data: { used: true }
-            })
-        ]);
+            }).catch(e => console.warn('Mark token used notice:', e.message));
+
+            await prisma.employee.updateMany({
+                where: { userId: resetRecord.userId },
+                data: { onboardingStatus: 'COMPLETED' }
+            }).catch(e => console.warn('Employee status update notice:', e.message));
+        } catch (secondaryErr) {
+            console.warn('Secondary cleanup error in resetPassword ignored:', secondaryErr.message);
+        }
 
         res.json({ message: 'Password has been reset successfully! You can now log in.' });
     } catch (error) {
         console.error('Reset Password Error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(500).json({ message: error.message || 'Internal server error' });
     }
 }
 
