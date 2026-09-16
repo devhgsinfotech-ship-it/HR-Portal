@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import PredefinedDateRanges from '../../../core/common/datePicker'
 import Table from "../../../core/common/dataTable/index";
 import { all_routes } from '../../../router/all_routes';
 import ImageWithBasePath from '../../../core/common/imageWithBasePath';
-import { employeereportDetails } from '../../../core/data/json/employeereportDetails';
 import ReactApexChart from 'react-apexcharts';
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
+import apiClient from '../../../core/utils/apiClient';
 
 // Define interfaces
 interface EmployeeReportItem {
@@ -31,7 +31,31 @@ interface ColumnType<T> {
 
 const EmployeeReports = () => {
 
-    const data: EmployeeReportItem[] = employeereportDetails;
+    const [data, setData] = useState<EmployeeReportItem[]>([]);
+
+    useEffect(() => {
+        const fetchEmployees = async () => {
+            try {
+                const res = await apiClient.get('/employees');
+                const employees = res.data;
+                const formattedData = employees.map((emp: any) => ({
+                    EmpID: emp.employeeCode || `EMP-${emp.id}`,
+                    Name: `${emp.firstName} ${emp.lastName}`,
+                    Image: emp.user?.profilePhotoUrl || 'avatar-20.jpg',
+                    Role: emp.role || 'EMPLOYEE',
+                    Email: emp.user?.email || '',
+                    Department: emp.department?.name || 'N/A',
+                    Phone: emp.phone || 'N/A',
+                    JoiningDate: emp.dateOfJoining ? new Date(emp.dateOfJoining).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, ' ') : 'N/A',
+                    Status: 'Active'
+                }));
+                setData(formattedData);
+            } catch (error) {
+                console.error("Error fetching employees:", error);
+            }
+        };
+        fetchEmployees();
+    }, []);
     const columns: ColumnType<EmployeeReportItem>[] = [
         {
             title: "Emp ID",
@@ -52,11 +76,20 @@ const EmployeeReports = () => {
                         data-bs-toggle="modal" data-inert={true}
                         data-bs-target="#view_details"
                     >
-                        <ImageWithBasePath
-                            src={`assets/img/users/${record?.Image}`}
-                            className="img-fluid rounded-circle"
-                            alt="image"
-                        />
+                        {record?.Image && (record.Image.startsWith('/') || record.Image.startsWith('http')) ? (
+                            <img
+                                src={record.Image.startsWith('http') ? record.Image : `${apiClient.defaults.baseURL}${record.Image}`}
+                                className="img-fluid rounded-circle"
+                                alt={`${record.Name}'s profile image`}
+                                style={{ width: "36px", height: "36px", objectFit: "cover" }}
+                            />
+                        ) : (
+                            <ImageWithBasePath
+                                src={`assets/img/users/${record?.Image || 'avatar-20.jpg'}`}
+                                className="img-fluid rounded-circle"
+                                alt="image"
+                            />
+                        )}
                     </Link>
                     <div className="ms-2">
                         <p className="text-dark mb-0">

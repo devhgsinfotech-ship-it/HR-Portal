@@ -120,7 +120,7 @@ const defaultDash: DashData = {
 const HrDashboard = () => {
   const user = useSelector((state: any) => state.auth?.user) as any
   const userName = user?.name || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (localStorage.getItem("userName") || "Vikramjeet"))
-  
+
   const [dashData, setDashData] = useState<DashData>(defaultDash)
   const [loading, setLoading] = useState(false)
   const [attendanceFilter, setAttendanceFilter] = useState<'week' | 'month' | 'year'>('week')
@@ -261,7 +261,7 @@ const HrDashboard = () => {
   return (
     <div className="page-wrapper" style={{ backgroundColor: 'var(--bs-body-bg, #f4f6f9)', minHeight: '100vh' }}>
       <div className="content container-fluid p-4">
-        
+
         {/* ── Banner Card ──────────────────────────────────────────────── */}
         <div className="card border-0 mb-4 hr-dashboard-card hr-banner-card" style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 50%, #ffffff 100%)', borderRadius: '16px' }}>
           <div className="card-body p-4 position-relative">
@@ -284,7 +284,7 @@ const HrDashboard = () => {
                   <div className="bg-white rounded-pill shadow-xs border px-2 py-1">
                     <PredefinedDatePicker onDateRangeChange={handleDateChange} />
                   </div>
-                  
+
                   <div className="dropdown">
                     <button className="btn btn-white btn-sm rounded-pill shadow-xs border dropdown-toggle fw-medium px-3" type="button" data-bs-toggle="dropdown">
                       Yearly Report
@@ -320,10 +320,10 @@ const HrDashboard = () => {
                         <h1 className="display-4 text-white mb-0 fw-normal" style={{ fontSize: '2.2rem', lineHeight: '1' }}>{hhmm}</h1>
                         <span className="fs-14 ms-1" style={{ opacity: 0.85 }}>{ssAmPm}</span>
                       </div>
-                      <button 
-                        onClick={handlePunch} 
+                      <button
+                        onClick={handlePunch}
                         disabled={clockLoading}
-                        className="btn px-4 py-2 border-0 fw-medium fs-14 rounded-3 text-white shadow-sm" 
+                        className="btn px-4 py-2 border-0 fw-medium fs-14 rounded-3 text-white shadow-sm"
                         style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s', opacity: clockLoading ? 0.7 : 1 }}
                       >
                         {clockLoading ? (
@@ -348,7 +348,7 @@ const HrDashboard = () => {
 
         {/* ── Top Metric Cards Row (5 Cards) ─────────────────────────────── */}
         <div className="row g-3 mb-4">
-          
+
           {/* Card 1: Total Employees */}
           <div className="col-xl-20 col-lg-4 col-md-6" style={{ width: '20%' }}>
             <div className="card hr-kpi-card-wrapper card-blue h-100">
@@ -448,7 +448,7 @@ const HrDashboard = () => {
 
         {/* ── Row 2: Status & Leave Type Distribution ─────────────────────── */}
         <div className="row g-3 mb-4">
-          
+
           {/* Employee Status & Type */}
           <div className="col-lg-6">
             <div className="card border-0 hr-dashboard-card h-100" style={{ borderRadius: '16px', backgroundColor: 'var(--bs-card-bg, #ffffff)' }}>
@@ -494,11 +494,11 @@ const HrDashboard = () => {
                         </div>
 
                         <div className="col-sm-5">
-                          <EmployeeStatusChart 
-                            fullTime={ft} 
-                            contract={ct} 
-                            partTime={pt} 
-                            totalCount={totalEmp} 
+                          <EmployeeStatusChart
+                            fullTime={ft}
+                            contract={ct}
+                            partTime={pt}
+                            totalCount={totalEmp}
                           />
                         </div>
                       </>
@@ -551,14 +551,14 @@ const HrDashboard = () => {
 
         {/* ── Row 3: Attendance Trend & Top Distribution ───────────────────── */}
         <div className="row g-3 mb-4">
-          
+
           {/* Attendance Trend */}
           <div className="col-lg-7">
             <div className="card border-0 hr-dashboard-card h-100" style={{ borderRadius: '16px', backgroundColor: 'var(--bs-card-bg, #ffffff)' }}>
               <div className="card-body p-3">
                 <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
                   <h6 className="fw-bold m-0 text-dark">Attendance Trend</h6>
-                  
+
                   <div className="d-flex align-items-center gap-2">
                     <div className="btn-group btn-group-sm rounded-pill border p-1 bg-light">
                       <button type="button" className={`btn btn-xs rounded-pill border-0 ${attendanceFilter === 'week' ? 'bg-primary text-white fw-medium' : 'text-secondary'}`} onClick={() => setAttendanceFilter('week')}>This Week</button>
@@ -623,7 +623,7 @@ const HrDashboard = () => {
 
         {/* ── Row 4: Upcoming Leave, Recruitment & Pending Approvals ───────── */}
         <div className="row g-3 mb-4">
-          
+
           {/* Upcoming Leave */}
           <div className="col-lg-4">
             <div className="card border-0 hr-dashboard-card h-100" style={{ borderRadius: '16px', backgroundColor: 'var(--bs-card-bg, #ffffff)' }}>
@@ -639,8 +639,8 @@ const HrDashboard = () => {
                       const tagStyle = item.leaveType.toLowerCase().includes('sick')
                         ? 'bg-danger-subtle text-danger'
                         : item.leaveType.toLowerCase().includes('casual')
-                        ? 'bg-info-subtle text-info'
-                        : 'bg-success-subtle text-success'
+                          ? 'bg-info-subtle text-info'
+                          : 'bg-success-subtle text-success'
 
                       return (
                         <div key={item.id} className="d-flex align-items-center justify-content-between p-2 rounded-3 border bg-light-subtle">
@@ -740,16 +740,16 @@ const HrDashboard = () => {
                     const leaveBadgeClass = p.leaveType.toLowerCase().includes('sick')
                       ? 'bg-danger-subtle text-danger border-danger-subtle'
                       : p.leaveType.toLowerCase().includes('casual')
-                      ? 'bg-info-subtle text-info border-info-subtle'
-                      : 'bg-primary-subtle text-primary border-primary-subtle'
+                        ? 'bg-info-subtle text-info border-info-subtle'
+                        : 'bg-primary-subtle text-primary border-primary-subtle'
 
                     return (
                       <div key={p.id} className="pending-item-box">
                         {/* Top Row: Avatar, Name, Designation & Leave Type Badge */}
                         <div className="d-flex align-items-center justify-content-between mb-2">
                           <div className="d-flex align-items-center gap-2.5 overflow-hidden me-2">
-                            <div 
-                              className="rounded-circle text-white fw-bold d-flex align-items-center justify-content-center flex-shrink-0" 
+                            <div
+                              className="rounded-circle text-white fw-bold d-flex align-items-center justify-content-center flex-shrink-0"
                               style={{ width: 34, height: 34, fontSize: 13, background: avatarGradients[idx % avatarGradients.length] }}
                             >
                               {p.employeeName.charAt(0)}
@@ -773,16 +773,16 @@ const HrDashboard = () => {
                           </div>
 
                           <div className="d-flex align-items-center gap-1.5 flex-shrink-0">
-                            <button 
-                              type="button" 
+                            <button
+                              type="button"
                               className="btn btn-xs btn-soft-approve rounded-pill px-2.5 py-1 fs-11 d-inline-flex align-items-center"
                               onClick={() => handleLeaveAction(p.id, 'APPROVED')}
                               title="Approve Leave Request"
                             >
                               <i className="ti ti-check me-1 fs-12" /> Approve
                             </button>
-                            <button 
-                              type="button" 
+                            <button
+                              type="button"
                               className="btn btn-xs btn-soft-decline rounded-pill px-2.5 py-1 fs-11 d-inline-flex align-items-center"
                               onClick={() => handleLeaveAction(p.id, 'REJECTED')}
                               title="Decline Leave Request"
@@ -804,7 +804,7 @@ const HrDashboard = () => {
 
         {/* ── Row 5: Benefits, Payroll, Top Employees & Quick Links ────────── */}
         <div className="row g-3 mb-4">
-          
+
           {/* Benefits Deductions */}
           <div className="col-lg-3 col-md-6">
             <div className="card border-0 hr-dashboard-card h-100" style={{ borderRadius: '12px', backgroundColor: 'var(--bs-card-bg, #ffffff)' }}>
@@ -891,7 +891,7 @@ const HrDashboard = () => {
                     <i className="ti ti-chevron-right text-muted fs-14" />
                   </Link>
 
-                  <Link to={all_routes.employeereport} className="d-flex align-items-center justify-content-between p-2 rounded-3 text-decoration-none border bg-light-subtle hover-shadow">
+                  <Link to={all_routes.payrollProcess} className="d-flex align-items-center justify-content-between p-2 rounded-3 text-decoration-none border bg-light-subtle hover-shadow">
                     <div className="d-flex align-items-center gap-2">
                       <i className="ti ti-file-text text-info fs-16" />
                       <div>
