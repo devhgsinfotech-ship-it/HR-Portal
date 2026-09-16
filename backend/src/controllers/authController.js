@@ -87,7 +87,7 @@ async function login(req, res) {
                 subdomain: user.company?.subdomain || null,
                 companyLogoUrl: user.company?.logoUrl || null,
                 profilePhotoUrl: user.employee?.profilePhotoUrl || null,
-                onboardingStatus: user.employee?.onboardingStatus || 'COMPLETED',
+                onboardingStatus: user.role === 'EMPLOYEE' ? (user.employee?.onboardingStatus || 'INVITED') : 'COMPLETED',
                 companyRoleName: user.employee?.companyRole?.name || null,
                 permissions: permissions
             },

@@ -92,7 +92,12 @@ const Login = () => {
       } else if (user.role === "HR") {
         navigation(routes.hrDashboard);
       } else {
-        navigation(routes.employeeDashboard);
+        const onboardingStatus = user.onboardingStatus || 'INVITED';
+        if (onboardingStatus !== 'COMPLETED') {
+          navigation('/onboarding');
+        } else {
+          navigation(routes.employeeDashboard);
+        }
       }
     } catch (err: any) {
       console.error("Login failed:", err);
