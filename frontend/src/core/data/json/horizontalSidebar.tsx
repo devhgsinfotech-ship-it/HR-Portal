@@ -1021,6 +1021,11 @@ export const HorizontalSidebarData = [
             base: 'website-settings',
             subMenusTwo: [
               {
+                menuValue: 'Company Settings',
+                route: routes.companySettings,
+                base: 'company-settings',
+              },
+              {
                 menuValue: 'Business Settings',
                 route: routes.businessSettings,
                 base: 'bussiness-settings',

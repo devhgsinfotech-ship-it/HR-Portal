@@ -186,8 +186,23 @@ async function createEmployee(req, res) {
 async function getEmployees(req, res) {
     try {
         const companyId = req.user.companyId;
+        let whereClause = {};
+        if (companyId) {
+            whereClause.user = { companyId };
+        }
+
+        if (req.user.role === 'MANAGER') {
+            const managerEmployee = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+            if (managerEmployee) {
+                whereClause.OR = [
+                    { id: managerEmployee.id },
+                    { reportingManagerId: managerEmployee.id }
+                ];
+            }
+        }
+
         const employees = await prisma.employee.findMany({
-            where: { user: { companyId } },
+            where: whereClause,
             include: {
                 user: {
                     include: {

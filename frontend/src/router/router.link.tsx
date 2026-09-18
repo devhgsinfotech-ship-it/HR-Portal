@@ -1069,6 +1069,11 @@ export const publicRoutes = [
     route: Route,
   },
   {
+    path: "/company-settings",
+    element: <CompanySettings />,
+    route: Route,
+  },
+  {
     path: routes.localizationSettings,
     element: <Localizationsettings />,
     route: Route,
