@@ -709,24 +709,30 @@ async function getHrDashboardSummary(req, res) {
 
 async function getAdminDashboardSummary(req, res) {
     try {
-        const companyId = parseInt(req.user.companyId, 10);
+        let companyId = parseInt(req.user.companyId, 10);
+        if (isNaN(companyId) || !companyId) {
+            companyId = null;
+        }
+
+        const userWhere = companyId ? { user: { companyId } } : {};
+        const companyWhere = companyId ? { companyId } : {};
 
         // 1. Total employees
         const totalEmployees = await prisma.employee.count({
-            where: { user: { companyId } }
+            where: userWhere
         });
 
         // 2. Pending Leave requests count
         const pendingLeavesCount = await prisma.leaveRequest.count({
             where: {
                 status: 'PENDING',
-                employee: { user: { companyId } }
+                employee: userWhere
             }
         });
 
         // 3. Employee status breakdown
         const allEmployees = await prisma.employee.findMany({
-            where: { user: { companyId } },
+            where: userWhere,
             select: { employmentType: true }
         });
 
@@ -743,7 +749,7 @@ async function getAdminDashboardSummary(req, res) {
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         const newHiresCount = await prisma.employee.count({
             where: {
-                user: { companyId },
+                ...userWhere,
                 dateOfJoining: { gte: thirtyDaysAgo }
             }
         });
@@ -759,7 +765,7 @@ async function getAdminDashboardSummary(req, res) {
 
         const todayRecords = await prisma.attendanceRecord.findMany({
             where: {
-                employee: { user: { companyId } },
+                employee: userWhere,
                 date: { gte: todayStart, lte: todayEnd }
             }
         });
@@ -769,13 +775,15 @@ async function getAdminDashboardSummary(req, res) {
         // Let's determine office start & grace period
         let officeStartHour = 9, officeStartMin = 0, gracePeriod = 15;
         try {
-            const policy = await prisma.attendancePolicy.findUnique({ where: { companyId } });
-            if (policy) gracePeriod = policy.lateGracePeriod || 15;
-            const setting = await prisma.companySetting.findUnique({ where: { companyId } });
-            if (setting && setting.officeStartTime) {
-                const parts = setting.officeStartTime.split(':');
-                officeStartHour = parseInt(parts[0], 10);
-                officeStartMin = parseInt(parts[1], 10);
+            if (companyId) {
+                const policy = await prisma.attendancePolicy.findUnique({ where: { companyId } });
+                if (policy) gracePeriod = policy.lateGracePeriod || 15;
+                const setting = await prisma.companySetting.findUnique({ where: { companyId } });
+                if (setting && setting.officeStartTime) {
+                    const parts = setting.officeStartTime.split(':');
+                    officeStartHour = parseInt(parts[0], 10);
+                    officeStartMin = parseInt(parts[1], 10);
+                }
             }
         } catch (e) {}
 
@@ -804,7 +812,7 @@ async function getAdminDashboardSummary(req, res) {
 
         // 5. Fetch all company employees to build dynamic list and check if seeding is needed
         const allCompanyEmployees = await prisma.employee.findMany({
-            where: { user: { companyId } },
+            where: userWhere,
             orderBy: { createdAt: 'desc' },
             include: {
                 user: { select: { name: true } },
@@ -943,9 +951,9 @@ async function getAdminDashboardSummary(req, res) {
 
         // Fetch live counts for projects, clients, and tasks in the company
         const [totalProjects, totalClients, totalTasks] = await Promise.all([
-            prisma.project.count({ where: { companyId } }),
-            prisma.client.count({ where: { companyId } }),
-            prisma.task.count({ where: { companyId } })
+            prisma.project.count({ where: companyWhere }),
+            prisma.client.count({ where: companyWhere }),
+            prisma.task.count({ where: companyWhere })
         ]);
 
         res.json({

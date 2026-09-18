@@ -5,7 +5,7 @@ import { useAppSelector } from "../core/data/redux/store";
 import { all_routes } from "./all_routes";
 
 interface PrivateRouteProps {
-    allowedRoles?: Array<"SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE">;
+    allowedRoles?: Array<"SUPER_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE">;
 }
 
 const PrivateRoute: React.FC<PrivateRouteProps> = ({ allowedRoles }) => {
@@ -17,11 +17,12 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ allowedRoles }) => {
     }
 
     // Logged in but wrong role → redirect to their correct dashboard
-    if (allowedRoles && !allowedRoles.includes(user.role)) {
+    const roleStr = user.role as string;
+    if (allowedRoles && !allowedRoles.includes(user.role as any)) {
         const routes = all_routes;
-        if (user.role === "SUPER_ADMIN") return <Navigate to={routes.superAdminDashboard} replace />;
-        if (user.role === "HR") return <Navigate to={routes.hrDashboard} replace />;
-        if (user.role === "MANAGER") return <Navigate to={routes.employeeDashboard} replace />;
+        if (roleStr === "SUPER_ADMIN") return <Navigate to={routes.superAdminDashboard} replace />;
+        if (roleStr === "COMPANY_ADMIN" || roleStr === "HR") return <Navigate to={routes.adminDashboard || routes.hrDashboard} replace />;
+        if (roleStr === "MANAGER") return <Navigate to={routes.employeeDashboard} replace />;
         return <Navigate to={routes.employeeDashboard} replace />;
     }
 

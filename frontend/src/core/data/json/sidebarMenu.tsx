@@ -1090,6 +1090,11 @@ export const SidebarDataTest = [
             showSubRoute: false,
             submenuItems: [
               {
+                label: 'Company Settings',
+                link: routes.companySettings,
+                base: 'company-settings',
+              },
+              {
                 label: 'Business Settings',
                 link: routes.businessSettings,
                 base: 'bussiness-settings',

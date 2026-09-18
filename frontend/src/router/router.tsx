@@ -10,10 +10,10 @@ const LazyAuthFeature = lazy(() => import("../feature-module/authFeature"));
 const LazyLayoutFeature = lazy(() => import("../feature-module/layoutFeature"));
 const OnboardingWizard = lazy(() => import("../feature-module/onboarding/OnboardingWizard"));
 
-type Role = "SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
+type Role = "SUPER_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
 
 const getRouteRoles = (path: string | undefined): Role[] => {
-  if (!path) return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  if (!path) return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
 
   const p = path.toLowerCase();
 
@@ -28,7 +28,7 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     "/org", "/org-directory"
   ];
   if (employeeAllowedPrefixes.some(prefix => p.startsWith(prefix))) {
-    return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
 
   // 3. Manager & HR Approvals
@@ -37,11 +37,11 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     "/tickets"
   ];
   if (adminApprovalPrefixes.some(prefix => p.startsWith(prefix))) {
-    return ["SUPER_ADMIN", "HR", "MANAGER"];
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER"];
   }
 
-  // 4. Default: Restricted to HR & Super Admin (Security by default)
-  return ["SUPER_ADMIN", "HR"];
+  // 4. Default: Restricted to Company Admin, HR & Super Admin (Security by default)
+  return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"];
 };
 
 const ALLRoutes: React.FC = () => {

@@ -89,8 +89,8 @@ const Login = () => {
       // Redirect based on role
       if (user.role === "SUPER_ADMIN") {
         navigation(routes.superAdminDashboard);
-      } else if (user.role === "HR") {
-        navigation(routes.hrDashboard);
+      } else if (user.role === "COMPANY_ADMIN" || user.role === "HR") {
+        navigation(routes.adminDashboard || routes.hrDashboard);
       } else {
         const onboardingStatus = user.onboardingStatus || 'INVITED';
         if (onboardingStatus !== 'COMPLETED') {

@@ -4,7 +4,12 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { login, register, verifyEmail, verifyInviteToken, acceptInvite, resendVerification, forgotPassword, resetPassword, getCompanyLogo } = require('../controllers/authController');
+const { 
+    login, register, verifyEmail, verifyInviteToken, acceptInvite, 
+    resendVerification, forgotPassword, resetPassword, getCompanyLogo,
+    getCompanySettings, updateCompanySettings, getProfile, updateProfile
+} = require('../controllers/authController');
+const { verifyToken } = require('../middleware/authMiddleware');
 
 // Use persistent upload directory configured in env (falls back to local uploads folder)
 const UPLOAD_BASE = process.env.UPLOAD_PATH 
@@ -36,6 +41,14 @@ router.post('/upload-logo', upload.single('logo'), (req, res) => {
     const fileUrl = `/uploads/logos/${req.file.filename}`;
     res.json({ success: true, url: fileUrl });
 });
+
+// Company Settings endpoints
+router.get('/company-settings', verifyToken, getCompanySettings);
+router.put('/company-settings', verifyToken, upload.single('logo'), updateCompanySettings);
+
+// User Profile endpoints
+router.get('/profile', verifyToken, getProfile);
+router.put('/profile', verifyToken, upload.single('avatar'), updateProfile);
 
 // POST /auth/login
 router.post('/login', login);

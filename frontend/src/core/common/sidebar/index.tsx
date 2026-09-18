@@ -40,10 +40,10 @@ interface SidebarMainMenu {
   submenuItems: SidebarMenuItem[];
 }
 
-type Role = "SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
+type Role = "SUPER_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
 
 const getRouteRoles = (path: string | undefined): Role[] => {
-  if (!path) return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  if (!path) return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   let p = path.toLowerCase();
   if (!p.startsWith('/')) {
     p = '/' + p;
@@ -59,11 +59,11 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     "/org", "/org-directory"
   ];
   if (employeeAllowedPrefixes.some(prefix => p.startsWith(prefix))) {
-    return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
   
   if (p === "/payslip" || p.startsWith("/payslip/")) {
-    return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
 
   // 3. Manager & HR Approvals
@@ -72,11 +72,11 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     "/tickets"
   ];
   if (adminApprovalPrefixes.some(prefix => p.startsWith(prefix))) {
-    return ["SUPER_ADMIN", "HR", "MANAGER"];
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER"];
   }
 
-  // 4. Default: Restricted to HR & Super Admin (Security by default)
-  return ["SUPER_ADMIN", "HR"];
+  // 4. Default: Restricted to Company Admin, HR & Super Admin (Security by default)
+  return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"];
 };
 
 const filterMenu = (items: SidebarMenuItem[] | undefined, role: Role): SidebarMenuItem[] => {

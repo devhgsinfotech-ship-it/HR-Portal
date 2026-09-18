@@ -133,19 +133,28 @@ const updateRole = async (req, res) => {
 
 /**
  * DELETE /api/roles/:id
+ * Optional Body: { reassignRoleId: number } — Reassigns employees to another role before deletion
  */
 const deleteRole = async (req, res) => {
   try {
     const roleId = Number(req.params.id);
+    const { reassignRoleId } = req.body || {};
 
-    // Unlink employees from this role first
+    const targetRoleId = reassignRoleId ? Number(reassignRoleId) : null;
+
+    // Reassign or unlink employees from this role first
     await prisma.employee.updateMany({
       where: { companyRoleId: roleId },
-      data: { companyRoleId: null },
+      data: { companyRoleId: targetRoleId },
     });
 
     await prisma.companyRole.delete({ where: { id: roleId } });
-    res.json({ success: true, message: 'Role deleted.' });
+    res.json({
+      success: true,
+      message: targetRoleId
+        ? `Role deleted and employees reassigned to target role.`
+        : 'Role deleted successfully.',
+    });
   } catch (err) {
     console.error('deleteRole error:', err);
     res.status(500).json({ message: 'Failed to delete role.' });
@@ -185,20 +194,31 @@ const savePermissions = async (req, res) => {
 };
 
 /**
- * PUT /api/roles/:id/assign-employee — Assign employee to a role
- * Body: { employeeId }
+ * PUT /api/roles/:id/assign-employee — Assign employee(s) to a role
+ * Body: { employeeId } or { employeeIds: [1, 2, 3] }
  */
 const assignEmployeeRole = async (req, res) => {
   try {
     const companyRoleId = Number(req.params.id);
-    const { employeeId } = req.body;
+    const { employeeId, employeeIds } = req.body;
 
-    await prisma.employee.update({
-      where: { id: Number(employeeId) },
-      data: { companyRoleId },
-    });
+    if (Array.isArray(employeeIds) && employeeIds.length > 0) {
+      await prisma.employee.updateMany({
+        where: { id: { in: employeeIds.map(Number) } },
+        data: { companyRoleId },
+      });
+      return res.json({ success: true, message: 'Employees reassigned to role.' });
+    }
 
-    res.json({ success: true, message: 'Employee role assigned.' });
+    if (employeeId) {
+      await prisma.employee.update({
+        where: { id: Number(employeeId) },
+        data: { companyRoleId },
+      });
+      return res.json({ success: true, message: 'Employee role assigned.' });
+    }
+
+    res.status(400).json({ message: 'Please provide employeeId or employeeIds.' });
   } catch (err) {
     console.error('assignEmployeeRole error:', err);
     res.status(500).json({ message: 'Failed to assign role.' });
