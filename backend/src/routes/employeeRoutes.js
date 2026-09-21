@@ -42,24 +42,9 @@ router.post('/onboarding/documents', upload.fields([
     { name: 'resume', maxCount: 1 }
 ]), employeeController.onboardingDocuments);
 
-// HR & Company Admin Approves Onboarding
-router.post('/:id/approve-onboarding', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.approveOnboarding);
-router.post('/:id/request-correction', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.requestOnboardingCorrection);
-router.post('/:id/resend-invite', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.resendInvite);
-router.put('/:id/documents', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), upload.fields([
-    { name: 'aadhaar', maxCount: 1 },
-    { name: 'pan', maxCount: 1 },
-    { name: 'resume', maxCount: 1 }
-]), employeeController.updateEmployeeDocuments);
-
-
 // My Profile endpoints
 router.get('/me', employeeController.getMe);
 router.put('/me', upload.single('profileImage'), employeeController.updateMe);
-
-// Employees can view employees, but only HR/Admin can modify
-router.get('/', employeeController.getEmployees);
-router.get('/:id', employeeController.getEmployeeById);
 
 // Dynamic Social Feed and Event routes for dashboard
 router.get('/dashboard/summary', employeeController.getDashboardSummary);
@@ -76,11 +61,24 @@ router.post('/dashboard/comments/:id/like', employeeController.toggleLikeComment
 router.get('/dashboard/on-leave-today', employeeController.getOnLeaveToday);
 router.get('/dashboard/next-holiday', employeeController.getNextHoliday);
 
-// HR and Company Admin management routes
-router.use(requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'));
-router.get('/check-email', employeeController.checkEmailAvailability);
-router.post('/', upload.single('profileImage'), employeeController.createEmployee);
-router.put('/:id', upload.single('profileImage'), employeeController.updateEmployee);
-router.delete('/:id', employeeController.deleteEmployee);
+// HR and Company Admin management routes (specific paths)
+router.get('/check-email', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.checkEmailAvailability);
+router.post('/', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), upload.single('profileImage'), employeeController.createEmployee);
+router.get('/', employeeController.getEmployees);
+
+// Parametric /:id routes (MUST come after all specific endpoints)
+router.get('/:id', employeeController.getEmployeeById);
+router.put('/:id', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), upload.single('profileImage'), employeeController.updateEmployee);
+router.delete('/:id', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.deleteEmployee);
+
+// HR & Company Admin Approves Onboarding & Document Management
+router.post('/:id/approve-onboarding', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.approveOnboarding);
+router.post('/:id/request-correction', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.requestOnboardingCorrection);
+router.post('/:id/resend-invite', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.resendInvite);
+router.put('/:id/documents', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), upload.fields([
+    { name: 'aadhaar', maxCount: 1 },
+    { name: 'pan', maxCount: 1 },
+    { name: 'resume', maxCount: 1 }
+]), employeeController.updateEmployeeDocuments);
 
 module.exports = router;

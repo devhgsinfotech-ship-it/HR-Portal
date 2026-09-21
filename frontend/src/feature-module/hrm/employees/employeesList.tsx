@@ -3416,7 +3416,7 @@ const EmployeeList = () => {
           </div>
         </div>
       </div>
-
+      <VerifyEmployeeModal employee={verifyEmp} onSuccess={fetchData} />
     </>
   );
 };
