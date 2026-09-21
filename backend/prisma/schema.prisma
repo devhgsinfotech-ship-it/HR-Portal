@@ -140,6 +140,26 @@ enum TaskStatus {
   ON_HOLD
 }
 
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum InvoiceStatus {
+  PAID
+  UNPAID
+  OVERDUE
+  VOID
+}
+
 // ============================================================
 // COMPANY — each registered company's workspace
 // ============================================================
@@ -179,8 +199,73 @@ model Company {
   timeLogs         TimeLog[]
   companyRoles     CompanyRole[]
   payrollPeriods   PayrollPeriod[]
+  subscription     Subscription?
+  invoices         Invoice[]
 
   @@map("companies")
+}
+
+// ============================================================
+// SAAS SUBSCRIPTION BILLING & TENANT MANAGEMENT
+// ============================================================
+
+model SubscriptionPlan {
+  id            Int            @id @default(autoincrement())
+  name          String
+  code          String         @unique
+  description   String?        @db.Text
+  priceMonthly  Float
+  priceYearly   Float
+  maxEmployees  Int            @default(10)
+  maxStorageGb  Float          @default(5.0)
+  features      Json?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id           Int                @id @default(autoincrement())
+  companyId    Int                @unique
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId       Int
+  plan         SubscriptionPlan   @relation(fields: [planId], references: [id])
+  status       SubscriptionStatus @default(TRIAL)
+  billingCycle BillingCycle       @default(MONTHLY)
+  startDate    DateTime           @default(now())
+  endDate      DateTime?
+  trialEndsAt  DateTime
+  autoRenew    Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  invoices     Invoice[]
+
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id             Int            @id @default(autoincrement())
+  companyId      Int
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  subscriptionId Int?
+  subscription   Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  invoiceNumber  String         @unique
+  amount         Float
+  currency       String         @default("USD")
+  status         InvoiceStatus  @default(UNPAID)
+  dueDate        DateTime
+  paidAt         DateTime?
+  paymentMethod  String?
+  pdfUrl         String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("invoices")
 }
 
 // ============================================================

@@ -218,6 +218,22 @@ async function register(req, res) {
             // Seed standard default company roles & permission matrix
             await seedDefaultCompanyRoles(tx, company.id);
 
+            // Auto-provision 14-day trial Subscription on Starter Plan
+            const starterPlan = await tx.subscriptionPlan.findFirst({ where: { code: 'STARTER' } });
+            if (starterPlan) {
+                const trialEndsAt = new Date();
+                trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+                await tx.subscription.create({
+                    data: {
+                        companyId: company.id,
+                        planId: starterPlan.id,
+                        status: 'TRIAL',
+                        billingCycle: 'MONTHLY',
+                        trialEndsAt
+                    }
+                });
+            }
+
             return { company, user };
         });
 

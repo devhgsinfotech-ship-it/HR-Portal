@@ -5,80 +5,198 @@ import ImageWithBasePath from '../../../core/common/imageWithBasePath'
 import CommonSelect from '../../../core/common/commonSelect'
 import PredefinedDateRanges from '../../../core/common/datePicker'
 import Table from "../../../core/common/dataTable/index";
-import { package_list } from '../../../core/data/json/packagelist'
+import React, { useState, useEffect } from 'react';
+import apiClient from '../../../core/utils/apiClient';
 
 interface PackageListItem {
+  id: number;
   Plan_Name: string;
   Plan_Type: string;
-  Total_Subscribers: string;
+  Total_Subscribers: number;
   Price: string;
   Created_Date: string;
   Status: 'Active' | 'Inactive' | string;
-  // Add other fields if needed
+  code: string;
+  maxEmployees: number;
 }
 
 const Packages = () => {
-  const data: PackageListItem[] = package_list;
+  const [plans, setPlans] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const [newPlan, setNewPlan] = useState({
+    name: '',
+    code: '',
+    description: '',
+    priceMonthly: 1999,
+    priceYearly: 19990,
+    maxEmployees: 25,
+    maxStorageGb: 10,
+    features: ['Employees', 'Invoices', 'Reports', 'Attendance', 'Payroll'],
+    country: 'India',
+    state: 'All India',
+    currency: 'INR (₹)',
+    isActive: true
+  });
+
+  const [customFeature, setCustomFeature] = useState('');
+
+  const availableModules = [
+    'Employees', 'Invoices', 'Reports', 'Contacts',
+    'Clients', 'Estimates', 'Goals', 'Deals',
+    'Projects', 'Payments', 'Assets', 'Leads',
+    'Tickets', 'Taxes', 'Activities', 'Pipelines',
+    'Attendance', 'Payroll'
+  ];
+
+  const fetchPlans = async () => {
+    try {
+      setLoading(true);
+      const res = await apiClient.get('/super-admin/plans');
+      if (Array.isArray(res.data)) {
+        setPlans(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch plans:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  const handleModuleToggle = (moduleName: string) => {
+    setNewPlan(prev => {
+      const exists = prev.features.includes(moduleName);
+      const updated = exists
+        ? prev.features.filter(f => f !== moduleName)
+        : [...prev.features, moduleName];
+      return { ...prev, features: updated };
+    });
+  };
+
+  const handleSelectAllModules = (checked: boolean) => {
+    setNewPlan(prev => ({
+      ...prev,
+      features: checked ? [...availableModules] : []
+    }));
+  };
+
+  const handleAddPlanSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPlan.name.trim()) {
+      alert('Plan Name is required');
+      return;
+    }
+    try {
+      const planCode = newPlan.code.trim() || newPlan.name.toUpperCase().replace(/\s+/g, '_');
+      
+      let featList = [...newPlan.features];
+      if (customFeature.trim()) {
+        const customArr = customFeature.split(',').map(f => f.trim()).filter(Boolean);
+        featList = Array.from(new Set([...featList, ...customArr]));
+      }
+
+      await apiClient.post('/super-admin/plans', {
+        name: newPlan.name,
+        code: planCode,
+        description: newPlan.description,
+        priceMonthly: Number(newPlan.priceMonthly),
+        priceYearly: Number(newPlan.priceYearly),
+        maxEmployees: Number(newPlan.maxEmployees),
+        maxStorageGb: Number(newPlan.maxStorageGb),
+        features: featList,
+        isActive: newPlan.isActive
+      });
+
+      alert('Plan created successfully!');
+      fetchPlans();
+
+      // Close modal
+      const closeBtn = document.getElementById('close_add_plans_modal');
+      if (closeBtn) closeBtn.click();
+
+      // Reset form
+      setNewPlan({
+        name: '',
+        code: '',
+        description: '',
+        priceMonthly: 1999,
+        priceYearly: 19990,
+        maxEmployees: 25,
+        maxStorageGb: 10,
+        features: ['Employees', 'Invoices', 'Reports', 'Attendance', 'Payroll'],
+        country: 'India',
+        state: 'All India',
+        currency: 'INR (₹)',
+        isActive: true
+      });
+      setCustomFeature('');
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to create plan');
+    }
+  };
+
+  const tableData: PackageListItem[] = plans.map(p => ({
+    id: p.id,
+    Plan_Name: p.name,
+    Plan_Type: 'Monthly / Yearly',
+    Total_Subscribers: p.totalSubscribers || 0,
+    Price: `₹${p.priceMonthly.toLocaleString('en-IN')}/mo (₹${p.priceYearly.toLocaleString('en-IN')}/yr)`,
+    Created_Date: p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'N/A',
+    Status: p.isActive ? 'Active' : 'Inactive',
+    code: p.code,
+    maxEmployees: p.maxEmployees
+  }));
+
+  const totalPlansCount = plans.length;
+  const activePlansCount = plans.filter(p => p.isActive).length;
+  const inactivePlansCount = plans.filter(p => !p.isActive).length;
+
   const columns = [
     {
       title: "Plan Name",
       dataIndex: "Plan_Name",
-      render: (text: string, _record: PackageListItem) => (
-        <h6 className="fw-medium">
-          <Link to="#">{text}</Link>
-        </h6>
+      render: (text: string, record: PackageListItem) => (
+        <div>
+          <h6 className="fw-medium mb-0">{text}</h6>
+          <span className="fs-12 text-muted">Code: {record.code} | Max {record.maxEmployees} Employees</span>
+        </div>
       ),
-      sorter: (a: PackageListItem, b: PackageListItem) => a.Plan_Name.length - b.Plan_Name.length,
+      sorter: (a: PackageListItem, b: PackageListItem) => a.Plan_Name.localeCompare(b.Plan_Name),
     },
     {
       title: "Plan Type",
       dataIndex: "Plan_Type",
-      sorter: (a: PackageListItem, b: PackageListItem) => a.Plan_Type.length - b.Plan_Type.length,
+      sorter: (a: PackageListItem, b: PackageListItem) => a.Plan_Type.localeCompare(b.Plan_Type),
     },
     {
       title: "Total Subscribers",
       dataIndex: "Total_Subscribers",
-      sorter: (a: PackageListItem, b: PackageListItem) => a.Total_Subscribers.length - b.Total_Subscribers.length,
+      sorter: (a: PackageListItem, b: PackageListItem) => a.Total_Subscribers - b.Total_Subscribers,
     },
     {
       title: "Price",
       dataIndex: "Price",
-      sorter: (a: PackageListItem, b: PackageListItem) => a.Price.length - b.Price.length,
+      sorter: (a: PackageListItem, b: PackageListItem) => a.Price.localeCompare(b.Price),
     },
     {
       title: "Created Date",
       dataIndex: "Created_Date",
-      sorter: (a: PackageListItem, b: PackageListItem) => a.Created_Date.length - b.Created_Date.length,
+      sorter: (a: PackageListItem, b: PackageListItem) => a.Created_Date.localeCompare(b.Created_Date),
     },
     {
       title: "Status",
       dataIndex: "Status",
-      render: (text: PackageListItem['Status'], _record: PackageListItem) => (
+      render: (text: string) => (
         <span className={`badge ${text === 'Active' ? 'badge-success' : 'badge-danger'} d-inline-flex align-items-center badge-xs`}>
           <i className="ti ti-point-filled me-1" />
           {text}
         </span>
       ),
-      sorter: (a: PackageListItem, b: PackageListItem) => a.Status.length - b.Status.length,
-    },
-    {
-      title: "",
-      dataIndex: "actions",
-      render: () => (
-        <div className="action-icon d-inline-flex">
-          <Link
-            to="#"
-            className="me-2"
-            data-bs-toggle="modal"
-            data-bs-target="#edit_plans"
-          >
-            <i className="ti ti-edit" />
-          </Link>
-          <Link to="#" data-bs-toggle="modal" data-bs-target="#delete_modal">
-            <i className="ti ti-trash" />
-          </Link>
-        </div>
-      ),
+      sorter: (a: PackageListItem, b: PackageListItem) => a.Status.localeCompare(b.Status),
     },
   ];
 
@@ -111,6 +229,7 @@ const Packages = () => {
     { value: "Active", label: "Active" },
     { value: "Inactive", label: "Inactive" },
   ];
+
   return (
     <>
       {/* Page Wrapper */}
@@ -207,7 +326,7 @@ const Packages = () => {
                       <p className="fs-12 fw-medium mb-1 text-truncate">
                         Total Plans
                       </p>
-                      <h4>08</h4>
+                      <h4>{totalPlansCount}</h4>
                     </div>
                   </div>
                   <div>
@@ -219,7 +338,7 @@ const Packages = () => {
               </div>
             </div>
             {/* /Total Plans */}
-            {/* Total Plans */}
+            {/* Active Plans */}
             <div className="col-lg-3 col-md-6 d-flex">
               <div className="card flex-fill">
                 <div className="card-body d-flex align-items-center justify-content-between">
@@ -228,7 +347,7 @@ const Packages = () => {
                       <p className="fs-12 fw-medium mb-1 text-truncate">
                         Active Plans
                       </p>
-                      <h4>08</h4>
+                      <h4>{activePlansCount}</h4>
                     </div>
                   </div>
                   <div>
@@ -239,7 +358,7 @@ const Packages = () => {
                 </div>
               </div>
             </div>
-            {/* /Total Plans */}
+            {/* /Active Plans */}
             {/* Inactive Plans */}
             <div className="col-lg-3 col-md-6 d-flex">
               <div className="card flex-fill">
@@ -249,7 +368,7 @@ const Packages = () => {
                       <p className="fs-12 fw-medium mb-1 text-truncate">
                         Inactive Plans
                       </p>
-                      <h4>0</h4>
+                      <h4>{inactivePlansCount}</h4>
                     </div>
                   </div>
                   <div>
@@ -400,7 +519,7 @@ const Packages = () => {
               </div>
             </div>
             <div className="card-body p-0">
-              <Table dataSource={data} columns={columns} Selection={true} />
+              <Table dataSource={tableData} columns={columns} Selection={false} />
             </div>
           </div>
         </div>
@@ -423,6 +542,7 @@ const Packages = () => {
               <h4 className="modal-title">Add New Plan</h4>
               <button
                 type="button"
+                id="close_add_plans_modal"
                 className="btn-close custom-btn-close"
                 data-bs-dismiss="modal"
                 aria-label="Close"
@@ -430,351 +550,222 @@ const Packages = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form>
+            <form onSubmit={handleAddPlanSubmit}>
               <div className="modal-body pb-0">
                 <div className="row">
-                  <div className="col-md-12">
-                    <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
-                      <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-30.jpg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </div>
-                      <div className="profile-upload">
-                        <div className="mb-2">
-                          <h6 className="mb-1">Upload Profile Image</h6>
-                          <p className="fs-12">Image should be below 4 mb</p>
-                        </div>
-                        <div className="profile-uploader d-flex align-items-center">
-                          <div className="drag-upload-btn btn btn-sm btn-primary me-2">
-                            Upload
-                            <input
-                              type="file"
-                              className="form-control image-sign"
-                              multiple
-                            />
-                          </div>
-                          <Link
-                            to="#"
-                            className="btn btn-light btn-sm"
-                          >
-                            Cancel
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                   <div className="col-md-6">
-                    <div className="mb-3 ">
+                    <div className="mb-3">
                       <label className="form-label">
                         Plan Name<span className="text-danger"> *</span>
                       </label>
-                      <CommonSelect
-                        className='select'
-                        options={planName}
-                        defaultValue={planName[0]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Plan Type<span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={planType}
-                        defaultValue={planType[0]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Plan Position<span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={planPosition}
-                        defaultValue={planPosition[0]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Plan Currency<span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={currency}
-                        defaultValue={currency[0]}
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="e.g. Growth Plan"
+                        value={newPlan.name}
+                        onChange={(e) => setNewPlan({ ...newPlan, name: e.target.value })}
+                        required
                       />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <div className="d-flex justify-content-between">
-                        <label className="form-label">
-                          Plan Currency<span className="text-danger"> *</span>
-                        </label>
-                        <span className="text-primary">
-                          <i className="fa-solid fa-circle-exclamation me-2" />
-                          Set 0 for free
-                        </span>
-                      </div>
-                      <CommonSelect
-                        className='select'
-                        options={plancurrency}
-                        defaultValue={plancurrency[0]}
+                      <label className="form-label">
+                        Plan Code / Identifier<span className="text-danger"> *</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="e.g. GROWTH"
+                        value={newPlan.code}
+                        onChange={(e) => setNewPlan({ ...newPlan, code: e.target.value.toUpperCase() })}
                       />
                     </div>
                   </div>
-                  <div className="col-md-3">
-                    <div className="mb-3 ">
+
+                  <div className="col-md-6">
+                    <div className="mb-3">
                       <label className="form-label">
-                        Discount Type<span className="text-danger"> *</span>
+                        Monthly Price (₹ INR)<span className="text-danger"> *</span>
                       </label>
-                      <div className="pass-group">
-                        <CommonSelect
-                          className='select'
-                          options={discountType}
-                          defaultValue={discountType[0]}
+                      <div className="input-group">
+                        <span className="input-group-text">₹</span>
+                        <input
+                          type="number"
+                          className="form-control"
+                          placeholder="1999"
+                          value={newPlan.priceMonthly}
+                          onChange={(e) => setNewPlan({ ...newPlan, priceMonthly: Number(e.target.value) })}
+                          required
                         />
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-3">
-                    <div className="mb-3 ">
+                  <div className="col-md-6">
+                    <div className="mb-3">
                       <label className="form-label">
-                        Discount<span className="text-danger"> *</span>
+                        Yearly Price (₹ INR)<span className="text-danger"> *</span>
                       </label>
-                      <div className="pass-group">
-                        <input type="text" className="form-control" />
+                      <div className="input-group">
+                        <span className="input-group-text">₹</span>
+                        <input
+                          type="number"
+                          className="form-control"
+                          placeholder="19990"
+                          value={newPlan.priceYearly}
+                          onChange={(e) => setNewPlan({ ...newPlan, priceYearly: Number(e.target.value) })}
+                          required
+                        />
                       </div>
                     </div>
                   </div>
-                  <div className="col-lg-3">
+
+                  <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Limitations Invoices</label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Max Employees</label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        placeholder="25"
+                        value={newPlan.maxEmployees}
+                        onChange={(e) => setNewPlan({ ...newPlan, maxEmployees: Number(e.target.value) })}
+                      />
                     </div>
                   </div>
-                  <div className="col-lg-3">
+                  <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Max Customers</label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Max Storage (GB)</label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        placeholder="10"
+                        value={newPlan.maxStorageGb}
+                        onChange={(e) => setNewPlan({ ...newPlan, maxStorageGb: Number(e.target.value) })}
+                      />
                     </div>
                   </div>
-                  <div className="col-lg-3">
+                  <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Product</label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Currency</label>
+                      <select
+                        className="form-select"
+                        value={newPlan.currency}
+                        onChange={(e) => setNewPlan({ ...newPlan, currency: e.target.value })}
+                      >
+                        <option value="INR (₹)">INR (₹) - Indian Rupee</option>
+                      </select>
                     </div>
                   </div>
-                  <div className="col-lg-3">
+
+                  <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Supplier</label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Country</label>
+                      <select
+                        className="form-select"
+                        value={newPlan.country}
+                        onChange={(e) => setNewPlan({ ...newPlan, country: e.target.value })}
+                      >
+                        <option value="India">India 🇮🇳</option>
+                      </select>
                     </div>
                   </div>
+                  <div className="col-md-4">
+                    <div className="mb-3">
+                      <label className="form-label">State / Region</label>
+                      <select
+                        className="form-select"
+                        value={newPlan.state}
+                        onChange={(e) => setNewPlan({ ...newPlan, state: e.target.value })}
+                      >
+                        <option value="All India">All India</option>
+                        <option value="Maharashtra">Maharashtra</option>
+                        <option value="Delhi">Delhi</option>
+                        <option value="Karnataka">Karnataka</option>
+                        <option value="Haryana">Haryana</option>
+                        <option value="Tamil Nadu">Tamil Nadu</option>
+                        <option value="Telangana">Telangana</option>
+                        <option value="Gujarat">Gujarat</option>
+                        <option value="Uttar Pradesh">Uttar Pradesh</option>
+                        <option value="West Bengal">West Bengal</option>
+                        <option value="Punjab">Punjab</option>
+                        <option value="Kerala">Kerala</option>
+                        <option value="Rajasthan">Rajasthan</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="col-md-4">
+                    <div className="mb-3">
+                      <label className="form-label">Status<span className="text-danger"> *</span></label>
+                      <select
+                        className="form-select"
+                        value={newPlan.isActive ? 'Active' : 'Inactive'}
+                        onChange={(e) => setNewPlan({ ...newPlan, isActive: e.target.value === 'Active' })}
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="col-lg-12">
-                    <div className="d-flex align-items-center justify-content-between mb-3">
-                      <h6>Plan Modules</h6>
+                    <div className="d-flex align-items-center justify-content-between mb-2">
+                      <h6 className="mb-0">Plan Modules &amp; Features</h6>
                       <div className="form-check d-flex align-items-center">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
+                        <input
+                          className="form-check-input me-1"
+                          type="checkbox"
+                          id="selectAllModulesCheck"
+                          checked={newPlan.features.length === availableModules.length}
+                          onChange={(e) => handleSelectAllModules(e.target.checked)}
+                        />
+                        <label className="form-check-label text-dark fw-medium" htmlFor="selectAllModulesCheck">
                           Select All
                         </label>
                       </div>
                     </div>
-                  </div>
-                  <div className="row">
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Employees
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Invoices
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Reports
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Contacts
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Clients
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Estimates
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Goals
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Deals
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Projects
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Payments
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Assets
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Leads
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Tickets
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Taxes
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Activities
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Pipelines
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 me-2 text-dark fw-medium">
-                          Access Trial
-                        </label>
-                        <div className="form-check form-switch me-2">
-                          <input
-                            className="form-check-input me-2"
-                            type="checkbox"
-                            role="switch"
-                          />
+                    <div className="row bg-light rounded p-3 mb-3">
+                      {availableModules.map((mod) => (
+                        <div className="col-lg-3 col-sm-6 mb-2" key={mod}>
+                          <div className="form-check">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id={`mod_${mod}`}
+                              checked={newPlan.features.includes(mod)}
+                              onChange={() => handleModuleToggle(mod)}
+                            />
+                            <label className="form-check-label text-dark" htmlFor={`mod_${mod}`}>
+                              {mod}
+                            </label>
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
                   </div>
-                  <div className="row align-items-center gx-3">
-                    <div className="col-md-4">
-                      <div className="d-flex align-items-center mb-3">
-                        <div className="flex-fill">
-                          <label className="form-label">Trial Days</label>
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="d-block align-items-center ms-3">
-                        <label className="form-check-label mt-0 me-2 text-dark">
-                          Is Recommended
-                        </label>
-                        <div className="form-check form-switch me-2">
-                          <input
-                            className="form-check-input me-2"
-                            type="checkbox"
-                            role="switch"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-5">
-                      <div className="mb-3 ">
-                        <label className="form-label">
-                          Status<span className="text-danger"> *</span>
-                        </label>
-                        <CommonSelect
-                          className='select'
-                          options={status}
-                          defaultValue={status[0]}
-                        />
-                      </div>
+
+                  <div className="col-md-12">
+                    <div className="mb-3">
+                      <label className="form-label">Additional Features (comma-separated)</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="e.g. Custom Domain, Priority HR Support, Audit Logs"
+                        value={customFeature}
+                        onChange={(e) => setCustomFeature(e.target.value)}
+                      />
                     </div>
                   </div>
+
                   <div className="col-md-12">
                     <div className="mb-3">
                       <label className="form-label">Description</label>
-                      <textarea className="form-control" defaultValue={""} />
+                      <textarea
+                        className="form-control"
+                        rows={2}
+                        placeholder="Short description of this subscription plan..."
+                        value={newPlan.description}
+                        onChange={(e) => setNewPlan({ ...newPlan, description: e.target.value })}
+                      />
                     </div>
                   </div>
                 </div>
@@ -787,8 +778,8 @@ const Packages = () => {
                 >
                   Cancel
                 </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                  Add Plan
+                <button type="submit" className="btn btn-primary">
+                  Save &amp; Add Plan
                 </button>
               </div>
             </form>

@@ -1716,6 +1716,11 @@ export const publicRoutes = [
     route: Route,
   },
   {
+    path: "/super-admin/subscriptions",
+    element: <Subscription />,
+    route: Route,
+  },
+  {
     path: routes.superAdminPackages,
     element: <Packages />,
     route: Route,

@@ -3,12 +3,14 @@ import { all_routes } from '../../../router/all_routes'
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
 import ImageWithBasePath from '../../../core/common/imageWithBasePath'
 import ReactApexChart from "react-apexcharts";
-import { subscription_details } from '../../../core/data/json/subscriptiondetails'
 import PredefinedDateRanges from '../../../core/common/datePicker'
 import Table from "../../../core/common/dataTable/index";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import apiClient from '../../../core/utils/apiClient';
 
 interface SubscriptionDetails {
+  id: number;
+  companyId: number;
   CompanyName: string;
   Image: string;
   Plan: string;
@@ -17,38 +19,95 @@ interface SubscriptionDetails {
   Amount: string;
   CreatedDate: string;
   ExpiringDate: string;
-  Status: 'Paid' | 'Unpaid' | string;
+  Status: string;
+  trialDaysLeft: number;
+  adminEmail: string;
 }
 
 const Subscription = () => {
-  const data: SubscriptionDetails[] = subscription_details;
+  const [subscriptions, setSubscriptions] = useState<SubscriptionDetails[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [totalSubsCount, setTotalSubsCount] = useState<number>(0);
+  const [activeSubsCount, setActiveSubsCount] = useState<number>(0);
+  const [expiredSubsCount, setExpiredSubsCount] = useState<number>(0);
+
+  const fetchSubscriptions = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.get('/super-admin/subscriptions');
+      const data = response.data;
+      if (Array.isArray(data)) {
+        let active = 0;
+        let expired = 0;
+
+        const formatted: SubscriptionDetails[] = data.map((sub: any) => {
+          if (sub.status === 'ACTIVE' || sub.status === 'TRIAL') active++;
+          if (sub.status === 'EXPIRED') expired++;
+
+          return {
+            id: sub.id,
+            companyId: sub.companyId,
+            CompanyName: sub.companyName,
+            Image: sub.companyLogo || 'company-01.svg',
+            Plan: `${sub.planName} (${sub.billingCycle})`,
+            BillCycle: sub.billingCycle === 'YEARLY' ? '365' : '30',
+            PaymentMethod: sub.lastInvoice?.paymentMethod || 'Credit Card / Stripe',
+            Amount: `₹${(sub.billingCycle === 'YEARLY' ? sub.priceYearly : sub.priceMonthly).toLocaleString('en-IN')}`,
+            CreatedDate: sub.startDate ? new Date(sub.startDate).toLocaleDateString() : 'N/A',
+            ExpiringDate: sub.trialEndsAt ? new Date(sub.trialEndsAt).toLocaleDateString() : 'N/A',
+            Status: sub.status,
+            trialDaysLeft: sub.trialDaysLeft,
+            adminEmail: sub.adminEmail
+          };
+        });
+
+        setSubscriptions(formatted);
+        setTotalSubsCount(data.length);
+        setActiveSubsCount(active);
+        setExpiredSubsCount(expired);
+      }
+    } catch (err) {
+      console.error('Error fetching subscriptions:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubscriptions();
+  }, []);
+
+  const handleExtendTrial = async (companyId: number) => {
+    try {
+      await apiClient.post(`/super-admin/subscriptions/${companyId}/extend-trial`, { extraDays: 14 });
+      alert('Successfully extended trial by 14 days!');
+      fetchSubscriptions();
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to extend trial');
+    }
+  };
+
   const columns = [
     {
       title: "Company Name",
       dataIndex: "CompanyName",
       render: (_text: string, record: SubscriptionDetails) => (
         <div className="d-flex align-items-center file-name-icon">
-          <Link to="#" className="avatar avatar-md border rounded-circle">
-            <ImageWithBasePath
-              src={`assets/img/company/${record.Image}`}
-              className="img-fluid"
-              alt={`${record.CompanyName} logo`}
-            />
-          </Link>
+          <div className="avatar avatar-md border rounded-circle bg-light d-flex align-items-center justify-content-center">
+            <span className="fw-bold text-primary">{record.CompanyName.charAt(0)}</span>
+          </div>
           <div className="ms-2">
-            <h6 className="fw-medium">
-              <Link to="#">{record.CompanyName}</Link>
-            </h6>
+            <h6 className="fw-medium mb-0">{record.CompanyName}</h6>
+            <span className="fs-12 text-muted">{record.adminEmail}</span>
           </div>
         </div>
-
       ),
-      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.CompanyName.length - b.CompanyName.length,
+      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.CompanyName.localeCompare(b.CompanyName),
     },
     {
       title: "Plan",
       dataIndex: "Plan",
-      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.Plan.length - b.Plan.length,
+      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.Plan.localeCompare(b.Plan),
     },
     {
       title: "Billing Cycle",
@@ -56,59 +115,60 @@ const Subscription = () => {
       render: (_text: string, record: SubscriptionDetails) => (
         <span>{record.BillCycle} Days</span>
       ),
-      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.BillCycle.length - b.BillCycle.length,
-    },
-    {
-      title: "Payment Method",
-      dataIndex: "PaymentMethod",
-      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.PaymentMethod.length - b.PaymentMethod.length,
+      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.BillCycle.localeCompare(b.BillCycle),
     },
     {
       title: "Amount",
       dataIndex: "Amount",
-      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.Amount.length - b.Amount.length,
+      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.Amount.localeCompare(b.Amount),
     },
     {
       title: "Created Date",
       dataIndex: "CreatedDate",
-      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.CreatedDate.length - b.CreatedDate.length,
+      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.CreatedDate.localeCompare(b.CreatedDate),
     },
     {
-      title: "Expired On",
+      title: "Trial / Expiry",
       dataIndex: "ExpiringDate",
-      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.ExpiringDate.length - b.ExpiringDate.length,
+      render: (_text: string, record: SubscriptionDetails) => (
+        <div>
+          <div>{record.ExpiringDate}</div>
+          {record.Status === 'TRIAL' && (
+            <span className="badge badge-info-transparent">{record.trialDaysLeft} days left</span>
+          )}
+        </div>
+      ),
+      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.ExpiringDate.localeCompare(b.ExpiringDate),
     },
     {
       title: "Status",
       dataIndex: "Status",
-      render: (text: SubscriptionDetails['Status'], _record: SubscriptionDetails) => (
-        <span className={`badge ${text === 'Paid' ? 'badge-success' : 'badge-danger'} d-inline-flex align-items-center badge-xs`}>
-          <i className="ti ti-point-filled me-1" />
-          {text}
-        </span>
-
-      ),
-      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.Status.length - b.Status.length,
+      render: (text: string) => {
+        let badgeClass = 'badge-secondary';
+        if (text === 'ACTIVE') badgeClass = 'badge-success';
+        if (text === 'TRIAL') badgeClass = 'badge-warning';
+        if (text === 'EXPIRED') badgeClass = 'badge-danger';
+        return (
+          <span className={`badge ${badgeClass} d-inline-flex align-items-center badge-xs`}>
+            <i className="ti ti-point-filled me-1" />
+            {text}
+          </span>
+        );
+      },
+      sorter: (a: SubscriptionDetails, b: SubscriptionDetails) => a.Status.localeCompare(b.Status),
     },
     {
-      title: "",
+      title: "Action",
       dataIndex: "actions",
-      render: () => (
-        <div className="action-icon d-inline-flex">
-          <Link
-            to="#"
-            className="me-2"
-            data-bs-toggle="modal"
-            data-bs-target="#view_invoice"
+      render: (_text: string, record: SubscriptionDetails) => (
+        <div className="action-icon d-inline-flex align-items-center">
+          <button
+            className="btn btn-xs btn-outline-primary me-2"
+            onClick={() => handleExtendTrial(record.companyId)}
+            title="Extend Trial (+14 Days)"
           >
-            <i className="ti ti-file-invoice" />
-          </Link>
-          <Link to="#" className="me-2">
-            <i className="ti ti-download" />
-          </Link>
-          <Link to="#" data-bs-toggle="modal" data-bs-target="#delete_modal">
-            <i className="ti ti-trash" />
-          </Link>
+            +14d Trial
+          </button>
         </div>
       ),
     },
@@ -532,7 +592,7 @@ const Subscription = () => {
                           <span className="fs-14 fw-normal text-truncate mb-1">
                             Total Subscribers
                           </span>
-                          <h5>600</h5>
+                          <h5>{totalSubsCount}</h5>
                         </div>
                       </div>
                       <div className="col-5">
@@ -550,9 +610,8 @@ const Subscription = () => {
                     <p className="fs-12 fw-normal d-flex align-items-center text-truncate">
                       <span className="text-primary fs-12 d-flex align-items-center me-1">
                         <i className="ti ti-arrow-wave-right-up me-1" />
-                        +19.01%
+                        Live Platform Tenants
                       </span>
-                      from last week
                     </p>
                   </div>
                 </div>
@@ -568,7 +627,7 @@ const Subscription = () => {
                           <span className="fs-14 fw-normal text-truncate mb-1">
                             Active Subscribers
                           </span>
-                          <h5>560</h5>
+                          <h5>{activeSubsCount}</h5>
                         </div>
                       </div>
                       <div className="col-5">
@@ -586,9 +645,8 @@ const Subscription = () => {
                     <p className="fs-12 fw-normal d-flex align-items-center text-truncate">
                       <span className="text-primary fs-12 d-flex align-items-center me-1">
                         <i className="ti ti-arrow-wave-right-up me-1" />
-                        +19.01%
+                        Active / Trial
                       </span>
-                      from last week
                     </p>
                   </div>
                 </div>
@@ -604,7 +662,7 @@ const Subscription = () => {
                           <span className="fs-14 fw-normal text-truncate mb-1">
                             Expired Subscribers
                           </span>
-                          <h5>40</h5>
+                          <h5>{expiredSubsCount}</h5>
                         </div>
                       </div>
                       <div className="col-5">
@@ -620,11 +678,10 @@ const Subscription = () => {
                   </div>
                   <div className="d-flex">
                     <p className="fs-12 fw-normal d-flex align-items-center text-truncate">
-                      <span className="text-primary fs-12 d-flex align-items-center me-1">
-                        <i className="ti ti-arrow-wave-right-up me-1" />
-                        +19.01%
+                      <span className="text-danger fs-12 d-flex align-items-center me-1">
+                        <i className="ti ti-arrow-wave-right-down me-1" />
+                        Requires Renewal
                       </span>
-                      from last week
                     </p>
                   </div>
                 </div>
@@ -634,129 +691,9 @@ const Subscription = () => {
           <div className="card">
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
               <h5>Subscription List</h5>
-              <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-                <div className="me-3">
-                  <div className="input-icon position-relative">
-                    <PredefinedDateRanges />
-                  </div>
-                </div>
-                <div className="dropdown me-3">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Select Plan
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Advanced (Monthly)
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Basic (Yearly)
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Enterprise (Monthly)
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-                <div className="dropdown me-3">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Select Status
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Paid
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Unpaid
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-                <div className="dropdown">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Sort By : Last 7 Days
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Recently Added
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Ascending
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Descending
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Last Month
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Last 7 Days
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
             </div>
             <div className="card-body p-0">
-              <Table dataSource={data} columns={columns} Selection={true} />
+              <Table dataSource={subscriptions} columns={columns} Selection={false} />
             </div>
           </div>
         </div>
