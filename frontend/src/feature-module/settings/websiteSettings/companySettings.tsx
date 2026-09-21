@@ -33,6 +33,22 @@ const CompanySettings = () => {
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [previewLogo, setPreviewLogo] = useState<string | null>(null);
+  const [subscriptionData, setSubscriptionData] = useState<any>(null);
+
+  const [availablePlans, setAvailablePlans] = useState<any[]>([]);
+  const [billingCycleToggle, setBillingCycleToggle] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
+  const [upgradingPlanId, setUpgradingPlanId] = useState<number | null>(null);
+
+  const fetchAvailablePlans = async () => {
+    try {
+      const res = await apiClient.get('/super-admin/plans');
+      if (Array.isArray(res.data)) {
+        setAvailablePlans(res.data.filter((p: any) => p.isActive));
+      }
+    } catch (err) {
+      console.error("Failed to load plans:", err);
+    }
+  };
 
   useEffect(() => {
     const fetchCompanySettings = async () => {
@@ -55,6 +71,14 @@ const CompanySettings = () => {
             setPreviewLogo(comp.logoUrl);
           }
         }
+
+        // Fetch company subscription details
+        const subRes = await apiClient.get('/api/subscription/company');
+        if (subRes.data) {
+          setSubscriptionData(subRes.data);
+        }
+
+        fetchAvailablePlans();
       } catch (err: any) {
         console.error("Failed to load company settings:", err);
         setMessage({ type: 'danger', text: err.response?.data?.message || "Failed to load company settings." });
@@ -64,6 +88,23 @@ const CompanySettings = () => {
     };
     fetchCompanySettings();
   }, []);
+
+  const handleUpgradePlan = async (targetPlanId: number) => {
+    try {
+      setUpgradingPlanId(targetPlanId);
+      const res = await apiClient.post('/api/subscription/company/change-plan', {
+        planId: targetPlanId,
+        billingCycle: billingCycleToggle
+      });
+      alert(res.data?.message || 'Plan upgraded successfully!');
+      const subRes = await apiClient.get('/api/subscription/company');
+      if (subRes.data) setSubscriptionData(subRes.data);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to upgrade plan');
+    } finally {
+      setUpgradingPlanId(null);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -354,6 +395,74 @@ const CompanySettings = () => {
                             </div>
                           </div>
                         </div>
+
+                        {/* Subscription & Plan Status Card */}
+                        {subscriptionData && (
+                          <div className="card mt-3">
+                            <div className="card-header d-flex align-items-center justify-content-between">
+                              <h5 className="mb-0">Workspace Plan</h5>
+                              <span className={`badge ${subscriptionData.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'} badge-xs`}>
+                                {subscriptionData.status}
+                              </span>
+                            </div>
+                            <div className="card-body">
+                              <div className="d-flex align-items-center justify-content-between mb-2">
+                                <span className="fw-bold text-dark fs-16">{subscriptionData.plan?.name}</span>
+                                <span className="text-primary fw-medium">${subscriptionData.plan?.priceMonthly}/mo</span>
+                              </div>
+                              <p className="fs-12 text-muted mb-3">{subscriptionData.plan?.description}</p>
+                              
+                              {subscriptionData.status === 'TRIAL' && (
+                                <div className="alert alert-warning py-2 px-3 fs-12 mb-3">
+                                  <i className="ti ti-clock me-1" />
+                                  <strong>14-Day Free Trial:</strong> {subscriptionData.trialDaysLeft} days remaining.
+                                </div>
+                              )}
+
+                              {/* Employee Quota Meter */}
+                              <div className="mb-3">
+                                <div className="d-flex align-items-center justify-content-between fs-12 mb-1">
+                                  <span className="text-muted">Employee Quota:</span>
+                                  <span className="fw-medium text-dark">
+                                    {subscriptionData.currentEmployeeCount} / {subscriptionData.maxEmployees} Used
+                                  </span>
+                                </div>
+                                <div className="progress" style={{ height: "6px" }}>
+                                  <div
+                                    className="progress-bar bg-primary"
+                                    role="progressbar"
+                                    style={{
+                                      width: `${Math.min(100, Math.round((subscriptionData.currentEmployeeCount / subscriptionData.maxEmployees) * 100))}%`
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Enabled Features */}
+                              <div className="border-top pt-2 mb-3">
+                                <h6 className="fs-12 text-muted mb-2">Included Features:</h6>
+                                <ul className="list-unstyled mb-0 fs-12">
+                                  {subscriptionData.plan?.features?.map((feat: string, idx: number) => (
+                                    <li key={idx} className="mb-1 d-flex align-items-center">
+                                      <i className="ti ti-circle-check text-success me-2 fs-14" />
+                                      {feat}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+
+                              <button
+                                type="button"
+                                className="btn btn-primary w-100 btn-sm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#upgrade_plan_modal"
+                              >
+                                <i className="ti ti-arrow-up-circle me-1" />
+                                Upgrade / Change Plan
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </form>
@@ -361,6 +470,101 @@ const CompanySettings = () => {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Upgrade Plan Modal */}
+        <div className="modal fade" id="upgrade_plan_modal" tabIndex={-1} aria-hidden="true">
+          <div className="modal-dialog modal-dialog-centered modal-xl">
+            <div className="modal-content">
+              <div className="modal-header border-bottom">
+                <h5 className="modal-title">Upgrade Workspace Plan</h5>
+                <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close" />
+              </div>
+              <div className="modal-body p-4">
+                <div className="text-center mb-4">
+                  <h4 className="fw-bold mb-2">Choose the Right Plan for Your Business</h4>
+                  <p className="text-muted fs-14">Scale your employee headcount, storage, and advanced HRMS capabilities instantly.</p>
+                  
+                  {/* Billing Cycle Toggle */}
+                  <div className="btn-group mt-2" role="group">
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${billingCycleToggle === 'MONTHLY' ? 'btn-primary' : 'btn-outline-primary'}`}
+                      onClick={() => setBillingCycleToggle('MONTHLY')}
+                    >
+                      Monthly Billing
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${billingCycleToggle === 'YEARLY' ? 'btn-primary' : 'btn-outline-primary'}`}
+                      onClick={() => setBillingCycleToggle('YEARLY')}
+                    >
+                      Yearly Billing <span className="badge bg-success ms-1">Save 15%</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="row">
+                  {availablePlans.map((p) => {
+                    const isCurrent = subscriptionData?.plan?.id === p.id && subscriptionData?.status === 'ACTIVE';
+                    const price = billingCycleToggle === 'YEARLY' ? p.priceYearly : p.priceMonthly;
+                    const isUpgradingThis = upgradingPlanId === p.id;
+
+                    return (
+                      <div key={p.id} className="col-md-4 col-sm-12 mb-3">
+                        <div className={`card h-100 border ${isCurrent ? 'border-primary shadow' : ''}`}>
+                          <div className="card-body d-flex flex-column">
+                            <div className="d-flex align-items-center justify-content-between mb-2">
+                              <h5 className="fw-bold mb-0">{p.name}</h5>
+                              {isCurrent && <span className="badge bg-success-transparent text-success">Current Plan</span>}
+                            </div>
+                            <p className="fs-12 text-muted mb-3">{p.description}</p>
+
+                            <div className="mb-3">
+                              <h3 className="fw-bold mb-0">
+                                ${price} <span className="fs-13 text-muted fw-normal">/{billingCycleToggle === 'YEARLY' ? 'year' : 'month'}</span>
+                              </h3>
+                              <span className="fs-12 text-primary fw-medium">Max {p.maxEmployees} Employees</span>
+                            </div>
+
+                            <div className="border-top pt-3 mb-4 flex-grow-1">
+                              <h6 className="fs-12 text-dark mb-2">Features Included:</h6>
+                              <ul className="list-unstyled fs-12 mb-0">
+                                {(Array.isArray(p.features) ? p.features : []).map((f: string, i: number) => (
+                                  <li key={i} className="mb-2 d-flex align-items-center">
+                                    <i className="ti ti-check text-success me-2" />
+                                    {f}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+
+                            <button
+                              type="button"
+                              className={`btn w-100 ${isCurrent ? 'btn-outline-secondary' : 'btn-primary'}`}
+                              disabled={isCurrent || upgradingPlanId !== null}
+                              onClick={() => handleUpgradePlan(p.id)}
+                            >
+                              {isUpgradingThis ? (
+                                <>
+                                  <span className="spinner-border spinner-border-sm me-1" />
+                                  Upgrading...
+                                </>
+                              ) : isCurrent ? (
+                                "Current Active Plan"
+                              ) : (
+                                `Upgrade to ${p.name}`
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -96,6 +96,10 @@ const timesheetRoutes = require('./src/routes/timesheetRoutes');
 const roleRoutes = require('./src/routes/roleRoutes');
 const payrollRoutes = require('./src/routes/payrollRoutes');
 
+// SaaS Subscription Billing Routes & Seeder
+const subscriptionRoutes = require('./src/routes/subscriptionRoutes');
+const { seedDefaultPlans } = require('./src/utils/seedDefaultPlans');
+
 // Initialize Cron Jobs
 require('./src/cron/attendanceJobs');
 
@@ -131,6 +135,11 @@ app.use('/roles', roleRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/payroll', payrollRoutes);
 app.use('/api/payroll', payrollRoutes);
+
+// SaaS Subscriptions & Plans
+app.use('/super-admin', subscriptionRoutes);
+app.use('/api/super-admin', subscriptionRoutes);
+app.use('/api/subscription', subscriptionRoutes);
 
 
 const prisma = require('./src/config/prisma');
@@ -181,8 +190,9 @@ app.get('/admin/db-push', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     // Sync database schema after server starts
     runDbPush();
+    await seedDefaultPlans();
 });
