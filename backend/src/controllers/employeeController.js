@@ -228,9 +228,13 @@ async function getEmployees(req, res) {
 async function getEmployeeById(req, res) {
     try {
         const { id } = req.params;
+        const parsedId = parseInt(id, 10);
+        if (isNaN(parsedId)) {
+            return res.status(400).json({ message: 'Invalid employee ID' });
+        }
         const companyId = req.user.companyId;
         const employee = await prisma.employee.findUnique({
-            where: { id: parseInt(id, 10) },
+            where: { id: parsedId },
             include: {
                 user: true,
                 department: true,
