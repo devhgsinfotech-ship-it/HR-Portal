@@ -320,24 +320,30 @@ const HrDashboard = () => {
                         <h1 className="display-4 text-white mb-0 fw-normal" style={{ fontSize: '2.2rem', lineHeight: '1' }}>{hhmm}</h1>
                         <span className="fs-14 ms-1" style={{ opacity: 0.85 }}>{ssAmPm}</span>
                       </div>
-                      <button
-                        onClick={handlePunch}
-                        disabled={clockLoading}
-                        className="btn px-4 py-2 border-0 fw-medium fs-14 rounded-3 text-white shadow-sm"
-                        style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s', opacity: clockLoading ? 0.7 : 1 }}
-                      >
-                        {clockLoading ? (
-                          <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" />
-                        ) : attendanceStatus?.isCheckedIn ? (
-                          <>
-                            <i className="ti ti-clock-off me-1" /> Clock-out
-                          </>
-                        ) : (
-                          <>
-                            <i className="ti ti-clock-check me-1" /> Clock-in
-                          </>
-                        )}
-                      </button>
+                      {attendanceStatus?.isNotApplicable ? (
+                        <span className="badge bg-white-transparent text-white px-3 py-2 fs-12 fw-medium border border-white-50 rounded-3">
+                          <i className="ti ti-shield-check me-1" /> Admin Account (No Punch Req.)
+                        </span>
+                      ) : (
+                        <button
+                          onClick={handlePunch}
+                          disabled={clockLoading}
+                          className="btn px-4 py-2 border-0 fw-medium fs-14 rounded-3 text-white shadow-sm"
+                          style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s', opacity: clockLoading ? 0.7 : 1 }}
+                        >
+                          {clockLoading ? (
+                            <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" />
+                          ) : attendanceStatus?.isCheckedIn ? (
+                            <>
+                              <i className="ti ti-clock-off me-1" /> Clock-out
+                            </>
+                          ) : (
+                            <>
+                              <i className="ti ti-clock-check me-1" /> Clock-in
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

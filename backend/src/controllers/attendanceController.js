@@ -5,6 +5,20 @@ const prisma = require('../config/prisma');
 async function getTodayStatus(req, res) {
     try {
         const userId = req.user.id;
+        const role = req.user.role;
+
+        // Company Admin and Super Admin are Administrator accounts, NOT employees.
+        // Attendance, Clock In/Out, and Employee tracking do NOT apply to Admin accounts.
+        if (role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN') {
+            return res.json({
+                isCheckedIn: false,
+                record: null,
+                employee: null,
+                isNotApplicable: true,
+                message: 'Attendance tracking is not applicable for Administrator accounts.'
+            });
+        }
+
         let employee = await prisma.employee.findUnique({ where: { userId } });
         if (!employee) {
             return res.json({ isCheckedIn: false, record: null });
@@ -24,8 +38,6 @@ async function getTodayStatus(req, res) {
         });
 
         // ── DETECT INCOMPLETE SESSION FROM A PREVIOUS DAY ───────────
-        // Find the most recent record that has a punch-in but NO punch-out
-        // and is NOT today (i.e., a forgotten session from a previous day)
         const incompleteYesterday = await prisma.attendanceRecord.findFirst({
             where: {
                 employeeId: employee.id,
@@ -33,7 +45,7 @@ async function getTodayStatus(req, res) {
                 checkOut: null,
                 date: { lt: todayStart }  // strictly before today
             },
-            orderBy: { date: 'desc' }  // get the most recent one
+            orderBy: { date: 'desc' }
         });
 
         res.json({
@@ -48,18 +60,23 @@ async function getTodayStatus(req, res) {
     }
 }
 
-// ── CHECK-IN (Employee / HR / Admin) ─────────────────────────
+// ── CHECK-IN (Employee / HR / Manager) ─────────────────────────
 async function checkIn(req, res) {
     try {
         const userId = req.user.id;
+        const role = req.user.role;
+
+        if (role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN') {
+            return res.status(400).json({ message: 'Attendance tracking and Clock In/Out are not applicable for Administrator accounts.' });
+        }
+
         let employee = await prisma.employee.findUnique({ where: { userId } });
         
-        // Auto-create employee profile for HR/Admin if it doesn't exist yet
-        if (!employee && (req.user.role === 'HR' || req.user.role === 'SUPER_ADMIN' || req.user.role === 'MANAGER')) {
+        // Auto-create employee profile for HR/Manager if missing (only if acting as employees)
+        if (!employee && (role === 'HR' || role === 'MANAGER')) {
             const user = await prisma.user.findUnique({ where: { id: userId } });
             if (!user) return res.status(404).json({ message: 'User not found' });
 
-            // Generate a unique employee code
             const code = `EMP-${user.companyId || 0}-${user.id}`;
             const existing = await prisma.employee.findUnique({ where: { employeeCode: code } });
             
@@ -67,7 +84,7 @@ async function checkIn(req, res) {
                 data: {
                     userId: user.id,
                     employeeCode: existing ? `${code}-${Date.now()}` : code,
-                    firstName: user.name?.split(' ')[0] || 'Admin',
+                    firstName: user.name?.split(' ')[0] || 'Employee',
                     lastName: user.name?.split(' ').slice(1).join(' ') || '',
                     dateOfJoining: new Date(),
                     employmentType: 'FULL_TIME'
@@ -77,7 +94,6 @@ async function checkIn(req, res) {
             return res.status(404).json({ message: 'Employee profile not found. Please contact HR to set up your employee profile.' });
         }
 
-        // Use date range to handle UTC/timezone offset reliably
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         const todayEnd = new Date();
@@ -116,17 +132,18 @@ async function checkIn(req, res) {
     }
 }
 
-// ── CHECK-OUT (Employee) ───────────────────────────────────
-// ── CHECK-OUT (Employee / HR / Admin) ─────────────────────────
+// ── CHECK-OUT (Employee / HR / Manager) ─────────────────────────
 async function checkOut(req, res) {
     try {
         const userId = req.user.id;
+        const role = req.user.role;
+
+        if (role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN') {
+            return res.status(400).json({ message: 'Attendance tracking and Clock In/Out are not applicable for Administrator accounts.' });
+        }
+
         let employee = await prisma.employee.findUnique({ where: { userId } });
-        
-        // Auto-create employee profile for HR/Admin if missing (edge case)
-        if (!employee && (req.user.role === 'HR' || req.user.role === 'SUPER_ADMIN' || req.user.role === 'MANAGER')) {
-            return res.status(400).json({ message: 'You have not checked in today' });
-        } else if (!employee) {
+        if (!employee) {
             return res.status(404).json({ message: 'Employee profile not found' });
         }
 
@@ -299,9 +316,14 @@ async function getAttendanceLogs(req, res) {
                 reportingManagerId: managerEmployee.id 
             };
         } else {
-            // HR/Admin: filter by company
+            // HR/Admin: filter by company and exclude Administrator accounts from employee tracking
             if (companyId) {
-                whereClause.employee = { user: { companyId } };
+                whereClause.employee = {
+                    user: {
+                        companyId,
+                        role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] }
+                    }
+                };
             }
         }
 
