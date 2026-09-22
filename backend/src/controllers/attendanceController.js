@@ -683,6 +683,48 @@ async function submitRegularization(req, res) {
             }
         });
 
+        // Send notifications to Company Admins, HRs, and Reporting Manager
+        try {
+            const empName = `${employee.firstName} ${employee.lastName}`;
+            const regDateStr = new Date(record.date).toISOString().split('T')[0];
+            const targetCompanyId = req.user.companyId;
+
+            if (targetCompanyId) {
+                const recipients = await prisma.user.findMany({
+                    where: {
+                        companyId: targetCompanyId,
+                        role: { in: ['COMPANY_ADMIN', 'HR', 'SUPER_ADMIN'] },
+                        accountStatus: 'ACTIVE'
+                    }
+                });
+
+                if (employee.reportingManagerId) {
+                    const managerEmp = await prisma.employee.findUnique({
+                        where: { id: employee.reportingManagerId },
+                        select: { userId: true }
+                    });
+                    if (managerEmp?.userId && !recipients.some(u => u.id === managerEmp.userId)) {
+                        recipients.push({ id: managerEmp.userId });
+                    }
+                }
+
+                for (const r of recipients) {
+                    if (r.id === userId) continue;
+                    await prisma.notification.create({
+                        data: {
+                            receiverId: r.id,
+                            senderId: userId,
+                            type: 'ATTENDANCE_REMINDER',
+                            title: 'Attendance Regularization Requested',
+                            message: `${empName} requested attendance regularization for ${regDateStr}.`
+                        }
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error('Failed to send regularization request notification:', notifErr);
+        }
+
         res.json({ message: 'Correction request submitted successfully', regularization });
     } catch (error) {
         console.error('Error submitting regularization:', error);
@@ -810,6 +852,27 @@ async function reviewRegularization(req, res) {
                     status: newStatus
                 }
             });
+        }
+
+        // Send notification to employee
+        try {
+            const empUserId = request.attendanceRecord?.employee?.userId;
+            if (empUserId) {
+                const regDateStr = new Date(request.attendanceRecord.date).toISOString().split('T')[0];
+                const isApproved = status === 'APPROVED';
+
+                await prisma.notification.create({
+                    data: {
+                        receiverId: empUserId,
+                        senderId: reviewerId,
+                        type: 'ATTENDANCE_REMINDER',
+                        title: isApproved ? 'Regularization Approved' : 'Regularization Rejected',
+                        message: `Your attendance regularization request for ${regDateStr} has been ${status.toLowerCase()}.${remarks ? ' Remarks: ' + remarks : ''}`
+                    }
+                });
+            }
+        } catch (notifErr) {
+            console.error('Failed to send regularization review notification:', notifErr);
         }
 
         res.json({ message: `Request ${status.toLowerCase()}`, request: updatedRequest });

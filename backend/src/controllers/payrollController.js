@@ -531,6 +531,27 @@ async function approvePayrollPeriod(req, res) {
                 }
             });
             created++;
+
+            // Notify Employee
+            try {
+                const emp = await prisma.employee.findUnique({
+                    where: { id: entry.employeeId },
+                    select: { userId: true }
+                });
+                if (emp?.userId) {
+                    await prisma.notification.create({
+                        data: {
+                            receiverId: emp.userId,
+                            senderId: req.user.id,
+                            type: 'PAYSLIP_GENERATED',
+                            title: 'Payslip Available',
+                            message: `Your payslip for ${period.label} has been generated and is ready to view.`
+                        }
+                    });
+                }
+            } catch (notifErr) {
+                console.error('Failed to send payslip notification:', notifErr);
+            }
         }
 
         await prisma.payrollPeriod.update({

@@ -146,7 +146,7 @@ const Header = React.memo(() => {
             targetRoute = routes.holidays || '/hrm/holidays';
             break;
           case 'DOCUMENT_VERIFIED':
-            targetRoute = routes.profile || '/pages/profile';
+            targetRoute = userRole === 'EMPLOYEE' ? (routes.profile || '/pages/profile') : (routes.employeeList || '/employees');
             break;
           default:
             targetRoute = null;

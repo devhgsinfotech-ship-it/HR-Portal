@@ -51,6 +51,41 @@ async function uploadDocument(req, res) {
       }
     });
 
+    // Send notification to Company Admins and HRs
+    try {
+      const emp = await prisma.employee.findUnique({
+        where: { id: empId },
+        include: { user: true }
+      });
+      const empName = emp ? `${emp.firstName} ${emp.lastName}` : (req.user.name || 'Employee');
+      const targetCompanyId = req.user.companyId || emp?.user?.companyId;
+
+      if (targetCompanyId) {
+        const recipients = await prisma.user.findMany({
+          where: {
+            companyId: targetCompanyId,
+            role: { in: ['COMPANY_ADMIN', 'HR', 'SUPER_ADMIN'] },
+            accountStatus: 'ACTIVE'
+          }
+        });
+
+        for (const r of recipients) {
+          if (r.id === req.user.id) continue;
+          await prisma.notification.create({
+            data: {
+              receiverId: r.id,
+              senderId: req.user.id,
+              type: 'DOCUMENT_VERIFIED',
+              title: 'New Document Uploaded',
+              message: `${empName} uploaded document "${document.name}".`
+            }
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('Failed to send document upload notification:', notifErr);
+    }
+
     res.status(201).json(document);
   } catch (error) {
     console.error('Error uploading document:', error);

@@ -352,9 +352,9 @@ async function returnAsset(req, res) {
         data: {
           receiverId: activeAssignment.employee.userId,
           senderId: req.user.id,
-          type: 'ANNOUNCEMENT',
+          type: 'ASSET_RETURN_REQUESTED',
           title: 'Asset Return Processed',
-          message: `Your return of asset "${asset.name}" (${asset.assetCode}) has been processed.`
+          message: `Asset "${asset.name}" (${asset.assetCode}) assigned to you has been marked as returned and processed by HR.`
         }
       });
     }
