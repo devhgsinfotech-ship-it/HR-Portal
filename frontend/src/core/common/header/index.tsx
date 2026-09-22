@@ -76,6 +76,91 @@ const Header = React.memo(() => {
   const apiUrl = APP_CONFIG.getBackendUrl();
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
 
+  // ── Notifications System State & Fetching ────────────────────
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await apiClient.get('/notifications');
+      if (res.data) {
+        setNotifications(res.data.notifications || []);
+        setUnreadCount(res.data.unreadCount || 0);
+      }
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleMarkAllRead = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      await apiClient.put('/notifications/read-all');
+      fetchNotifications();
+    } catch (err) {
+      console.error("Failed to mark all read:", err);
+    }
+  };
+
+  const handleMarkRead = async (id: number) => {
+    try {
+      await apiClient.put(`/notifications/${id}/read`);
+      fetchNotifications();
+    } catch (err) {
+      console.error("Failed to mark notification read:", err);
+    }
+  };
+
+  const handleNotificationClick = async (n: any) => {
+    try {
+      if (!n.isRead) {
+        await apiClient.put(`/notifications/${n.id}/read`);
+        fetchNotifications();
+      }
+
+      let targetRoute = n.targetUrl;
+      if (!targetRoute) {
+        const userRole = user?.role || 'EMPLOYEE';
+        switch (n.type) {
+          case 'ASSET_RETURN_REQUESTED':
+          case 'ASSET_ASSIGNED':
+            targetRoute = routes.assetList || '/assets';
+            break;
+          case 'LEAVE_APPROVAL':
+          case 'LEAVE_REJECTION':
+            targetRoute = userRole === 'EMPLOYEE' ? (routes.leaveemployee || '/leaves-employee') : (routes.leaveadmin || '/leaves');
+            break;
+          case 'PAYSLIP_GENERATED':
+            targetRoute = routes.payslip || '/payslip';
+            break;
+          case 'ATTENDANCE_REMINDER':
+            targetRoute = userRole === 'EMPLOYEE' ? (routes.attendanceemployee || '/attendance-employee') : (routes.attendanceadmin || '/attendance-admin');
+            break;
+          case 'HOLIDAY_REMINDER':
+            targetRoute = routes.holidays || '/hrm/holidays';
+            break;
+          case 'DOCUMENT_VERIFIED':
+            targetRoute = userRole === 'EMPLOYEE' ? (routes.profile || '/pages/profile') : (routes.employeeList || '/employees');
+            break;
+          default:
+            targetRoute = null;
+        }
+      }
+
+      if (targetRoute) {
+        navigate(targetRoute);
+      }
+    } catch (err) {
+      console.error("Failed handling notification click:", err);
+    }
+  };
+
   useEffect(() => {
     const fetchLogo = async () => {
       const currentSub = window.location.hostname.split('.')[0];
@@ -906,155 +991,55 @@ const Header = React.memo(() => {
                     data-bs-toggle="dropdown"
                   >
                     <i className="ti ti-bell" />
-                    <span className="notification-status-dot" />
+                    {unreadCount > 0 && (
+                      <span className="badge bg-danger rounded-circle position-absolute top-0 start-100 translate-middle p-1 fs-10">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
                   </Link>
-                  <div className="dropdown-menu dropdown-menu-end notification-dropdown p-4">
-                    <div className="d-flex align-items-center justify-content-between border-bottom p-0 pb-3 mb-3">
-                      <h4 className="notification-title">Notifications (2)</h4>
-                      <div className="d-flex align-items-center">
-                        <Link to="#" className="text-primary fs-15 me-3 lh-1">
-                          Mark all as read
+                  <div className="dropdown-menu dropdown-menu-end notification-dropdown p-3" style={{ minWidth: '340px', maxWidth: '380px', maxHeight: '480px', overflowY: 'auto' }}>
+                    <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
+                      <h5 className="notification-title mb-0 fs-14 fw-bold">
+                        Notifications {unreadCount > 0 && <span className="badge bg-danger ms-1">{unreadCount} unread</span>}
+                      </h5>
+                      {unreadCount > 0 && (
+                        <Link to="#" onClick={handleMarkAllRead} className="text-primary fs-12 fw-semibold">
+                          Mark all read
                         </Link>
-                        <div className="dropdown">
-                          <Link
-                            to="#"
-                            className="bg-white dropdown-toggle"
-                            data-bs-toggle="dropdown"
-                          >
-                            <i className="ti ti-calendar-due me-1" />
-                            Today
-                          </Link>
-                          <ul className="dropdown-menu mt-2 p-3">
-                            <li>
-                              <Link to="#" className="dropdown-item rounded-1">
-                                This Week
-                              </Link>
-                            </li>
-                            <li>
-                              <Link to="#" className="dropdown-item rounded-1">
-                                Last Week
-                              </Link>
-                            </li>
-                            <li>
-                              <Link to="#" className="dropdown-item rounded-1">
-                                Last Month
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
+                      )}
                     </div>
                     <div className="noti-content">
-                      <div className="d-flex flex-column">
-                        <div className="border-bottom mb-3 pb-3">
-                          <Link to={all_routes.activity}>
-                            <div className="d-flex">
-                              <span className="avatar avatar-lg me-2 flex-shrink-0">
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-27.jpg"
-                                  alt="Profile"
-                                />
-                              </span>
-                              <div className="flex-grow-1">
-                                <p className="mb-1">
-                                  <span className="text-dark fw-semibold">
-                                    Shawn
-                                  </span>
-                                  performance in Math is below the threshold.
-                                </p>
-                                <span>Just Now</span>
-                              </div>
-                            </div>
-                          </Link>
+                      {notifications.length === 0 ? (
+                        <div className="text-center py-4 text-muted">
+                          <i className="ti ti-bell-off fs-24 mb-1 d-block text-secondary" />
+                          <span className="fs-12">No notifications right now</span>
                         </div>
-                        <div className="border-bottom mb-3 pb-3">
-                          <Link to={all_routes.activity} className="pb-0">
-                            <div className="d-flex">
-                              <span className="avatar avatar-lg me-2 flex-shrink-0">
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-23.jpg"
-                                  alt="Profile"
-                                />
-                              </span>
-                              <div className="flex-grow-1">
-                                <p className="mb-1">
-                                  <span className="text-dark fw-semibold">
-                                    Sylvia
-                                  </span>{" "}
-                                  added appointment on 02:00 PM
-                                </p>
-                                <span>10 mins ago</span>
-                                <div className="d-flex justify-content-start align-items-center mt-1">
-                                  <span className="btn btn-light btn-sm me-2">
-                                    Deny
-                                  </span>
-                                  <span className="btn btn-primary btn-sm">
-                                    Approve
-                                  </span>
+                      ) : (
+                        <div className="d-flex flex-column gap-2">
+                          {notifications.map((n) => (
+                            <div
+                              key={n.id}
+                              className={`p-2 rounded border-bottom ${!n.isRead ? 'bg-light-subtle font-weight-bold' : ''}`}
+                              onClick={() => handleNotificationClick(n)}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <div className="d-flex align-items-start">
+                                <span className="avatar avatar-sm rounded-circle me-2 bg-primary-transparent text-primary fw-bold flex-shrink-0 d-flex align-items-center justify-content-center mt-1">
+                                  <i className="ti ti-bell-ringing fs-14" />
+                                </span>
+                                <div className="flex-grow-1 overflow-hidden">
+                                  <div className="d-flex justify-content-between align-items-center mb-1">
+                                    <span className="fs-13 fw-bold text-dark text-truncate">{n.title}</span>
+                                    {!n.isRead && <span className="badge bg-primary p-1 rounded-circle" title="Unread" />}
+                                  </div>
+                                  <p className="fs-12 text-muted mb-1 text-wrap">{n.message}</p>
+                                  <span className="fs-10 text-secondary">{new Date(n.createdAt).toLocaleString()}</span>
                                 </div>
                               </div>
                             </div>
-                          </Link>
+                          ))}
                         </div>
-                        <div className="border-bottom mb-3 pb-3">
-                          <Link to={all_routes.activity}>
-                            <div className="d-flex">
-                              <span className="avatar avatar-lg me-2 flex-shrink-0">
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-25.jpg"
-                                  alt="Profile"
-                                />
-                              </span>
-                              <div className="flex-grow-1">
-                                <p className="mb-1">
-                                  New student record{" "}
-                                  <span className="text-dark fw-semibold">
-                                    {" "}
-                                    George
-                                  </span>{" "}
-                                  is created by{" "}
-                                  <span className="text-dark fw-semibold">
-                                    Teressa
-                                  </span>
-                                </p>
-                                <span>2 hrs ago</span>
-                              </div>
-                            </div>
-                          </Link>
-                        </div>
-                        <div className="border-0 mb-3 pb-0">
-                          <Link to={all_routes.activity}>
-                            <div className="d-flex">
-                              <span className="avatar avatar-lg me-2 flex-shrink-0">
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-01.jpg"
-                                  alt="Profile"
-                                />
-                              </span>
-                              <div className="flex-grow-1">
-                                <p className="mb-1">
-                                  A new teacher record for{" "}
-                                  <span className="text-dark fw-semibold">
-                                    Elisa
-                                  </span>{" "}
-                                </p>
-                                <span>09:45 AM</span>
-                              </div>
-                            </div>
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="d-flex p-0">
-                      <Link to="#" className="btn btn-light w-100 me-2">
-                        Cancel
-                      </Link>
-                      <Link
-                        to={all_routes.activity}
-                        className="btn btn-primary w-100"
-                      >
-                        View All
-                      </Link>
+                      )}
                     </div>
                   </div>
                 </div>

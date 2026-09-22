@@ -163,9 +163,54 @@ async function applyLeave(req, res) {
             },
             include: {
                 leaveType: true,
-                employee: true
+                employee: { include: { user: true } }
             }
         });
+
+        // Send notifications to Company Admins, HRs, and Reporting Manager
+        try {
+            const emp = leaveRequest.employee;
+            const empName = emp ? `${emp.firstName} ${emp.lastName}` : (req.user.name || 'Employee');
+            const targetCompanyId = req.user.companyId || emp?.user?.companyId;
+
+            if (targetCompanyId) {
+                const recipients = await prisma.user.findMany({
+                    where: {
+                        companyId: targetCompanyId,
+                        role: { in: ['COMPANY_ADMIN', 'HR', 'SUPER_ADMIN'] },
+                        accountStatus: 'ACTIVE'
+                    }
+                });
+
+                if (emp?.reportingManagerId) {
+                    const managerEmp = await prisma.employee.findUnique({
+                        where: { id: emp.reportingManagerId },
+                        select: { userId: true }
+                    });
+                    if (managerEmp?.userId && !recipients.some(u => u.id === managerEmp.userId)) {
+                        recipients.push({ id: managerEmp.userId });
+                    }
+                }
+
+                const sDate = start.toISOString().split('T')[0];
+                const eDate = end.toISOString().split('T')[0];
+
+                for (const r of recipients) {
+                    if (r.id === userId) continue;
+                    await prisma.notification.create({
+                        data: {
+                            receiverId: r.id,
+                            senderId: userId,
+                            type: 'LEAVE_APPROVAL',
+                            title: 'New Leave Request',
+                            message: `${empName} applied for ${totalDays} day(s) of ${leaveRequest.leaveType?.name || 'Leave'} (${sDate} to ${eDate}).`
+                        }
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error('Failed to create leave request notification:', notifErr);
+        }
 
         res.status(201).json(leaveRequest);
     } catch (error) {
@@ -257,6 +302,27 @@ async function updateLeaveStatus(req, res) {
                     }
                 });
             }
+        }
+
+        // Send notification to employee
+        try {
+            if (updatedRequest.employee?.user?.id) {
+                const sDate = new Date(updatedRequest.startDate).toISOString().split('T')[0];
+                const eDate = new Date(updatedRequest.endDate).toISOString().split('T')[0];
+                const isApproved = status === 'APPROVED';
+
+                await prisma.notification.create({
+                    data: {
+                        receiverId: updatedRequest.employee.user.id,
+                        senderId: userId,
+                        type: isApproved ? 'LEAVE_APPROVAL' : 'LEAVE_REJECTION',
+                        title: isApproved ? 'Leave Request Approved' : 'Leave Request Rejected',
+                        message: `Your ${updatedRequest.leaveType?.name || 'Leave'} request (${sDate} to ${eDate}) has been ${status.toLowerCase()}.${remarks ? ' Remarks: ' + remarks : ''}`
+                    }
+                });
+            }
+        } catch (notifErr) {
+            console.error('Failed to create leave status update notification:', notifErr);
         }
 
         res.json(updatedRequest);

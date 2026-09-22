@@ -100,6 +100,11 @@ const payrollRoutes = require('./src/routes/payrollRoutes');
 const subscriptionRoutes = require('./src/routes/subscriptionRoutes');
 const { seedDefaultPlans } = require('./src/utils/seedDefaultPlans');
 
+// Phase 4 Routes: Assets, Documents & Notifications
+const assetRoutes = require('./src/routes/assetRoutes');
+const documentRoutes = require('./src/routes/documentRoutes');
+const notificationRoutes = require('./src/routes/notificationRoutes');
+
 // Initialize Cron Jobs
 require('./src/cron/attendanceJobs');
 
@@ -140,6 +145,14 @@ app.use('/api/payroll', payrollRoutes);
 app.use('/super-admin', subscriptionRoutes);
 app.use('/api/super-admin', subscriptionRoutes);
 app.use('/api/subscription', subscriptionRoutes);
+
+// Phase 4 APIs
+app.use('/assets', assetRoutes);
+app.use('/api/assets', assetRoutes);
+app.use('/documents', documentRoutes);
+app.use('/api/documents', documentRoutes);
+app.use('/notifications', notificationRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 
 const prisma = require('./src/config/prisma');
