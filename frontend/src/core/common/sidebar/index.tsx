@@ -66,7 +66,17 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
 
-  // 3. Manager & HR Approvals
+  // 3. Asset Categories (Admin/HR Configuration — Exclude Employee)
+  if (p.includes("category") || p.includes("categories")) {
+    return ["COMPANY_ADMIN", "HR", "MANAGER"];
+  }
+
+  // 4. Company Internal Assets & My Assets (Accessible by Employee, Manager, HR & Admin — Hides from Super Admin)
+  if (p.includes("asset")) {
+    return ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
+  // 4. Manager & HR Approvals
   const adminApprovalPrefixes = [
     "/leaves", "/attendance-admin", "/timesheet", "/performance", "/training",
     "/tickets"
