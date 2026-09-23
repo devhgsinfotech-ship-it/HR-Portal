@@ -20,7 +20,20 @@ const getRouteRoles = (path: string | undefined): Role[] => {
   // 1. Super Admin ONLY routes
   if (p.startsWith("/super-admin")) return ["SUPER_ADMIN"];
 
-  // 2. Employee Self-Service routes (Accessible by all)
+  // 2. Job postings (Accessible by Company Admin, HR, Manager & Employee)
+  if (p.includes("job-grid") || p.includes("job-list") || p.includes("jobgrid") || p.includes("joblist")) {
+    return ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
+  // Other Recruitment module routes (Company Admin, HR & Manager feature — Hides from Super Admin)
+  const recruitmentKeywords = [
+    "recruitment", "job", "candidate", "refferal", "resume-parsing", "campus-hiring"
+  ];
+  if (recruitmentKeywords.some(keyword => p.includes(keyword))) {
+    return ["COMPANY_ADMIN", "HR", "MANAGER"];
+  }
+
+  // 3. Employee Self-Service routes (Accessible by all)
   const employeeAllowedPrefixes = [
     "/employee-dashboard", "/attendance-employee", "/leaves-employee",
     "/pages/profile", "/hrm/holidays", "/payslip", "/application",

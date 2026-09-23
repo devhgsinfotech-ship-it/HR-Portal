@@ -1,13 +1,99 @@
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import PredefinedDateRanges from "../../../core/common/datePicker";
-import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { all_routes } from "../../../router/all_routes";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
+import apiClient from "../../../core/utils/apiClient";
 
-const CandidateGrid = () => {
+interface Candidate {
+  id: number;
+  candId: string;
+  name: string;
+  email: string;
+  phone: string;
+  resumeUrl?: string;
+  jobTitle: string;
+  jobCode: string;
+  departmentName: string;
+  appliedDate: string;
+  stage: string;
+  rawStage: string;
+}
+
+const STAGE_CONFIG: Record<string, { label: string; badgeClass: string }> = {
+  APPLIED: { label: 'New', badgeClass: 'bg-purple text-white' },
+  SHORTLISTED: { label: 'Scheduled', badgeClass: 'bg-pink text-white' },
+  INTERVIEW: { label: 'Interviewed', badgeClass: 'bg-info text-white' },
+  OFFER: { label: 'Offered', badgeClass: 'bg-warning text-white' },
+  HIRED: { label: 'Hired', badgeClass: 'bg-success text-white' },
+  REJECTED: { label: 'Rejected', badgeClass: 'bg-danger text-white' }
+};
+
+const CandidateGrid: React.FC = () => {
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterStage, setFilterStage] = useState<string>('ALL');
+
+  const fetchApplicants = async () => {
+    setLoading(true);
+    try {
+      const res = await apiClient.get('/applicants');
+      if (Array.isArray(res.data)) {
+        const mapped: Candidate[] = res.data.map((a: any) => ({
+          id: a.id,
+          candId: `Cand-${String(a.id).padStart(3, '0')}`,
+          name: a.fullName || `${a.firstName || ''} ${a.lastName || ''}`.trim() || 'Candidate',
+          email: a.email,
+          phone: a.phone || 'N/A',
+          resumeUrl: a.resumeUrl,
+          jobTitle: a.jobTitle || 'General',
+          jobCode: a.jobCode || '',
+          departmentName: a.departmentName || 'General',
+          appliedDate: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString('en-IN') : 'N/A',
+          stage: STAGE_CONFIG[a.stage]?.label || a.stage,
+          rawStage: a.stage || 'APPLIED'
+        }));
+        setCandidates(mapped);
+      } else {
+        setCandidates([]);
+      }
+    } catch (err) {
+      console.error('Error fetching applicants for grid:', err);
+      setCandidates([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchApplicants();
+  }, []);
+
+  const handleUpdateStage = async (id: number, newStage: string) => {
+    try {
+      await apiClient.put(`/applicants/${id}/stage`, { stage: newStage });
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update candidate stage');
+    }
+  };
+
+  const handleDeleteApplicant = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this candidate application?')) return;
+    try {
+      await apiClient.delete(`/applicants/${id}`);
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete applicant');
+    }
+  };
+
+  const filteredCandidates = filterStage === 'ALL'
+    ? candidates
+    : candidates.filter(c => c.rawStage === filterStage);
+
   return (
     <>
-      {/* Page Wrapper */}
       <div className="page-wrapper">
         <div className="content">
           {/* Breadcrumb */}
@@ -28,53 +114,30 @@ const CandidateGrid = () => {
                 </ol>
               </nav>
             </div>
-            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
+            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
               <div className="me-2 mb-2">
                 <div className="d-flex align-items-center border bg-white rounded p-1 me-2 icon-list">
                   <Link
                     to={all_routes.candidateskanban}
                     className="btn btn-icon btn-sm me-1"
+                    title="Kanban View"
                   >
                     <i className="ti ti-layout-kanban" />
                   </Link>
                   <Link
                     to={all_routes.candidateslist}
                     className="btn btn-icon btn-sm me-1"
+                    title="List View"
                   >
                     <i className="ti ti-list-tree" />
                   </Link>
                   <Link
                     to={all_routes.candidatesGrid}
                     className="btn btn-icon btn-sm active bg-primary text-white"
+                    title="Grid View"
                   >
                     <i className="ti ti-layout-grid" />
                   </Link>
-                </div>
-              </div>
-              <div className="me-2 mb-2">
-                <div className="dropdown">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    <i className="ti ti-file-export me-1" />
-                    Export
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        <i className="ti ti-file-type-pdf me-1" />
-                        Export as PDF
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        <i className="ti ti-file-type-xls me-1" />
-                        Export as Excel{" "}
-                      </Link>
-                    </li>
-                  </ul>
                 </div>
               </div>
               <div className="head-icons ms-2">
@@ -83,1305 +146,159 @@ const CandidateGrid = () => {
             </div>
           </div>
           {/* /Breadcrumb */}
-          <div className="card">
+
+          <div className="card mb-4">
             <div className="card-body p-3">
               <div className="d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-                <h5>Candidates Grid</h5>
-                <div className="d-flex align-items-center flex-wrap row-gap-3">
-                  <div className="me-3">
-                    <div className="input-icon position-relative">
-                      <PredefinedDateRanges />
-                    </div>
-                  </div>
-                  <div className="dropdown me-3">
-                    <Link
-                      to="#"
-                      className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                      data-bs-toggle="dropdown"
-                    >
-                      Role
-                    </Link>
-                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Accountant
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          App Developer
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Technician
-                        </Link>
-                      </li>
-                    </ul>
-                  </div>
-                  <div className="dropdown me-3">
-                    <Link
-                      to="#"
-                      className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                      data-bs-toggle="dropdown"
-                    >
-                      Select Status
-                    </Link>
-                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Select Status
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Active
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Inactive
-                        </Link>
-                      </li>
-                    </ul>
-                  </div>
+                <h5 className="mb-0">Candidates Grid ({filteredCandidates.length})</h5>
+                <div className="d-flex align-items-center flex-wrap gap-2">
+                  <PredefinedDateRanges />
                   <div className="dropdown">
-                    <Link
-                      to="#"
-                      className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
+                    <button
+                      className="dropdown-toggle btn btn-white border d-inline-flex align-items-center fs-13"
                       data-bs-toggle="dropdown"
                     >
-                      Sort By : Last 7 Days
-                    </Link>
-                    <ul className="dropdown-menu  dropdown-menu-end p-3">
+                      Filter Stage: {filterStage === 'ALL' ? 'All Stages' : STAGE_CONFIG[filterStage]?.label || filterStage}
+                    </button>
+                    <ul className="dropdown-menu dropdown-menu-end p-2 shadow-sm">
                       <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Recently Added
-                        </Link>
+                        <button className="dropdown-item rounded-1 fs-12" onClick={() => setFilterStage('ALL')}>
+                          All Stages
+                        </button>
                       </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Ascending
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Desending
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Last Month
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Last 7 Days
-                        </Link>
-                      </li>
+                      {Object.keys(STAGE_CONFIG).map((sk) => (
+                        <li key={sk}>
+                          <button className="dropdown-item rounded-1 fs-12" onClick={() => setFilterStage(sk)}>
+                            {STAGE_CONFIG[sk].label}
+                          </button>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          {/* Candidates Grid */}
-          <div className="row">
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-39.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Harold Gaynor
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-001
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          harold@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Accountant
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-purple">
-                        {" "}
-                        <i className="ti ti-point-filled" /> New
-                      </span>
-                    </div>
-                  </div>
-                </div>
+
+          {loading ? (
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading candidate grid...</span>
               </div>
             </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-40.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            {" "}
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Sandra Ornellas
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-002
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          sandra@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Accountant
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-pink">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Scheduled
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          ) : filteredCandidates.length === 0 ? (
+            <div className="text-center py-5 bg-white rounded border">
+              <i className="ti ti-users fs-40 text-muted mb-2 d-block"></i>
+              <h5 className="text-muted">No Candidates Found</h5>
+              <p className="text-muted fs-14 mb-0">
+                No candidate applications have been received yet. Post jobs or share job links to start receiving applicants!
+              </p>
             </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-41.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              John Harris
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-003
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          john@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Technician
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-info">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Interviewed
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-42.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Carole Langan
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-004
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          carole@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Web Developer
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-warning">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Offered
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-44.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Charles Marks
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-005
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          charles@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">SEO</span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-success">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Hired
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-43.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Kerry Drake
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-006
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          kerry@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Designer
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-danger">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Rejected
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-46.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              David Carmona
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-007
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          david@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Account Manager
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-success">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Hired
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-45.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Margaret Soto
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-008
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          margaret@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        SEO Analyst
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-pink">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Scheduled
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-48.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Jeffrey Thaler
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-009
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          jeffrey@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">Admin</span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-purple">
-                        {" "}
-                        <i className="ti ti-point-filled" /> New
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-47.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Joyce Golston
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-010
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          joyce@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Business Analyst
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-success">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Hired
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-49.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Cedric Rosalez
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-011
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          cedric@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Financial Analyst
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-purple">
-                        {" "}
-                        <i className="ti ti-point-filled" /> New
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-50.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Lillie Diaz
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-012
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          lillie@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Receptionist
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-danger">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Rejected
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-12">
-              <div className="text-center mb-4">
-                <Link to="#" className="btn btn-primary">
-                  <i className="ti ti-loader-3 me-1" />
-                  Load More
-                </Link>
-              </div>
-            </div>
-          </div>
-          {/* /Candidates Grid */}
-        </div>
-        <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-          <p className="mb-0">2014 - 2025 © SmartHR.</p>
-          <p>
-            Designed &amp; Developed By{" "}
-            <Link to="#" className="text-primary">
-              Dreams
-            </Link>
-          </p>
-        </div>
-      </div>
-      {/* /Page Wrapper */}
-      {/* Candidate Details */}
-      <div
-        className="offcanvas offcanvas-end offcanvas-large"
-        tabIndex={-1}
-        id="candidate_details"
-      >
-        <div className="offcanvas-header border-bottom">
-          <h4 className="d-flex align-items-center">
-            Candidate Details
-            <span className="badge bg-primary-transparent fw-medium ms-2">
-              Cand-001
-            </span>
-          </h4>
-          <button
-            type="button"
-            className="btn-close custom-btn-close"
-            data-bs-dismiss="offcanvas"
-            aria-label="Close"
-          >
-            <i className="ti ti-x" />
-          </button>
-        </div>
-        <div className="offcanvas-body">
-          <div className="card">
-            <div className="card-body">
-              <div className="d-flex align-items-center flex-wrap flex-md-nowrap row-gap-3">
-                <span className="avatar avatar-xxxl candidate-img flex-shrink-0 me-3">
-                  <ImageWithBasePath
-                    src="assets/img/users/user-03.jpg"
-                    alt="Users Image"
-                  />
-                </span>
-                <div className="flex-fill border rounded p-3 pb-0">
-                  <div className="row align-items-center">
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Candiate Name</p>
-                        <h6 className="fw-normal">Harold Gaynor</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Applied Role</p>
-                        <h6 className="fw-normal">Accountant</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Applied Date</p>
-                        <h6 className="fw-normal">12 Sep 2024</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Email</p>
-                        <h6 className="fw-normal">harold@example.com</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Recruiter</p>
-                        <h6 className="fw-normal d-flex align-items-center">
-                          <span className="avatar avatar-xs avatar-rounded me-1">
-                            <ImageWithBasePath
-                              src="assets/img/users/user-01.jpg"
-                              alt="Users Image"
-                            />
-                          </span>
-                          Anthony Lewis
-                        </h6>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Recruiter</p>
-                        <span className="badge badge-purple d-inline-flex align-items-center">
-                          <i className="ti ti-point-filled me-1" />
-                          New
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="contact-grids-tab p-0 mb-3">
-            <ul className="nav nav-underline" id="myTab" role="tablist">
-              <li className="nav-item" role="presentation">
-                <button
-                  className="nav-link active pt-0"
-                  id="info-tab"
-                  data-bs-toggle="tab"
-                  data-bs-target="#basic-info"
-                  type="button"
-                  role="tab"
-                  aria-selected="true"
-                >
-                  Profile
-                </button>
-              </li>
-              <li className="nav-item" role="presentation">
-                <button
-                  className="nav-link pt-0"
-                  id="address-tab"
-                  data-bs-toggle="tab"
-                  data-bs-target="#address"
-                  type="button"
-                  role="tab"
-                  aria-selected="false"
-                >
-                  Hiring Pipeline
-                </button>
-              </li>
-              <li className="nav-item" role="presentation">
-                <button
-                  className="nav-link pt-0"
-                  id="address-tab2"
-                  data-bs-toggle="tab"
-                  data-bs-target="#address2"
-                  type="button"
-                  role="tab"
-                  aria-selected="false"
-                >
-                  Notes
-                </button>
-              </li>
-            </ul>
-          </div>
-          <div className="tab-content" id="myTabContent">
-            <div
-              className="tab-pane fade show active"
-              id="basic-info"
-              role="tabpanel"
-              aria-labelledby="info-tab"
-              tabIndex={0}
-            >
-              <div className="card">
-                <div className="card-header">
-                  <h5>Personal Information</h5>
-                </div>
-                <div className="card-body pb-0">
-                  <div className="row align-items-center">
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Candiate Name</p>
-                        <h6 className="fw-normal">Harold Gaynor</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Phone</p>
-                        <h6 className="fw-normal">(146) 8964 278</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Gender</p>
-                        <h6 className="fw-normal">Male</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Date of Birth</p>
-                        <h6 className="fw-normal">23 Oct 2000</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Email</p>
-                        <h6 className="fw-normal">harold@example.com</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Nationality</p>
-                        <h6 className="fw-normal">Indian</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Religion</p>
-                        <h6 className="fw-normal">Christianity</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Marital status</p>
-                        <h6 className="fw-normal">No</h6>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="card">
-                <div className="card-header">
-                  <h5>Address Information</h5>
-                </div>
-                <div className="card-body pb-0">
-                  <div className="row align-items-center">
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Address</p>
-                        <h6 className="fw-normal">1861 Bayonne Ave</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">City</p>
-                        <h6 className="fw-normal">New York</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">State</p>
-                        <h6 className="fw-normal">New York</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Country</p>
-                        <h6 className="fw-normal">United States Of America</h6>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="card">
-                <div className="card-header">
-                  <h5>Resume</h5>
-                </div>
-                <div className="card-body pb-0">
-                  <div className="row align-items-center">
-                    <div className="col-md-6">
-                      <div className="d-flex align-items-center mb-3">
-                        <span className="avatar avatar-lg bg-light-500 border text-dark me-2">
-                          <i className="ti ti-file-description fs-24" />
-                        </span>
-                        <div>
-                          <h6 className="fw-medium">Resume.doc</h6>
-                          <span>120 KB</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3 text-md-end">
-                        <Link
-                          to="#"
-                          className="btn btn-dark d-inline-flex align-items-center"
-                        >
-                          <i className="ti ti-download me-1" />
-                          Download
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div
-              className="tab-pane fade"
-              id="address"
-              role="tabpanel"
-              aria-labelledby="address-tab"
-              tabIndex={0}
-            >
-              <div className="card">
-                <div className="card-body">
-                  <h5 className="fw-medium mb-2">Candidate Pipeline Stage</h5>
-                  <div className="pipeline-list candidates border-0 mb-0">
-                    <ul className="mb-0">
-                      <li>
-                        <Link to="#" className="bg-purple">
-                          New
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="bg-gray-100">
-                          Scheduled
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="bg-grat-100">
-                          Interviewed
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="bg-gray-100">
-                          Offered
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="bg-gray-100">
-                          Hired / Rejected
-                        </Link>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              <div className="card">
-                <div className="card-header">
-                  <h5>Details</h5>
-                </div>
-                <div className="card-body pb-0">
-                  <div className="row align-items-center">
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Current Status</p>
-                        <span className="badge badge-soft-purple d-inline-flex align-items-center">
-                          <i className="ti ti-point-filled me-1" />
-                          New
-                        </span>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Applied Role</p>
-                        <h6 className="fw-normal">Accountant</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Applied Date</p>
-                        <h6 className="fw-normal">12 Sep 2024</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Recruiter</p>
-                        <div className="d-flex align-items-center">
-                          <Link
-                            to="#"
-                            className="avatar avatar-sm avatar-rounded me-2"
+          ) : (
+            <div className="row">
+              {filteredCandidates.map((cand) => (
+                <div className="col-xl-3 col-lg-4 col-md-6 mb-4" key={cand.id}>
+                  <div className="card h-100 shadow-sm border rounded">
+                    <div className="card-body p-3 d-flex flex-column justify-content-between">
+                      <div>
+                        {/* Header: Candidate Avatar & Info */}
+                        <div className="d-flex align-items-start justify-content-between mb-3">
+                          <div className="d-flex align-items-center">
+                            <div className="avatar avatar-lg bg-gradient-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold fs-18 me-2">
+                              {cand.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="overflow-hidden">
+                              <h6 className="fw-semibold text-truncate mb-0" title={cand.name}>
+                                {cand.name}
+                              </h6>
+                              <span className="badge bg-light text-secondary border fs-11 mt-1">
+                                {cand.candId}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-icon btn-sm text-danger border-0 bg-transparent p-0"
+                            onClick={() => handleDeleteApplicant(cand.id)}
+                            title="Delete Candidate"
                           >
-                            <ImageWithBasePath
-                              src="assets/img/users/user-01.jpg"
-                              alt="Users Image"
-                            />
-                          </Link>
-                          <h6>
-                            <Link to="#">Anthony Lewis</Link>
-                          </h6>
+                            <i className="ti ti-trash fs-16" />
+                          </button>
                         </div>
+
+                        {/* Contact details */}
+                        <div className="bg-light p-2 rounded mb-3 fs-12">
+                          <div className="text-muted text-truncate mb-1">
+                            <i className="ti ti-mail text-primary me-1" />
+                            <span>{cand.email}</span>
+                          </div>
+                          <div className="text-muted">
+                            <i className="ti ti-phone text-success me-1" />
+                            <span>{cand.phone}</span>
+                          </div>
+                        </div>
+
+                        {/* Applied Role & Date */}
+                        <div className="d-flex align-items-center justify-content-between fs-12 border-bottom pb-2 mb-3">
+                          <div>
+                            <span className="text-muted d-block">Applied Role</span>
+                            <span className="fw-medium text-dark">{cand.jobTitle}</span>
+                          </div>
+                          <div className="text-end">
+                            <span className="text-muted d-block">Applied Date</span>
+                            <span className="fw-medium text-dark">{cand.appliedDate}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer: Stage Dropdown & Resume */}
+                      <div className="d-flex align-items-center justify-content-between pt-2 border-top">
+                        {/* Stage Selector */}
+                        <div className="dropdown">
+                          <button
+                            className={`btn btn-sm dropdown-toggle ${STAGE_CONFIG[cand.rawStage]?.badgeClass || 'bg-secondary text-white'} fs-12 fw-medium px-2 py-1`}
+                            type="button"
+                            data-bs-toggle="dropdown"
+                          >
+                            {STAGE_CONFIG[cand.rawStage]?.label || cand.rawStage}
+                          </button>
+                          <ul className="dropdown-menu p-2 shadow-sm">
+                            {Object.keys(STAGE_CONFIG).map((sk) => (
+                              <li key={sk}>
+                                <button
+                                  className={`dropdown-item rounded-1 fs-12 ${cand.rawStage === sk ? 'active' : ''}`}
+                                  onClick={() => handleUpdateStage(cand.id, sk)}
+                                >
+                                  {STAGE_CONFIG[sk].label}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Resume Button */}
+                        {cand.resumeUrl ? (
+                          <a
+                            href={cand.resumeUrl.startsWith('http') ? cand.resumeUrl : `${apiClient.defaults.baseURL || ''}${cand.resumeUrl}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm btn-outline-primary py-1 px-2 d-inline-flex align-items-center fs-12"
+                            title="View Candidate Resume"
+                          >
+                            <i className="ti ti-file-text me-1" /> Resume
+                          </a>
+                        ) : (
+                          <span className="text-muted fs-12">No Resume</span>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
-                <div className="card-footer">
-                  <div className="d-flex align-items-center justify-content-end">
-                    <Link to="#" className="btn btn-dark me-3">
-                      Reject
-                    </Link>
-                    <Link to="#" className="btn btn-primary">
-                      Move to Next Stage
-                    </Link>
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
-            <div
-              className="tab-pane fade"
-              id="address2"
-              role="tabpanel"
-              aria-labelledby="address-tab2"
-              tabIndex={0}
-            >
-              <div className="card">
-                <div className="card-header">
-                  <h5>Notes</h5>
-                </div>
-                <div className="card-body">
-                  <p>
-                    Harold Gaynor is a detail-oriented and highly motivated
-                    accountant with 4 years of experience in financial
-                    reporting, auditing, and tax preparation.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
-      {/* Candidate Details */}
     </>
   );
 };

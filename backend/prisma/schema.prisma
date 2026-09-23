@@ -98,6 +98,7 @@ enum NotificationType {
   ASSET_ASSIGNED
   ASSET_RETURN_REQUESTED
   DOCUMENT_VERIFIED
+  JOB_APPLICATION_RECEIVED
 }
 
 enum ProjectStatus {
@@ -203,6 +204,8 @@ model Company {
   payrollPeriods   PayrollPeriod[]
   subscription     Subscription?
   invoices         Invoice[]
+  jobPostings      JobPosting[]
+  applicants       Applicant[]
 
   @@map("companies")
 }
@@ -258,7 +261,7 @@ model Invoice {
   subscription   Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   invoiceNumber  String         @unique
   amount         Float
-  currency       String         @default("USD")
+  currency       String         @default("INR")
   status         InvoiceStatus  @default(UNPAID)
   dueDate        DateTime
   paidAt         DateTime?
@@ -389,6 +392,7 @@ model Employee {
   postComments        PostComment[]
   commentLikes        CommentLike[]
   announcementsCreated Announcement[] @relation("AnnouncementsCreated")
+  interviews          Interview[]    @relation("Interviewer")
 
   @@map("employees")
 }
@@ -408,6 +412,7 @@ model Department {
   updatedAt   DateTime  @updatedAt
 
   employees   Employee[]
+  jobPostings JobPosting[]
 
   @@unique([companyId, name])
   @@map("departments")
@@ -1309,5 +1314,95 @@ model PayrollEntry {
 
   @@unique([payrollPeriodId, employeeId])
   @@map("payroll_entries")
+}
+
+// ============================================================
+// RECRUITMENT & APPLICANT TRACKING SYSTEM (ATS)
+// ============================================================
+
+enum JobPostingStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+enum ApplicantStage {
+  APPLIED
+  SHORTLISTED
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+model JobPosting {
+  id              Int              @id @default(autoincrement())
+  companyId       Int
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobCode         String           @unique
+  title           String
+  departmentId    Int?
+  department      Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  employmentType  EmploymentType   @default(FULL_TIME)
+  experienceLevel String?
+  location        String?
+  vacancies       Int              @default(1)
+  minSalary       Float?
+  maxSalary       Float?
+  status          JobPostingStatus @default(OPEN)
+  description     String?          @db.Text
+  requirements    String?          @db.Text
+  bannerUrl       String?          @db.Text
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  applicants      Applicant[]
+
+  @@map("job_postings")
+}
+
+model Applicant {
+  id           Int            @id @default(autoincrement())
+  companyId    Int
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobPostingId Int
+  jobPosting   JobPosting     @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+  firstName    String
+  lastName     String
+  email        String
+  phone        String?
+  resumeUrl    String?
+  stage        ApplicantStage @default(APPLIED)
+  rating       Int            @default(0)
+  notes        String?        @db.Text
+  appliedAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  interviews   Interview[]
+
+  @@map("applicants")
+}
+
+model Interview {
+  id              Int             @id @default(autoincrement())
+  applicantId     Int
+  applicant       Applicant       @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  interviewerId   Int?
+  interviewer     Employee?       @relation("Interviewer", fields: [interviewerId], references: [id], onDelete: SetNull)
+  scheduledAt     DateTime
+  locationOrLink  String?
+  status          InterviewStatus @default(SCHEDULED)
+  scorecardRating Int?
+  feedbackNotes   String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("interviews")
 }
 

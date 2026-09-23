@@ -154,6 +154,14 @@ app.use('/api/documents', documentRoutes);
 app.use('/notifications', notificationRoutes);
 app.use('/api/notifications', notificationRoutes);
 
+// Phase 5.1 Recruitment ATS Routes
+const jobPostingRoutes = require('./src/routes/jobPostingRoutes');
+const applicantRoutes = require('./src/routes/applicantRoutes');
+app.use('/job-postings', jobPostingRoutes);
+app.use('/api/job-postings', jobPostingRoutes);
+app.use('/applicants', applicantRoutes);
+app.use('/api/applicants', applicantRoutes);
+
 
 const prisma = require('./src/config/prisma');
 app.get('/health', async (req, res) => {

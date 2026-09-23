@@ -847,7 +847,7 @@ async function updateProfile(req, res) {
 
         let newPhotoUrl = profilePhotoUrl;
         if (req.file) {
-            newPhotoUrl = `/uploads/logos/${req.file.filename}`;
+            newPhotoUrl = `/uploads/profiles/${req.file.filename}`;
         }
 
         const fullName = name || (firstName && lastName ? `${firstName} ${lastName}` : firstName || undefined);

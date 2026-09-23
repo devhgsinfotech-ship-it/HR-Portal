@@ -2,6 +2,7 @@ import { Navigate, Route } from "react-router";
 import { all_routes } from "./all_routes";
 import TestTheme from "../test-theme";
 import OrgDirectory from "../feature-module/hrm/employees/OrgDirectory";
+import PublicJobApply from "../feature-module/pages/PublicJobApply";
 
 // Import all lazy-loaded components
 import {
@@ -1898,6 +1899,10 @@ export const publicRoutes = [
 ];
 
 export const authRoutes = [
+  {
+    path: routes.publicJobApply,
+    element: <PublicJobApply />,
+  },
   {
     path: "/invite/:token",
     element: <AcceptInvite />,

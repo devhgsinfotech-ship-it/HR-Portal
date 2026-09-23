@@ -217,8 +217,61 @@ async function sendPasswordResetEmail(toEmail, token, workspaceUrl, userName, co
     }
 }
 
+/**
+ * Sends notification email to Company Admin / HR when a new candidate or employee applies for a job.
+ */
+async function sendJobApplicationNotificationEmail(recipients, applicant, jobPosting, companyName = 'HGS-HRMS') {
+    try {
+        if (!recipients || recipients.length === 0) return;
+        const transporter = await getTransporter();
+
+        const mailOptions = {
+            from: `"${companyName} Recruitment" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
+            to: Array.isArray(recipients) ? recipients.join(', ') : recipients,
+            subject: `New Job Application Received: ${applicant.firstName} ${applicant.lastName} - ${jobPosting.title}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                    <h2 style="color: #ff5722; margin-bottom: 10px;">New Job Application Received</h2>
+                    <p style="color: #333; font-size: 16px;">
+                        A candidate has submitted an application for <strong>${jobPosting.title}</strong> (${jobPosting.jobCode || 'N/A'}).
+                    </p>
+                    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <h4 style="margin-top: 0; color: #444;">Candidate Details:</h4>
+                        <ul style="color: #555; line-height: 1.6; padding-left: 20px;">
+                            <li><strong>Full Name:</strong> ${applicant.firstName} ${applicant.lastName}</li>
+                            <li><strong>Email:</strong> ${applicant.email}</li>
+                            <li><strong>Phone:</strong> ${applicant.phone || 'N/A'}</li>
+                            <li><strong>Applied Date:</strong> ${new Date().toLocaleDateString('en-IN')}</li>
+                            ${applicant.resumeUrl ? `<li><strong>Resume Attached:</strong> Yes (${applicant.resumeUrl})</li>` : ''}
+                        </ul>
+                        ${applicant.notes ? `<p style="color: #555; margin-top: 10px;"><strong>Cover Letter / Notes:</strong><br/>${applicant.notes}</p>` : ''}
+                    </div>
+                    <p style="color: #555; font-size: 14px;">
+                        Please log in to your HR Portal under Recruitment > Candidates to review the application and candidate profile.
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                    <p style="color: #999; font-size: 12px; text-align: center;">
+                        This is an automated notification from ${companyName} HRMS Recruitment System.
+                    </p>
+                </div>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('--------------------------------------------------');
+        console.log('[Recruitment Email] Application alert sent to: %s', Array.isArray(recipients) ? recipients.join(', ') : recipients);
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('--------------------------------------------------');
+        return info;
+    } catch (error) {
+        console.error('Error sending job application notification email:', error);
+    }
+}
+
 module.exports = {
     sendVerificationEmail,
     sendEmployeeInviteEmail,
-    sendPasswordResetEmail
+    sendPasswordResetEmail,
+    sendJobApplicationNotificationEmail
 };
+

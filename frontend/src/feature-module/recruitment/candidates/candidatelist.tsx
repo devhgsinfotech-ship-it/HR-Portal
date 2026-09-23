@@ -1,138 +1,216 @@
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import PredefinedDateRanges from "../../../core/common/datePicker";
-import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { all_routes } from "../../../router/all_routes";
-import { candidatelistDetails } from "./candidatelistDetails";
 import Table from "../../../core/common/dataTable/index";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
+import apiClient from "../../../core/utils/apiClient";
 
-// Define Candidate interface for type safety
 interface Candidate {
-  Key: string;
-  Cand_ID: string;
-  Candidate: string;
-  Image: string;
-  Email: string;
-  Resume: string;
-  Applied_Role: string;
-  Phone: string;
-  Applied_Date: string;
-  Status: string;
+  id: number;
+  key: string;
+  candId: string;
+  name: string;
+  email: string;
+  phone: string;
+  resumeUrl?: string;
+  jobTitle: string;
+  jobCode: string;
+  departmentName: string;
+  appliedDate: string;
+  stage: string;
+  rawStage: string;
 }
 
-const CandidatesList = () => {
-  const data = candidatelistDetails;
+const STAGE_CONFIG: Record<string, { label: string; colorClass: string }> = {
+  APPLIED: { label: 'New', colorClass: 'bg-purple-light text-purple border-purple' },
+  SHORTLISTED: { label: 'Scheduled', colorClass: 'bg-pink-light text-pink border-pink' },
+  INTERVIEW: { label: 'Interviewed', colorClass: 'bg-info-light text-info border-info' },
+  OFFER: { label: 'Offered', colorClass: 'bg-warning-light text-warning border-warning' },
+  HIRED: { label: 'Hired', colorClass: 'bg-success-light text-success border-success' },
+  REJECTED: { label: 'Rejected', colorClass: 'bg-danger-light text-danger border-danger' }
+};
+
+const CandidatesList: React.FC = () => {
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterStage, setFilterStage] = useState<string>('ALL');
+
+  const fetchApplicants = async () => {
+    setLoading(true);
+    try {
+      const res = await apiClient.get('/applicants');
+      if (Array.isArray(res.data)) {
+        const mapped: Candidate[] = res.data.map((a: any) => ({
+          id: a.id,
+          key: `cand-${a.id}`,
+          candId: `CAND-${String(a.id).padStart(3, '0')}`,
+          name: a.fullName || `${a.firstName || ''} ${a.lastName || ''}`.trim() || 'Candidate',
+          email: a.email,
+          phone: a.phone || 'N/A',
+          resumeUrl: a.resumeUrl,
+          jobTitle: a.jobTitle || 'General',
+          jobCode: a.jobCode || '',
+          departmentName: a.departmentName || 'General',
+          appliedDate: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString('en-IN') : 'N/A',
+          stage: STAGE_CONFIG[a.stage]?.label || a.stage,
+          rawStage: a.stage || 'APPLIED'
+        }));
+        setCandidates(mapped);
+      } else {
+        setCandidates([]);
+      }
+    } catch (err) {
+      console.error('Error fetching applicants:', err);
+      setCandidates([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchApplicants();
+  }, []);
+
+  const handleUpdateStage = async (id: number, newStage: string) => {
+    try {
+      await apiClient.put(`/applicants/${id}/stage`, { stage: newStage });
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update candidate stage');
+    }
+  };
+
+  const handleDeleteApplicant = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this candidate application?')) return;
+    try {
+      await apiClient.delete(`/applicants/${id}`);
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete applicant');
+    }
+  };
+
+  const filteredCandidates = filterStage === 'ALL'
+    ? candidates
+    : candidates.filter(c => c.rawStage === filterStage);
+
   const columns = [
     {
       title: "Cand ID",
-      dataIndex: "Cand_ID",
-      sorter: (a: Candidate, b: Candidate) =>
-        a.Cand_ID.length - b.Cand_ID.length,
+      dataIndex: "candId",
+      sorter: (a: Candidate, b: Candidate) => a.candId.localeCompare(b.candId),
+      render: (text: string) => <span className="fw-medium text-dark">{text}</span>
     },
     {
       title: "Candidate",
-      dataIndex: "Candidate",
+      dataIndex: "name",
       render: (_text: string, record: Candidate) => (
-        <div className="d-flex align-items-center file-name-icon">
-          <Link to="#" className="avatar avatar-md ">
-            <ImageWithBasePath
-              src={`assets/img/users/${record.Image}`}
-              className="img-fluid rounded-circle"
-              alt={record.Candidate} // Accessibility: use candidate name
-            />
-          </Link>
-          <div className="ms-2">
-            <h6 className="fw-medium">
-              <Link to="#">{record.Candidate}</Link>
-            </h6>
-            <span className="d-block mt-1">{record.Email}</span>
+        <div className="d-flex align-items-center">
+          <div className="avatar avatar-md bg-gradient-primary rounded-circle text-white d-flex align-items-center justify-content-center fw-bold me-2">
+            {record.name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h6 className="fw-medium mb-0">{record.name}</h6>
+            <span className="text-muted fs-12">{record.email}</span>
           </div>
         </div>
       ),
-      sorter: (a: Candidate, b: Candidate) =>
-        a.Candidate.length - b.Candidate.length,
+      sorter: (a: Candidate, b: Candidate) => a.name.localeCompare(b.name),
     },
     {
       title: "Applied Role",
-      dataIndex: "Applied_Role",
-      sorter: (a: Candidate, b: Candidate) =>
-        a.Applied_Role.length - b.Applied_Role.length,
+      dataIndex: "jobTitle",
+      render: (text: string, record: Candidate) => (
+        <div>
+          <span className="fw-medium d-block">{text}</span>
+          {record.jobCode && <span className="fs-12 text-muted">{record.jobCode}</span>}
+        </div>
+      ),
+      sorter: (a: Candidate, b: Candidate) => a.jobTitle.localeCompare(b.jobTitle),
     },
-   
     {
       title: "Phone",
-      dataIndex: "Phone",
-      sorter: (a: Candidate, b: Candidate) => a.Phone.length - b.Phone.length,
+      dataIndex: "phone",
+      sorter: (a: Candidate, b: Candidate) => a.phone.localeCompare(b.phone),
     },
     {
       title: "Applied Date",
-      dataIndex: "Applied_Date",
-      sorter: (a: Candidate, b: Candidate) =>
-        a.Applied_Date.length - b.Applied_Date.length,
+      dataIndex: "appliedDate",
+      sorter: (a: Candidate, b: Candidate) => a.appliedDate.localeCompare(b.appliedDate),
     },
-     {
+    {
       title: "Resume",
-      dataIndex: "Resume",
-      render: () => (
+      dataIndex: "resumeUrl",
+      render: (url?: string) => (
         <div className="d-inline-flex">
-          <Link to="#" className="text-gray me-2 fs-16">
-            <i className="ti ti-file-text" />
-          </Link>
-          <Link to="#" className="text-gray fs-16">
-            <i className="ti ti-download" />
-          </Link>
+          {url ? (
+            <a
+              href={url.startsWith('http') ? url : `${apiClient.defaults.baseURL || ''}${url}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-sm btn-outline-primary py-1 px-2 d-inline-flex align-items-center"
+              title="View Candidate Resume"
+            >
+              <i className="ti ti-file-text me-1 fs-14" /> Resume
+            </a>
+          ) : (
+            <span className="text-muted fs-12">No Resume</span>
+          )}
         </div>
-      ),
-      sorter: (a: Candidate, b: Candidate) => a.Resume.length - b.Resume.length,
+      )
     },
-
     {
-      title: "Status",
-      dataIndex: "Status",
-      render: (text: string) => (
-        <span
-          className={`badge border   ${
-            text === "Sent"
-              ? "border-purple text-purple"
-              : text === "Scheduled"
-                ? "border-pink text-pink"
-                : text === "Interviewed"
-                  ? "border-info text-info"
-                  : text === "Offered"
-                    ? "border-warning text-warning"
-                    : text === "Hired"
-                      ? "border-success text-success"
-                      : text === "App Received"
-                        ? "border-purple text-purple"
-                        : "border-danger text-danger"
-          }`}
+      title: "Status / Stage",
+      dataIndex: "rawStage",
+      render: (_text: string, record: Candidate) => (
+        <div className="dropdown">
+          <button
+            className={`btn btn-sm dropdown-toggle border px-2 py-1 fs-12 fw-medium ${STAGE_CONFIG[record.rawStage]?.colorClass || 'bg-light text-dark'}`}
+            type="button"
+            data-bs-toggle="dropdown"
+          >
+            {STAGE_CONFIG[record.rawStage]?.label || record.rawStage}
+          </button>
+          <ul className="dropdown-menu p-2 shadow-sm">
+            {Object.keys(STAGE_CONFIG).map((stageKey) => (
+              <li key={stageKey}>
+                <button
+                  className={`dropdown-item rounded-1 fs-12 ${record.rawStage === stageKey ? 'active' : ''}`}
+                  onClick={() => handleUpdateStage(record.id, stageKey)}
+                >
+                  {STAGE_CONFIG[stageKey].label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )
+    },
+    {
+      title: "Action",
+      dataIndex: "id",
+      render: (id: number) => (
+        <button
+          type="button"
+          className="btn btn-icon btn-sm text-danger border-0 bg-transparent"
+          onClick={() => handleDeleteApplicant(id)}
+          title="Delete Candidate"
         >
-          <i className="ti ti-point-filled" />
-          {text}
-        </span>
-      ),
-      sorter: (a: Candidate, b: Candidate) => a.Status.length - b.Status.length,
-    },
-    {
-      title: "",
-      dataIndex: "actions",
-      render: () => (
-        <Link to="#" data-bs-toggle="modal" data-bs-target="#delete_modal">
-          <i className="ti ti-trash" />
-        </Link>
-      ),
-    },
+          <i className="ti ti-trash fs-16" />
+        </button>
+      )
+    }
   ];
 
   return (
     <>
-      {/* Page Wrapper */}
       <div className="page-wrapper">
         <div className="content">
           {/* Breadcrumb */}
           <div className="d-md-flex d-block align-items-center justify-content-between page-breadcrumb mb-3">
             <div className="my-auto mb-2">
-              <h2 className="mb-1">Candidates List</h2>
+              <h2 className="mb-1">Candidates</h2>
               <nav>
                 <ol className="breadcrumb mb-0">
                   <li className="breadcrumb-item">
@@ -153,47 +231,24 @@ const CandidatesList = () => {
                   <Link
                     to={all_routes.candidateskanban}
                     className="btn btn-icon btn-sm me-1"
+                    title="Kanban View"
                   >
                     <i className="ti ti-layout-kanban" />
                   </Link>
                   <Link
                     to={all_routes.candidateslist}
                     className="btn btn-icon btn-sm active bg-primary text-white me-1"
+                    title="List View"
                   >
                     <i className="ti ti-list-tree" />
                   </Link>
                   <Link
-                    to={all_routes.candidateskanban}
+                    to={all_routes.candidatesGrid}
                     className="btn btn-icon btn-sm"
+                    title="Grid View"
                   >
                     <i className="ti ti-layout-grid" />
                   </Link>
-                </div>
-              </div>
-              <div className="me-2 mb-2">
-                <div className="dropdown">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    <i className="ti ti-file-export me-1" />
-                    Export
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        <i className="ti ti-file-type-pdf me-1" />
-                        Export as PDF
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        <i className="ti ti-file-type-xls me-1" />
-                        Export as Excel{" "}
-                      </Link>
-                    </li>
-                  </ul>
                 </div>
               </div>
               <div className="head-icons ms-2">
@@ -202,131 +257,59 @@ const CandidatesList = () => {
             </div>
           </div>
           {/* /Breadcrumb */}
+
           <div className="card">
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-              <h5>Candidates List</h5>
-              <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-                <div className="me-3">
-                  <div className="input-icon position-relative">
-                    <PredefinedDateRanges />
-                  </div>
-                </div>
-                <div className="dropdown me-3">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Role
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Accountant
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Accountant
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Technician
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-                <div className="dropdown me-3">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Select Status
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Scheduled
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Interviewed
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Offered
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Rejected
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Hired
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
+              <h5 className="mb-0">Candidates List ({filteredCandidates.length})</h5>
+              <div className="d-flex align-items-center flex-wrap gap-2">
+                <PredefinedDateRanges />
                 <div className="dropdown">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
+                  <button
+                    className="dropdown-toggle btn btn-white border d-inline-flex align-items-center fs-13"
                     data-bs-toggle="dropdown"
                   >
-                    Sort By : Last 7 Days
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
+                    Filter Stage: {filterStage === 'ALL' ? 'All Stages' : STAGE_CONFIG[filterStage]?.label || filterStage}
+                  </button>
+                  <ul className="dropdown-menu dropdown-menu-end p-2 shadow-sm">
                     <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Recently Added
-                      </Link>
+                      <button className="dropdown-item rounded-1 fs-12" onClick={() => setFilterStage('ALL')}>
+                        All Stages
+                      </button>
                     </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Ascending
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Descending
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Last Month
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Last 7 Days
-                      </Link>
-                    </li>
+                    {Object.keys(STAGE_CONFIG).map((sk) => (
+                      <li key={sk}>
+                        <button className="dropdown-item rounded-1 fs-12" onClick={() => setFilterStage(sk)}>
+                          {STAGE_CONFIG[sk].label}
+                        </button>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </div>
             </div>
+
             <div className="card-body p-0">
-              <Table dataSource={data} columns={columns} Selection={true} />
+              {loading ? (
+                <div className="text-center py-5">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Loading candidate applications...</span>
+                  </div>
+                </div>
+              ) : candidates.length === 0 ? (
+                <div className="text-center py-5 px-3">
+                  <i className="ti ti-users fs-40 text-muted mb-2 d-block"></i>
+                  <h5 className="text-muted">No Candidates Found</h5>
+                  <p className="text-muted fs-14 mb-0">
+                    No job applications have been submitted yet. Share job links to start receiving applicants!
+                  </p>
+                </div>
+              ) : (
+                <Table dataSource={filteredCandidates} columns={columns} Selection={false} />
+              )}
             </div>
           </div>
         </div>
-        <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-          <p className="mb-0">2014 - 2026 © SmartHR.</p>
-          <p>
-            Designed &amp; Developed By{" "}
-            <Link to="#" className="text-primary">
-              Dreams
-            </Link>
-          </p>
-        </div>
       </div>
-      {/* /Page Wrapper */}
     </>
   );
 };
