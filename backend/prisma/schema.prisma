@@ -206,6 +206,7 @@ model Company {
   invoices         Invoice[]
   jobPostings      JobPosting[]
   applicants       Applicant[]
+  referrals        Referral[]
 
   @@map("companies")
 }
@@ -297,6 +298,7 @@ model User {
   regularizations       AttendanceRegularization[]
   passwordResetTokens   PasswordResetToken[]
   tasksCreated          Task[]             @relation("TaskCreator")
+  referrals             Referral[]         @relation("ReferrerUser")
 
   @@map("users")
 }
@@ -1363,6 +1365,7 @@ model JobPosting {
   updatedAt       DateTime         @updatedAt
 
   applicants      Applicant[]
+  referrals       Referral[]
 
   @@map("job_postings")
 }
@@ -1404,5 +1407,38 @@ model Interview {
   updatedAt       DateTime        @updatedAt
 
   @@map("interviews")
+}
+
+// ============================================================
+// EMPLOYEE REFERRALS
+// ============================================================
+
+enum ReferralStatus {
+  PENDING
+  REVIEWED
+  HIRED
+  REJECTED
+}
+
+model Referral {
+  id              Int            @id @default(autoincrement())
+  companyId       Int
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  referrerId      Int
+  referrer        User           @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
+  jobPostingId    Int?
+  jobPosting      JobPosting?    @relation(fields: [jobPostingId], references: [id], onDelete: SetNull)
+  candidateName   String
+  candidateEmail  String
+  candidatePhone  String?
+  relationship    String?
+  resumeUrl       String?
+  notes           String?        @db.Text
+  status          ReferralStatus @default(PENDING)
+  rewardAmount    Float          @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("referrals")
 }
 

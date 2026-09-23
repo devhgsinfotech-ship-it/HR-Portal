@@ -268,10 +268,88 @@ async function sendJobApplicationNotificationEmail(recipients, applicant, jobPos
     }
 }
 
+/**
+ * Sends interview schedule / invitation / update email to Candidate and Interviewer.
+ */
+async function sendInterviewScheduleEmail({ toEmail, candidateName, jobTitle, roundTitle, scheduledAt, locationOrLink, companyName = 'HGS-HRMS', isResendOrUpdate = false }) {
+    try {
+        if (!toEmail) return;
+        const transporter = await getTransporter();
+
+        const formattedDate = new Date(scheduledAt).toLocaleString('en-IN', {
+            dateStyle: 'full',
+            timeStyle: 'short'
+        });
+
+        const subject = isResendOrUpdate
+            ? `[Updated] Interview Schedule: ${roundTitle || 'Interview Round'} - ${jobTitle || 'Position'} | ${companyName}`
+            : `Interview Scheduled: ${roundTitle || 'Interview Round'} - ${jobTitle || 'Position'} | ${companyName}`;
+
+        const mailOptions = {
+            from: `"${companyName} Recruitment" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
+            to: toEmail,
+            subject,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                    <div style="text-align: center; padding-bottom: 15px; border-bottom: 2px solid #ff5722;">
+                        <h2 style="color: #ff5722; margin: 0;">${companyName}</h2>
+                        <span style="color: #777; font-size: 13px;">Recruitment & Applicant Tracking System</span>
+                    </div>
+                    <h3 style="color: #333; margin-top: 20px;">
+                        ${isResendOrUpdate ? 'Interview Details Updated' : 'Interview Invitation'}
+                    </h3>
+                    <p style="color: #444; font-size: 15px;">
+                        Dear <strong>${candidateName}</strong>,
+                    </p>
+                    <p style="color: #555; font-size: 15px; line-height: 1.5;">
+                        ${isResendOrUpdate 
+                            ? `Your interview details for the <strong>${jobTitle || 'Applied Position'}</strong> role have been updated. Please review your schedule details below:`
+                            : `We are pleased to invite you for an interview for the <strong>${jobTitle || 'Applied Position'}</strong> role. Here are your schedule details:`
+                        }
+                    </p>
+                    <div style="background-color: #f8f9fa; padding: 18px; border-left: 4px solid #ff5722; border-radius: 6px; margin: 20px 0;">
+                        <h4 style="margin-top: 0; color: #222;">Schedule Details:</h4>
+                        <ul style="color: #444; line-height: 1.8; padding-left: 20px; font-size: 14px; margin-bottom: 0;">
+                            <li><strong>Interview Round:</strong> ${roundTitle || 'Technical Interview'}</li>
+                            <li><strong>Date & Time:</strong> ${formattedDate}</li>
+                            <li><strong>Meeting Link / Location:</strong> <a href="${locationOrLink}" target="_blank" style="color: #ff5722; font-weight: bold; word-break: break-all;">${locationOrLink}</a></li>
+                        </ul>
+                    </div>
+                    ${locationOrLink && locationOrLink.startsWith('http') ? `
+                    <div style="text-align: center; margin: 25px 0;">
+                        <a href="${locationOrLink}" target="_blank" style="background-color: #ff5722; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 15px; display: inline-block;">
+                            Join Video Meeting
+                        </a>
+                    </div>
+                    ` : ''}
+                    <p style="color: #555; font-size: 14px;">
+                        Please ensure you join on time. If you need to reschedule or have any queries, please reply directly to this email.
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                    <p style="color: #999; font-size: 12px; text-align: center;">
+                        Best regards,<br/>
+                        <strong>${companyName} Recruitment Team</strong>
+                    </p>
+                </div>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('--------------------------------------------------');
+        console.log('[Interview Schedule Email] Sent to: %s (Message ID: %s)', toEmail, info.messageId);
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('--------------------------------------------------');
+        return info;
+    } catch (error) {
+        console.error('Error sending interview schedule email:', error);
+    }
+}
+
 module.exports = {
     sendVerificationEmail,
     sendEmployeeInviteEmail,
     sendPasswordResetEmail,
-    sendJobApplicationNotificationEmail
+    sendJobApplicationNotificationEmail,
+    sendInterviewScheduleEmail
 };
 

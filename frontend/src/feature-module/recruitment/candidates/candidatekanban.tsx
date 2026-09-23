@@ -17,6 +17,14 @@ interface Candidate {
   departmentName: string;
   appliedDate: string;
   stage: string; // APPLIED | SHORTLISTED | INTERVIEW | OFFER | HIRED | REJECTED
+  rating: number;
+  interviewsCount: number;
+  latestInterview?: {
+    id: number;
+    scheduledAt: string;
+    status: string;
+    locationOrLink?: string;
+  } | null;
 }
 
 interface ColumnConfig {
@@ -40,6 +48,19 @@ const CandidateKanban: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [draggedCandidateId, setDraggedCandidateId] = useState<number | null>(null);
 
+  // Schedule Interview Modal State
+  const [schedCand, setSchedCand] = useState<Candidate | null>(null);
+  const [interviewDate, setInterviewDate] = useState<string>('');
+  const [meetingLink, setMeetingLink] = useState<string>('https://meet.google.com/abc-defg-hij');
+  const [roundTitle, setRoundTitle] = useState<string>('Technical Interview Round 1');
+  const [scheduling, setScheduling] = useState(false);
+
+  // Scorecard Evaluation Modal State
+  const [evalCand, setEvalCand] = useState<Candidate | null>(null);
+  const [ratingScore, setRatingScore] = useState<number>(5);
+  const [feedbackNotes, setFeedbackNotes] = useState<string>('Strong technical foundation, excellent problem solving skills.');
+  const [evaluating, setEvaluating] = useState(false);
+
   const fetchApplicants = async () => {
     setLoading(true);
     try {
@@ -56,7 +77,10 @@ const CandidateKanban: React.FC = () => {
           jobCode: a.jobCode || '',
           departmentName: a.departmentName || 'General',
           appliedDate: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString('en-IN') : 'N/A',
-          stage: a.stage || 'APPLIED'
+          stage: a.stage || 'APPLIED',
+          rating: a.rating || 0,
+          interviewsCount: a.interviewsCount || 0,
+          latestInterview: a.latestInterview
         }));
         setCandidates(mapped);
       } else {
@@ -76,12 +100,11 @@ const CandidateKanban: React.FC = () => {
 
   const handleUpdateStage = async (id: number, newStage: string) => {
     try {
-      // Optimistic state update for instant responsive UI
       setCandidates(prev => prev.map(c => c.id === id ? { ...c, stage: newStage } : c));
       await apiClient.put(`/applicants/${id}/stage`, { stage: newStage });
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to update candidate stage');
-      fetchApplicants(); // Revert on failure
+      fetchApplicants();
     }
   };
 
@@ -93,6 +116,97 @@ const CandidateKanban: React.FC = () => {
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to delete applicant');
       fetchApplicants();
+    }
+  };
+
+  // Open Schedule Interview Modal
+  const handleOpenScheduleModal = (cand: Candidate) => {
+    setSchedCand(cand);
+    // Set default date to tomorrow 10:00 AM
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(10, 0, 0, 0);
+    const formattedDateTime = tomorrow.toISOString().slice(0, 16);
+    setInterviewDate(formattedDateTime);
+  };
+
+  // Submit Schedule Interview
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!schedCand || !interviewDate) {
+      alert('Please select interview date and time');
+      return;
+    }
+
+    setScheduling(true);
+    try {
+      await apiClient.post(`/applicants/${schedCand.id}/schedule-interview`, {
+        scheduledAt: interviewDate,
+        locationOrLink: meetingLink,
+        roundTitle
+      });
+
+      alert(`Interview schedule saved! Invitation email sent to ${schedCand.email || schedCand.name}.`);
+
+      // Dismiss modal
+      const closeBtn = document.querySelector('#schedule_interview_modal .custom-btn-close') as HTMLElement;
+      if (closeBtn) closeBtn.click();
+
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to schedule interview');
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  // Re-trigger / Resend Email Notification manually
+  const handleResendEmail = async () => {
+    if (!schedCand) return;
+    setScheduling(true);
+    try {
+      await apiClient.post(`/applicants/${schedCand.id}/resend-interview-email`, {
+        roundTitle,
+        scheduledAt: interviewDate,
+        locationOrLink: meetingLink
+      });
+      alert(`Updated interview schedule email sent to ${schedCand.email || schedCand.name}!`);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to resend interview email');
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  // Open Scorecard Modal
+  const handleOpenScorecardModal = (cand: Candidate) => {
+    setEvalCand(cand);
+    setRatingScore(cand.rating || 5);
+  };
+
+  // Submit Scorecard Rating
+  const handleScorecardSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!evalCand) return;
+
+    setEvaluating(true);
+    try {
+      await apiClient.put(`/applicants/${evalCand.id}/stage`, {
+        rating: ratingScore,
+        notes: feedbackNotes
+      });
+
+      alert(`Scorecard & ${ratingScore}-star rating submitted for ${evalCand.name}!`);
+
+      // Dismiss modal
+      const closeBtn = document.querySelector('#submit_scorecard_modal .custom-btn-close') as HTMLElement;
+      if (closeBtn) closeBtn.click();
+
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to submit scorecard rating');
+    } finally {
+      setEvaluating(false);
     }
   };
 
@@ -114,6 +228,19 @@ const CandidateKanban: React.FC = () => {
       handleUpdateStage(id, targetStageKey);
     }
     setDraggedCandidateId(null);
+  };
+
+  const renderStars = (rating: number) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <i
+          key={i}
+          className={`ti ti-star-filled fs-12 ${i <= rating ? 'text-warning' : 'text-muted opacity-25'}`}
+        />
+      );
+    }
+    return <div className="d-inline-flex gap-1">{stars}</div>;
   };
 
   return (
@@ -206,7 +333,7 @@ const CandidateKanban: React.FC = () => {
                   <div
                     key={col.key}
                     className="kanban-column bg-light rounded border p-3 flex-shrink-0"
-                    style={{ width: '310px', minHeight: '550px' }}
+                    style={{ width: '320px', minHeight: '550px' }}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, col.key)}
                   >
@@ -239,9 +366,13 @@ const CandidateKanban: React.FC = () => {
                             <div className="card-body p-3">
                               {/* Top Bar: Cand-ID Badge & Action Dropdown */}
                               <div className="d-flex align-items-center justify-content-between mb-2">
-                                <span className="badge bg-light text-primary border fs-11">
-                                  {cand.candId}
-                                </span>
+                                <div className="d-flex align-items-center gap-1">
+                                  <span className="badge bg-light text-primary border fs-11">
+                                    {cand.candId}
+                                  </span>
+                                  {cand.rating > 0 && renderStars(cand.rating)}
+                                </div>
+
                                 <div className="dropdown">
                                   <button
                                     className="btn btn-icon btn-sm border-0 text-muted p-0"
@@ -251,6 +382,29 @@ const CandidateKanban: React.FC = () => {
                                     <i className="ti ti-dots-vertical fs-16" />
                                   </button>
                                   <ul className="dropdown-menu dropdown-menu-end p-2 shadow-sm fs-12">
+                                    <li>
+                                      <button
+                                        type="button"
+                                        className="dropdown-item rounded-1 fs-12 text-primary"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#schedule_interview_modal"
+                                        onClick={() => handleOpenScheduleModal(cand)}
+                                      >
+                                        <i className="ti ti-calendar-event me-1" /> Schedule Interview
+                                      </button>
+                                    </li>
+                                    <li>
+                                      <button
+                                        type="button"
+                                        className="dropdown-item rounded-1 fs-12 text-warning"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#submit_scorecard_modal"
+                                        onClick={() => handleOpenScorecardModal(cand)}
+                                      >
+                                        <i className="ti ti-star me-1" /> Rate / Scorecard
+                                      </button>
+                                    </li>
+                                    <li><hr className="dropdown-divider" /></li>
                                     <li className="dropdown-header text-muted fs-11">Move Stage:</li>
                                     {KANBAN_COLUMNS.map((targetCol) => (
                                       <li key={targetCol.key}>
@@ -304,18 +458,39 @@ const CandidateKanban: React.FC = () => {
                                 </div>
                               </div>
 
-                              {/* Resume Link */}
-                              {cand.resumeUrl ? (
-                                <a
-                                  href={cand.resumeUrl.startsWith('http') ? cand.resumeUrl : `${apiClient.defaults.baseURL || ''}${cand.resumeUrl}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="btn btn-sm btn-outline-primary w-100 py-1 d-flex align-items-center justify-content-center fs-12"
+                              {/* Bottom Action Bar */}
+                              <div className="d-flex gap-1">
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-primary flex-fill py-1 fs-12 d-flex align-items-center justify-content-center"
+                                  data-bs-toggle="modal"
+                                  data-bs-target="#schedule_interview_modal"
+                                  onClick={() => handleOpenScheduleModal(cand)}
                                 >
-                                  <i className="ti ti-file-text me-1" /> View Resume
-                                </a>
-                              ) : (
-                                <span className="text-muted fs-12 d-block text-center">No Resume Attached</span>
+                                  <i className="ti ti-calendar me-1" /> Schedule
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-warning flex-fill py-1 fs-12 d-flex align-items-center justify-content-center"
+                                  data-bs-toggle="modal"
+                                  data-bs-target="#submit_scorecard_modal"
+                                  onClick={() => handleOpenScorecardModal(cand)}
+                                >
+                                  <i className="ti ti-star me-1" /> Rate
+                                </button>
+                              </div>
+
+                              {cand.resumeUrl && (
+                                <div className="mt-2">
+                                  <a
+                                    href={cand.resumeUrl.startsWith('http') ? cand.resumeUrl : `${apiClient.defaults.baseURL || ''}${cand.resumeUrl}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary fs-12 d-inline-flex align-items-center"
+                                  >
+                                    <i className="ti ti-file-text me-1" /> View Resume Document
+                                  </a>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -327,6 +502,142 @@ const CandidateKanban: React.FC = () => {
               })}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Schedule Interview Modal */}
+      <div className="modal fade" id="schedule_interview_modal">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h4 className="modal-title">Schedule Interview</h4>
+              <button
+                type="button"
+                className="btn-close custom-btn-close"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+              />
+            </div>
+            <form onSubmit={handleScheduleSubmit}>
+              <div className="modal-body">
+                {schedCand && (
+                  <div className="bg-light p-2 rounded mb-3 fs-13">
+                    <strong>Candidate:</strong> {schedCand.name} ({schedCand.email})<br />
+                    <strong>Role:</strong> {schedCand.jobTitle}
+                  </div>
+                )}
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Interview Round Title</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={roundTitle}
+                    onChange={(e) => setRoundTitle(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Interview Date & Time *</label>
+                  <input
+                    type="datetime-local"
+                    className="form-control"
+                    value={interviewDate}
+                    onChange={(e) => setInterviewDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Meeting Link / Location</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Google Meet link or Conference Room 2"
+                    value={meetingLink}
+                    onChange={(e) => setMeetingLink(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer d-flex justify-content-between align-items-center">
+                <button
+                  type="button"
+                  className="btn btn-outline-info btn-sm d-inline-flex align-items-center"
+                  onClick={handleResendEmail}
+                  disabled={scheduling || !schedCand}
+                  title="Resend email with current round, date, and link"
+                >
+                  <i className="ti ti-mail-forward me-1 fs-14" /> Resend Email to Candidate
+                </button>
+                <div>
+                  <button type="button" className="btn btn-light me-2" data-bs-dismiss="modal">
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={scheduling}>
+                    {scheduling ? 'Saving...' : 'Save & Send Email'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      {/* Submit Scorecard & Rating Modal */}
+      <div className="modal fade" id="submit_scorecard_modal">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h4 className="modal-title">Candidate Evaluation & Rating Scorecard</h4>
+              <button
+                type="button"
+                className="btn-close custom-btn-close"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+              />
+            </div>
+            <form onSubmit={handleScorecardSubmit}>
+              <div className="modal-body">
+                {evalCand && (
+                  <div className="bg-light p-2 rounded mb-3 fs-13">
+                    <strong>Candidate:</strong> {evalCand.name}<br />
+                    <strong>Applied Job:</strong> {evalCand.jobTitle}
+                  </div>
+                )}
+                <div className="mb-3">
+                  <label className="form-label fw-medium d-block">Overall Candidate Rating (1 to 5 Stars)</label>
+                  <div className="d-flex gap-2 fs-20 cursor-pointer">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <i
+                        key={star}
+                        className={`ti ti-star-filled ${star <= ratingScore ? 'text-warning' : 'text-muted opacity-25'}`}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setRatingScore(star)}
+                      />
+                    ))}
+                    <span className="fs-14 fw-bold ms-2 align-self-center text-primary">{ratingScore} / 5 Stars</span>
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Evaluation Feedback Notes</label>
+                  <textarea
+                    className="form-control"
+                    rows={4}
+                    value={feedbackNotes}
+                    onChange={(e) => setFeedbackNotes(e.target.value)}
+                    placeholder="Enter technical skills, communication performance, and assessment notes..."
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" data-bs-dismiss="modal">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-warning text-white" disabled={evaluating}>
+                  {evaluating ? 'Submitting...' : 'Submit Rating & Scorecard'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </>

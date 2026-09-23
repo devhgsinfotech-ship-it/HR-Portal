@@ -154,13 +154,16 @@ app.use('/api/documents', documentRoutes);
 app.use('/notifications', notificationRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// Phase 5.1 Recruitment ATS Routes
+// Phase 5.1 & 5.2 Recruitment ATS & Referral Routes
 const jobPostingRoutes = require('./src/routes/jobPostingRoutes');
 const applicantRoutes = require('./src/routes/applicantRoutes');
+const referralRoutes = require('./src/routes/referralRoutes');
 app.use('/job-postings', jobPostingRoutes);
 app.use('/api/job-postings', jobPostingRoutes);
 app.use('/applicants', applicantRoutes);
 app.use('/api/applicants', applicantRoutes);
+app.use('/referrals', referralRoutes);
+app.use('/api/referrals', referralRoutes);
 
 
 const prisma = require('./src/config/prisma');

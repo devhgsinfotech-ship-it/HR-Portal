@@ -20,6 +20,8 @@ interface Candidate {
   appliedDate: string;
   stage: string;
   rawStage: string;
+  rating?: number;
+  interviews?: any[];
 }
 
 const STAGE_CONFIG: Record<string, { label: string; colorClass: string }> = {
@@ -35,6 +37,19 @@ const CandidatesList: React.FC = () => {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStage, setFilterStage] = useState<string>('ALL');
+
+  // Modal States for Interview Scheduling
+  const [schedCand, setSchedCand] = useState<Candidate | null>(null);
+  const [interviewDate, setInterviewDate] = useState<string>('');
+  const [meetingLink, setMeetingLink] = useState<string>('');
+  const [roundTitle, setRoundTitle] = useState<string>('Technical Round 1');
+  const [scheduling, setScheduling] = useState<boolean>(false);
+
+  // Modal States for Rating & Scorecard
+  const [evalCand, setEvalCand] = useState<Candidate | null>(null);
+  const [ratingScore, setRatingScore] = useState<number>(5);
+  const [feedbackNotes, setFeedbackNotes] = useState<string>('');
+  const [evaluating, setEvaluating] = useState<boolean>(false);
 
   const fetchApplicants = async () => {
     setLoading(true);
@@ -54,7 +69,9 @@ const CandidatesList: React.FC = () => {
           departmentName: a.departmentName || 'General',
           appliedDate: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString('en-IN') : 'N/A',
           stage: STAGE_CONFIG[a.stage]?.label || a.stage,
-          rawStage: a.stage || 'APPLIED'
+          rawStage: a.stage || 'APPLIED',
+          rating: a.rating || 0,
+          interviews: a.interviews || []
         }));
         setCandidates(mapped);
       } else {
@@ -91,6 +108,103 @@ const CandidatesList: React.FC = () => {
     }
   };
 
+  // Open Schedule Modal
+  const handleOpenScheduleModal = (cand: Candidate) => {
+    setSchedCand(cand);
+    setMeetingLink('https://meet.google.com/abc-defg-hij');
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(10, 0, 0, 0);
+    setInterviewDate(tomorrow.toISOString().slice(0, 16));
+  };
+
+  // Submit Schedule Interview
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!schedCand || !interviewDate) {
+      alert('Please select interview date and time');
+      return;
+    }
+
+    setScheduling(true);
+    try {
+      await apiClient.post(`/applicants/${schedCand.id}/schedule-interview`, {
+        scheduledAt: interviewDate,
+        locationOrLink: meetingLink,
+        roundTitle
+      });
+
+      alert(`Interview schedule saved! Invitation email sent to ${schedCand.email || schedCand.name}.`);
+      const closeBtn = document.querySelector('#schedule_interview_modal .custom-btn-close') as HTMLElement;
+      if (closeBtn) closeBtn.click();
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to schedule interview');
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  // Re-trigger / Resend Email Notification manually
+  const handleResendEmail = async () => {
+    if (!schedCand) return;
+    setScheduling(true);
+    try {
+      await apiClient.post(`/applicants/${schedCand.id}/resend-interview-email`, {
+        roundTitle,
+        scheduledAt: interviewDate,
+        locationOrLink: meetingLink
+      });
+      alert(`Updated interview schedule email sent to ${schedCand.email || schedCand.name}!`);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to resend interview email');
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  // Open Scorecard Modal
+  const handleOpenScorecardModal = (cand: Candidate) => {
+    setEvalCand(cand);
+    setRatingScore(cand.rating || 5);
+  };
+
+  // Submit Scorecard Rating
+  const handleScorecardSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!evalCand) return;
+
+    setEvaluating(true);
+    try {
+      await apiClient.put(`/applicants/${evalCand.id}/stage`, {
+        rating: ratingScore,
+        notes: feedbackNotes
+      });
+
+      alert(`Scorecard & ${ratingScore}-star rating submitted for ${evalCand.name}!`);
+      const closeBtn = document.querySelector('#submit_scorecard_modal .custom-btn-close') as HTMLElement;
+      if (closeBtn) closeBtn.click();
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to submit scorecard rating');
+    } finally {
+      setEvaluating(false);
+    }
+  };
+
+  const renderStars = (rating: number) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <i
+          key={i}
+          className={`ti ti-star-filled fs-12 ${i <= rating ? 'text-warning' : 'text-muted opacity-25'}`}
+        />
+      );
+    }
+    return <div className="d-inline-flex gap-1">{stars}</div>;
+  };
+
   const filteredCandidates = filterStage === 'ALL'
     ? candidates
     : candidates.filter(c => c.rawStage === filterStage);
@@ -113,6 +227,7 @@ const CandidatesList: React.FC = () => {
           <div>
             <h6 className="fw-medium mb-0">{record.name}</h6>
             <span className="text-muted fs-12">{record.email}</span>
+            <div className="mt-1">{renderStars(record.rating || 0)}</div>
           </div>
         </div>
       ),
@@ -172,11 +287,20 @@ const CandidatesList: React.FC = () => {
           >
             {STAGE_CONFIG[record.rawStage]?.label || record.rawStage}
           </button>
-          <ul className="dropdown-menu p-2 shadow-sm">
+          <ul
+            className="dropdown-menu p-2 shadow-lg border-0 fs-12"
+            style={{
+              maxHeight: '160px',
+              overflowY: 'auto',
+              minWidth: '150px',
+              zIndex: 1050,
+              borderRadius: '8px'
+            }}
+          >
             {Object.keys(STAGE_CONFIG).map((stageKey) => (
-              <li key={stageKey}>
+              <li key={stageKey} className="mb-1">
                 <button
-                  className={`dropdown-item rounded-1 fs-12 ${record.rawStage === stageKey ? 'active' : ''}`}
+                  className={`dropdown-item rounded-2 py-1 px-2 ${record.rawStage === stageKey ? 'bg-primary-light text-primary fw-bold' : 'text-dark'}`}
                   onClick={() => handleUpdateStage(record.id, stageKey)}
                 >
                   {STAGE_CONFIG[stageKey].label}
@@ -188,17 +312,41 @@ const CandidatesList: React.FC = () => {
       )
     },
     {
-      title: "Action",
+      title: "Actions",
       dataIndex: "id",
-      render: (id: number) => (
-        <button
-          type="button"
-          className="btn btn-icon btn-sm text-danger border-0 bg-transparent"
-          onClick={() => handleDeleteApplicant(id)}
-          title="Delete Candidate"
-        >
-          <i className="ti ti-trash fs-16" />
-        </button>
+      render: (_id: number, record: Candidate) => (
+        <div className="d-flex align-items-center gap-1">
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-info py-1 px-2 d-inline-flex align-items-center"
+            data-bs-toggle="modal"
+            data-bs-target="#schedule_interview_modal"
+            onClick={() => handleOpenScheduleModal(record)}
+            title="Schedule Interview Round"
+          >
+            <i className="ti ti-calendar-event me-1 fs-14" /> Schedule
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-warning py-1 px-2 d-inline-flex align-items-center"
+            data-bs-toggle="modal"
+            data-bs-target="#submit_scorecard_modal"
+            onClick={() => handleOpenScorecardModal(record)}
+            title="Rate & Scorecard Evaluation"
+          >
+            <i className="ti ti-star me-1 fs-14" /> Rate
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-icon btn-sm text-danger border-0 bg-transparent ms-1"
+            onClick={() => handleDeleteApplicant(record.id)}
+            title="Delete Candidate"
+          >
+            <i className="ti ti-trash fs-16" />
+          </button>
+        </div>
       )
     }
   ];
@@ -307,6 +455,135 @@ const CandidatesList: React.FC = () => {
                 <Table dataSource={filteredCandidates} columns={columns} Selection={false} />
               )}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* SCHEDULE INTERVIEW MODAL */}
+      <div className="modal fade" id="schedule_interview_modal" tabIndex={-1} aria-hidden="true">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">
+                <i className="ti ti-calendar-event text-primary me-2" />
+                Schedule Interview - {schedCand?.name}
+              </h5>
+              <button type="button" className="btn-close custom-btn-close" data-bs-dismiss="modal" aria-label="Close" />
+            </div>
+            <form onSubmit={handleScheduleSubmit}>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Candidate</label>
+                  <input type="text" className="form-control" value={`${schedCand?.name || ''} (${schedCand?.email || ''})`} disabled />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Round Name / Stage</label>
+                  <select
+                    className="form-select"
+                    value={roundTitle}
+                    onChange={(e) => setRoundTitle(e.target.value)}
+                  >
+                    <option value="HR Screening">HR Screening</option>
+                    <option value="Technical Round 1">Technical Round 1</option>
+                    <option value="Technical Round 2">Technical Round 2</option>
+                    <option value="Managerial Interview">Managerial Interview</option>
+                    <option value="Final HR Discussion">Final HR Discussion</option>
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Interview Date & Time *</label>
+                  <input
+                    type="datetime-local"
+                    className="form-control"
+                    required
+                    value={interviewDate}
+                    onChange={(e) => setInterviewDate(e.target.value)}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Meeting Link / Room Location</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. https://meet.google.com/xyz-abc"
+                    value={meetingLink}
+                    onChange={(e) => setMeetingLink(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer d-flex justify-content-between align-items-center">
+                <button
+                  type="button"
+                  className="btn btn-outline-info btn-sm d-inline-flex align-items-center"
+                  onClick={handleResendEmail}
+                  disabled={scheduling || !schedCand}
+                  title="Resend email with current round, date, and link"
+                >
+                  <i className="ti ti-mail-forward me-1 fs-14" /> Resend Email to Candidate
+                </button>
+                <div>
+                  <button type="button" className="btn btn-light me-2" data-bs-dismiss="modal">
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={scheduling}>
+                    {scheduling ? 'Saving...' : 'Save & Send Email'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      {/* SUBMIT SCORECARD & RATING MODAL */}
+      <div className="modal fade" id="submit_scorecard_modal" tabIndex={-1} aria-hidden="true">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">
+                <i className="ti ti-star text-warning me-2" />
+                Scorecard & Rating - {evalCand?.name}
+              </h5>
+              <button type="button" className="btn-close custom-btn-close" data-bs-dismiss="modal" aria-label="Close" />
+            </div>
+            <form onSubmit={handleScorecardSubmit}>
+              <div className="modal-body">
+                <div className="mb-3 text-center">
+                  <label className="form-label d-block fw-medium">Overall Rating (1 to 5 Stars)</label>
+                  <div className="d-flex justify-content-center gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        type="button"
+                        key={star}
+                        className="btn btn-link p-0 border-0 fs-24"
+                        onClick={() => setRatingScore(star)}
+                      >
+                        <i className={`ti ti-star-filled ${star <= ratingScore ? 'text-warning' : 'text-muted opacity-25'}`} />
+                      </button>
+                    ))}
+                  </div>
+                  <small className="text-muted d-block mt-1">Click a star to rate</small>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Interviewer Feedback & Scorecard Notes</label>
+                  <textarea
+                    className="form-control"
+                    rows={4}
+                    placeholder="Enter assessment notes, domain knowledge ratings, communication skills..."
+                    value={feedbackNotes}
+                    onChange={(e) => setFeedbackNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" data-bs-dismiss="modal">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-warning text-white" disabled={evaluating}>
+                  {evaluating ? 'Submitting...' : 'Save Scorecard Rating'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
