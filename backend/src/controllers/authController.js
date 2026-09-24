@@ -483,7 +483,50 @@ async function acceptInvite(req, res) {
             console.warn('Secondary cleanup error ignored:', secondaryErr.message);
         }
 
-        return res.json({ message: 'Account set up successfully! You can now log in.' });
+        // Auto-login & Return JWT token and Onboarding redirect URL based on company subdomain
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
+        const baseDomain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
+        const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
+
+        const updatedUser = await prisma.user.findUnique({
+            where: { id: targetUserId },
+            include: { company: true, employee: true }
+        });
+
+        const jwtToken = jwt.sign(
+            {
+                id: updatedUser.id,
+                role: updatedUser.role,
+                email: updatedUser.email,
+                companyId: updatedUser.companyId,
+                subdomain: updatedUser.company?.subdomain || null,
+            },
+            process.env.JWT_SECRET || 'fallback_secret_key',
+            { expiresIn: '7d' }
+        );
+
+        const companySubdomain = updatedUser.company?.subdomain;
+        const redirectUrl = companySubdomain
+            ? `${protocol}://${companySubdomain}.${baseDomain}/onboarding`
+            : `${protocol}://${baseDomain}/onboarding`;
+
+        return res.json({
+            success: true,
+            message: 'Account set up successfully! Redirecting to onboarding...',
+            token: jwtToken,
+            user: {
+                id: updatedUser.id,
+                name: updatedUser.name,
+                email: updatedUser.email,
+                role: updatedUser.role,
+                companyId: updatedUser.companyId,
+                subdomain: companySubdomain || null,
+                companyLogoUrl: updatedUser.company?.logoUrl || null,
+                profilePhotoUrl: updatedUser.employee?.profilePhotoUrl || null,
+                onboardingStatus: updatedUser.role === 'EMPLOYEE' ? (updatedUser.employee?.onboardingStatus || 'INVITED') : 'COMPLETED',
+            },
+            redirectUrl
+        });
     } catch (error) {
         console.error('Accept Invite Error:', error);
         res.status(500).json({ message: error.message || 'Internal server error' });
@@ -847,7 +890,7 @@ async function updateProfile(req, res) {
 
         let newPhotoUrl = profilePhotoUrl;
         if (req.file) {
-            newPhotoUrl = `/uploads/logos/${req.file.filename}`;
+            newPhotoUrl = `/uploads/profiles/${req.file.filename}`;
         }
 
         const fullName = name || (firstName && lastName ? `${firstName} ${lastName}` : firstName || undefined);

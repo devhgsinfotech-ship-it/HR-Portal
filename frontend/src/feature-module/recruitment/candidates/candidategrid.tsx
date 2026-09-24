@@ -1,13 +1,289 @@
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import PredefinedDateRanges from "../../../core/common/datePicker";
-import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { all_routes } from "../../../router/all_routes";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
+import apiClient from "../../../core/utils/apiClient";
 
-const CandidateGrid = () => {
+interface Candidate {
+  id: number;
+  candId: string;
+  name: string;
+  email: string;
+  phone: string;
+  resumeUrl?: string;
+  jobTitle: string;
+  jobCode: string;
+  departmentName: string;
+  appliedDate: string;
+  stage: string;
+  rawStage: string;
+  rating: number;
+  matchScore?: number;
+  aiInsights?: any;
+}
+
+const STAGE_CONFIG: Record<string, { label: string; badgeClass: string }> = {
+  APPLIED: { label: 'New', badgeClass: 'bg-purple text-white' },
+  SHORTLISTED: { label: 'Scheduled', badgeClass: 'bg-pink text-white' },
+  INTERVIEW: { label: 'Interviewed', badgeClass: 'bg-info text-white' },
+  OFFER: { label: 'Offered', badgeClass: 'bg-warning text-white' },
+  HIRED: { label: 'Hired', badgeClass: 'bg-success text-white' },
+  REJECTED: { label: 'Rejected', badgeClass: 'bg-danger text-white' }
+};
+
+const CandidateGrid: React.FC = () => {
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterStage, setFilterStage] = useState<string>('ALL');
+
+
+  // Schedule Interview Modal State
+  const [schedCand, setSchedCand] = useState<Candidate | null>(null);
+  const [interviewDate, setInterviewDate] = useState<string>('');
+  const [meetingLink, setMeetingLink] = useState<string>('https://meet.google.com/abc-defg-hij');
+  const [roundTitle, setRoundTitle] = useState<string>('Technical Interview Round 1');
+  const [scheduling, setScheduling] = useState(false);
+
+  // Scorecard Evaluation Modal State
+  const [evalCand, setEvalCand] = useState<Candidate | null>(null);
+  const [ratingScore, setRatingScore] = useState<number>(5);
+  const [feedbackNotes, setFeedbackNotes] = useState<string>('Strong technical skills, excellent communication, recommended.');
+  const [evaluating, setEvaluating] = useState(false);
+
+  // Offer Letter & Employee Conversion State
+  const [offerCand, setOfferCand] = useState<Candidate | null>(null);
+  const [annualCtc, setAnnualCtc] = useState<string>('600000');
+  const [basicSalary, setBasicSalary] = useState<string>('300000');
+  const [hra, setHra] = useState<string>('120000');
+  const [specialAllowance, setSpecialAllowance] = useState<string>('180000');
+  const [joiningDate, setJoiningDate] = useState<string>('');
+  const [offerNotes, setOfferNotes] = useState<string>('Subject to background verification and document submission.');
+  const [generatingOffer, setGeneratingOffer] = useState<boolean>(false);
+  const [converting, setConverting] = useState<boolean>(false);
+
+  const fetchApplicants = async () => {
+    setLoading(true);
+    try {
+      const res = await apiClient.get('/applicants');
+      if (Array.isArray(res.data)) {
+        const mapped: Candidate[] = res.data.map((a: any) => ({
+          id: a.id,
+          candId: `Cand-${String(a.id).padStart(3, '0')}`,
+          name: a.fullName || `${a.firstName || ''} ${a.lastName || ''}`.trim() || 'Candidate',
+          email: a.email,
+          phone: a.phone || 'N/A',
+          resumeUrl: a.resumeUrl,
+          jobTitle: a.jobTitle || 'General',
+          jobCode: a.jobCode || '',
+          departmentName: a.departmentName || 'General',
+          appliedDate: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString('en-IN') : 'N/A',
+          stage: STAGE_CONFIG[a.stage]?.label || a.stage,
+          rawStage: a.stage || 'APPLIED',
+          rating: a.rating || 0,
+          matchScore: a.matchScore || (a.rating > 0 ? a.rating * 18 : 82),
+          aiInsights: a.aiInsights
+        }));
+        setCandidates(mapped);
+      } else {
+        setCandidates([]);
+      }
+    } catch (err) {
+      console.error('Error fetching applicants for grid:', err);
+      setCandidates([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Open AI Insights Modal
+
+  useEffect(() => {
+    fetchApplicants();
+  }, []);
+
+  const handleUpdateStage = async (id: number, newStage: string) => {
+    try {
+      await apiClient.put(`/applicants/${id}/stage`, { stage: newStage });
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update candidate stage');
+    }
+  };
+
+  const handleDeleteApplicant = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this candidate application?')) return;
+    try {
+      await apiClient.delete(`/applicants/${id}`);
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete applicant');
+    }
+  };
+
+  // Open Schedule Interview Modal
+  const handleOpenScheduleModal = (cand: Candidate) => {
+    setSchedCand(cand);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(10, 0, 0, 0);
+    setInterviewDate(tomorrow.toISOString().slice(0, 16));
+  };
+
+  // Submit Schedule Interview
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!schedCand || !interviewDate) {
+      alert('Please select interview date and time');
+      return;
+    }
+
+    setScheduling(true);
+    try {
+      await apiClient.post(`/applicants/${schedCand.id}/schedule-interview`, {
+        scheduledAt: interviewDate,
+        locationOrLink: meetingLink,
+        roundTitle
+      });
+
+      alert(`Interview schedule saved! Invitation email sent to ${schedCand.email || schedCand.name}.`);
+      const closeBtn = document.querySelector('#schedule_interview_modal .custom-btn-close') as HTMLElement;
+      if (closeBtn) closeBtn.click();
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to schedule interview');
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  // Re-trigger / Resend Email Notification manually
+  const handleResendEmail = async () => {
+    if (!schedCand) return;
+    setScheduling(true);
+    try {
+      await apiClient.post(`/applicants/${schedCand.id}/resend-interview-email`, {
+        roundTitle,
+        scheduledAt: interviewDate,
+        locationOrLink: meetingLink
+      });
+      alert(`Updated interview schedule email sent to ${schedCand.email || schedCand.name}!`);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to resend interview email');
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  // Open Scorecard Modal
+  const handleOpenScorecardModal = (cand: Candidate) => {
+    setEvalCand(cand);
+    setRatingScore(cand.rating || 5);
+  };
+
+  // Submit Scorecard Rating
+  const handleScorecardSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!evalCand) return;
+
+    setEvaluating(true);
+    try {
+      await apiClient.put(`/applicants/${evalCand.id}/stage`, {
+        rating: ratingScore,
+        notes: feedbackNotes
+      });
+
+      alert(`Scorecard & ${ratingScore}-star rating submitted for ${evalCand.name}!`);
+      const closeBtn = document.querySelector('#submit_scorecard_modal .custom-btn-close') as HTMLElement;
+      if (closeBtn) closeBtn.click();
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to submit scorecard rating');
+    } finally {
+      setEvaluating(false);
+    }
+  };
+
+  // Open Offer Letter Modal
+  const handleOpenOfferModal = (cand: Candidate) => {
+    setOfferCand(cand);
+    const in15Days = new Date();
+    in15Days.setDate(in15Days.getDate() + 15);
+    setJoiningDate(in15Days.toISOString().slice(0, 10));
+  };
+
+  // Generate & Send Offer Letter Submit
+  const handleOfferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!offerCand || !annualCtc || !joiningDate) {
+      alert('Please fill in Annual CTC and Joining Date');
+      return;
+    }
+
+    setGeneratingOffer(true);
+    try {
+      const res = await apiClient.post(`/applicants/${offerCand.id}/offer-letter`, {
+        annualCtc,
+        basicSalary,
+        hra,
+        specialAllowance,
+        joiningDate,
+        notes: offerNotes
+      });
+
+      alert(`Offer letter generated and sent to ${offerCand.name} (${offerCand.email})! Stage updated to OFFER.`);
+      const closeBtn = document.querySelector('#generate_offer_modal .custom-btn-close') as HTMLElement;
+      if (closeBtn) closeBtn.click();
+
+      if (res.data?.offerLetterUrl) {
+        window.open(`${apiClient.defaults.baseURL || ''}${res.data.offerLetterUrl}`, '_blank');
+      }
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to generate offer letter');
+    } finally {
+      setGeneratingOffer(false);
+    }
+  };
+
+  // One-Click Convert Hired Candidate to Employee
+  const handleConvertToEmployee = async (cand: Candidate) => {
+    if (!window.confirm(`Are you sure you want to convert candidate "${cand.name}" into a full Employee? This will generate their employee profile and send onboarding credentials.`)) return;
+
+    setConverting(true);
+    try {
+      const res = await apiClient.post(`/applicants/${cand.id}/convert-to-employee`, {
+        dateOfJoining: new Date().toISOString().slice(0, 10)
+      });
+
+      alert(`Success! ${cand.name} converted to Employee (${res.data.employeeCode}). Onboarding invite sent to ${cand.email}.`);
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to convert candidate to employee');
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  const renderStars = (rating: number) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <i
+          key={i}
+          className={`ti ti-star-filled fs-12 ${i <= rating ? 'text-warning' : 'text-muted opacity-25'}`}
+        />
+      );
+    }
+    return <div className="d-inline-flex gap-1">{stars}</div>;
+  };
+
+  const filteredCandidates = filterStage === 'ALL'
+    ? candidates
+    : candidates.filter(c => c.rawStage === filterStage);
+
   return (
     <>
-      {/* Page Wrapper */}
       <div className="page-wrapper">
         <div className="content">
           {/* Breadcrumb */}
@@ -28,53 +304,30 @@ const CandidateGrid = () => {
                 </ol>
               </nav>
             </div>
-            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
+            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
               <div className="me-2 mb-2">
                 <div className="d-flex align-items-center border bg-white rounded p-1 me-2 icon-list">
                   <Link
                     to={all_routes.candidateskanban}
                     className="btn btn-icon btn-sm me-1"
+                    title="Kanban View"
                   >
                     <i className="ti ti-layout-kanban" />
                   </Link>
                   <Link
                     to={all_routes.candidateslist}
                     className="btn btn-icon btn-sm me-1"
+                    title="List View"
                   >
                     <i className="ti ti-list-tree" />
                   </Link>
                   <Link
                     to={all_routes.candidatesGrid}
                     className="btn btn-icon btn-sm active bg-primary text-white"
+                    title="Grid View"
                   >
                     <i className="ti ti-layout-grid" />
                   </Link>
-                </div>
-              </div>
-              <div className="me-2 mb-2">
-                <div className="dropdown">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    <i className="ti ti-file-export me-1" />
-                    Export
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        <i className="ti ti-file-type-pdf me-1" />
-                        Export as PDF
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        <i className="ti ti-file-type-xls me-1" />
-                        Export as Excel{" "}
-                      </Link>
-                    </li>
-                  </ul>
                 </div>
               </div>
               <div className="head-icons ms-2">
@@ -83,1305 +336,461 @@ const CandidateGrid = () => {
             </div>
           </div>
           {/* /Breadcrumb */}
-          <div className="card">
+
+          <div className="card mb-4">
             <div className="card-body p-3">
               <div className="d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-                <h5>Candidates Grid</h5>
-                <div className="d-flex align-items-center flex-wrap row-gap-3">
-                  <div className="me-3">
-                    <div className="input-icon position-relative">
-                      <PredefinedDateRanges />
-                    </div>
-                  </div>
-                  <div className="dropdown me-3">
-                    <Link
-                      to="#"
-                      className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                      data-bs-toggle="dropdown"
-                    >
-                      Role
-                    </Link>
-                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Accountant
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          App Developer
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Technician
-                        </Link>
-                      </li>
-                    </ul>
-                  </div>
-                  <div className="dropdown me-3">
-                    <Link
-                      to="#"
-                      className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                      data-bs-toggle="dropdown"
-                    >
-                      Select Status
-                    </Link>
-                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Select Status
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Active
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Inactive
-                        </Link>
-                      </li>
-                    </ul>
-                  </div>
+                <h5 className="mb-0">Candidates Grid ({filteredCandidates.length})</h5>
+                <div className="d-flex align-items-center flex-wrap gap-2">
+                  <PredefinedDateRanges />
                   <div className="dropdown">
-                    <Link
-                      to="#"
-                      className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
+                    <button
+                      className="dropdown-toggle btn btn-white border d-inline-flex align-items-center fs-13"
                       data-bs-toggle="dropdown"
                     >
-                      Sort By : Last 7 Days
-                    </Link>
-                    <ul className="dropdown-menu  dropdown-menu-end p-3">
+                      Filter Stage: {filterStage === 'ALL' ? 'All Stages' : STAGE_CONFIG[filterStage]?.label || filterStage}
+                    </button>
+                    <ul className="dropdown-menu dropdown-menu-end p-2 shadow-sm">
                       <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Recently Added
-                        </Link>
+                        <button className="dropdown-item rounded-1 fs-12" onClick={() => setFilterStage('ALL')}>
+                          All Stages
+                        </button>
                       </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Ascending
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Desending
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Last Month
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="dropdown-item rounded-1">
-                          Last 7 Days
-                        </Link>
-                      </li>
+                      {Object.keys(STAGE_CONFIG).map((sk) => (
+                        <li key={sk}>
+                          <button className="dropdown-item rounded-1 fs-12" onClick={() => setFilterStage(sk)}>
+                            {STAGE_CONFIG[sk].label}
+                          </button>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          {/* Candidates Grid */}
-          <div className="row">
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-39.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Harold Gaynor
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-001
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          harold@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Accountant
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-purple">
-                        {" "}
-                        <i className="ti ti-point-filled" /> New
-                      </span>
-                    </div>
-                  </div>
-                </div>
+
+          {loading ? (
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading candidate grid...</span>
               </div>
             </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-40.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            {" "}
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Sandra Ornellas
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-002
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          sandra@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Accountant
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-pink">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Scheduled
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          ) : filteredCandidates.length === 0 ? (
+            <div className="text-center py-5 bg-white rounded border">
+              <i className="ti ti-users fs-40 text-muted mb-2 d-block"></i>
+              <h5 className="text-muted">No Candidates Found</h5>
+              <p className="text-muted fs-14 mb-0">
+                No candidate applications have been received yet. Share job links to start receiving applicants!
+              </p>
             </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-41.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              John Harris
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-003
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          john@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Technician
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-info">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Interviewed
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-42.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Carole Langan
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-004
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          carole@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Web Developer
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-warning">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Offered
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-44.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Charles Marks
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-005
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          charles@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">SEO</span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-success">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Hired
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-43.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Kerry Drake
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-006
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          kerry@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Designer
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-danger">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Rejected
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-46.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              David Carmona
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-007
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          david@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Account Manager
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-success">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Hired
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-45.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Margaret Soto
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-008
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          margaret@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        SEO Analyst
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-pink">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Scheduled
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-48.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Jeffrey Thaler
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-009
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          jeffrey@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">Admin</span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-purple">
-                        {" "}
-                        <i className="ti ti-point-filled" /> New
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-47.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Joyce Golston
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-010
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          joyce@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Business Analyst
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-success">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Hired
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-49.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Cedric Rosalez
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-011
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          cedric@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Financial Analyst
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-purple">
-                        {" "}
-                        <i className="ti ti-point-filled" /> New
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-xxl-3 col-xl-4 col-md-6">
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div className="d-flex align-items-center flex-shrink-0">
-                      <Link
-                        to="#"
-                        className="avatar avatar-lg avatar rounded-circle me-2"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#candidate_details"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/users/user-50.jpg"
-                          className="img-fluid h-auto w-auto"
-                          alt="Users Image"
-                        />
-                      </Link>
-                      <div className="d-flex flex-column">
-                        <div className="d-flex flex-wrap mb-1">
-                          <h6 className="fs-16 fw-semibold me-1">
-                            <Link
-                              to="#"
-                              data-bs-toggle="offcanvas"
-                              data-bs-target="#candidate_details"
-                            >
-                              Lillie Diaz
-                            </Link>
-                          </h6>
-                          <span className="badge bg-primary-transparent">
-                            Cand-012
-                          </span>
-                        </div>
-                        <p className="text-gray fs-13 fw-normal">
-                          lillie@example.com
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-light rounder p-2">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Role
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        Receptionist
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="text-gray fs-14 fw-normal">
-                        Applied Date
-                      </h6>
-                      <span className="text-dark fs-14 fw-medium">
-                        12 Sep 2024
-                      </span>
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="text-gray fs-14 fw-normal">Status</h6>
-                      <span className="fs-10 fw-medium badge bg-danger">
-                        {" "}
-                        <i className="ti ti-point-filled" /> Rejected
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-12">
-              <div className="text-center mb-4">
-                <Link to="#" className="btn btn-primary">
-                  <i className="ti ti-loader-3 me-1" />
-                  Load More
-                </Link>
-              </div>
-            </div>
-          </div>
-          {/* /Candidates Grid */}
-        </div>
-        <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-          <p className="mb-0">2014 - 2025 © SmartHR.</p>
-          <p>
-            Designed &amp; Developed By{" "}
-            <Link to="#" className="text-primary">
-              Dreams
-            </Link>
-          </p>
-        </div>
-      </div>
-      {/* /Page Wrapper */}
-      {/* Candidate Details */}
-      <div
-        className="offcanvas offcanvas-end offcanvas-large"
-        tabIndex={-1}
-        id="candidate_details"
-      >
-        <div className="offcanvas-header border-bottom">
-          <h4 className="d-flex align-items-center">
-            Candidate Details
-            <span className="badge bg-primary-transparent fw-medium ms-2">
-              Cand-001
-            </span>
-          </h4>
-          <button
-            type="button"
-            className="btn-close custom-btn-close"
-            data-bs-dismiss="offcanvas"
-            aria-label="Close"
-          >
-            <i className="ti ti-x" />
-          </button>
-        </div>
-        <div className="offcanvas-body">
-          <div className="card">
-            <div className="card-body">
-              <div className="d-flex align-items-center flex-wrap flex-md-nowrap row-gap-3">
-                <span className="avatar avatar-xxxl candidate-img flex-shrink-0 me-3">
-                  <ImageWithBasePath
-                    src="assets/img/users/user-03.jpg"
-                    alt="Users Image"
-                  />
-                </span>
-                <div className="flex-fill border rounded p-3 pb-0">
-                  <div className="row align-items-center">
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Candiate Name</p>
-                        <h6 className="fw-normal">Harold Gaynor</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Applied Role</p>
-                        <h6 className="fw-normal">Accountant</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Applied Date</p>
-                        <h6 className="fw-normal">12 Sep 2024</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Email</p>
-                        <h6 className="fw-normal">harold@example.com</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Recruiter</p>
-                        <h6 className="fw-normal d-flex align-items-center">
-                          <span className="avatar avatar-xs avatar-rounded me-1">
-                            <ImageWithBasePath
-                              src="assets/img/users/user-01.jpg"
-                              alt="Users Image"
-                            />
-                          </span>
-                          Anthony Lewis
-                        </h6>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="mb-1">Recruiter</p>
-                        <span className="badge badge-purple d-inline-flex align-items-center">
-                          <i className="ti ti-point-filled me-1" />
-                          New
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="contact-grids-tab p-0 mb-3">
-            <ul className="nav nav-underline" id="myTab" role="tablist">
-              <li className="nav-item" role="presentation">
-                <button
-                  className="nav-link active pt-0"
-                  id="info-tab"
-                  data-bs-toggle="tab"
-                  data-bs-target="#basic-info"
-                  type="button"
-                  role="tab"
-                  aria-selected="true"
-                >
-                  Profile
-                </button>
-              </li>
-              <li className="nav-item" role="presentation">
-                <button
-                  className="nav-link pt-0"
-                  id="address-tab"
-                  data-bs-toggle="tab"
-                  data-bs-target="#address"
-                  type="button"
-                  role="tab"
-                  aria-selected="false"
-                >
-                  Hiring Pipeline
-                </button>
-              </li>
-              <li className="nav-item" role="presentation">
-                <button
-                  className="nav-link pt-0"
-                  id="address-tab2"
-                  data-bs-toggle="tab"
-                  data-bs-target="#address2"
-                  type="button"
-                  role="tab"
-                  aria-selected="false"
-                >
-                  Notes
-                </button>
-              </li>
-            </ul>
-          </div>
-          <div className="tab-content" id="myTabContent">
-            <div
-              className="tab-pane fade show active"
-              id="basic-info"
-              role="tabpanel"
-              aria-labelledby="info-tab"
-              tabIndex={0}
-            >
-              <div className="card">
-                <div className="card-header">
-                  <h5>Personal Information</h5>
-                </div>
-                <div className="card-body pb-0">
-                  <div className="row align-items-center">
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Candiate Name</p>
-                        <h6 className="fw-normal">Harold Gaynor</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Phone</p>
-                        <h6 className="fw-normal">(146) 8964 278</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Gender</p>
-                        <h6 className="fw-normal">Male</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Date of Birth</p>
-                        <h6 className="fw-normal">23 Oct 2000</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Email</p>
-                        <h6 className="fw-normal">harold@example.com</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Nationality</p>
-                        <h6 className="fw-normal">Indian</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Religion</p>
-                        <h6 className="fw-normal">Christianity</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Marital status</p>
-                        <h6 className="fw-normal">No</h6>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="card">
-                <div className="card-header">
-                  <h5>Address Information</h5>
-                </div>
-                <div className="card-body pb-0">
-                  <div className="row align-items-center">
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Address</p>
-                        <h6 className="fw-normal">1861 Bayonne Ave</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">City</p>
-                        <h6 className="fw-normal">New York</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">State</p>
-                        <h6 className="fw-normal">New York</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Country</p>
-                        <h6 className="fw-normal">United States Of America</h6>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="card">
-                <div className="card-header">
-                  <h5>Resume</h5>
-                </div>
-                <div className="card-body pb-0">
-                  <div className="row align-items-center">
-                    <div className="col-md-6">
-                      <div className="d-flex align-items-center mb-3">
-                        <span className="avatar avatar-lg bg-light-500 border text-dark me-2">
-                          <i className="ti ti-file-description fs-24" />
-                        </span>
-                        <div>
-                          <h6 className="fw-medium">Resume.doc</h6>
-                          <span>120 KB</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3 text-md-end">
-                        <Link
-                          to="#"
-                          className="btn btn-dark d-inline-flex align-items-center"
-                        >
-                          <i className="ti ti-download me-1" />
-                          Download
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div
-              className="tab-pane fade"
-              id="address"
-              role="tabpanel"
-              aria-labelledby="address-tab"
-              tabIndex={0}
-            >
-              <div className="card">
-                <div className="card-body">
-                  <h5 className="fw-medium mb-2">Candidate Pipeline Stage</h5>
-                  <div className="pipeline-list candidates border-0 mb-0">
-                    <ul className="mb-0">
-                      <li>
-                        <Link to="#" className="bg-purple">
-                          New
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="bg-gray-100">
-                          Scheduled
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="bg-grat-100">
-                          Interviewed
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="bg-gray-100">
-                          Offered
-                        </Link>
-                      </li>
-                      <li>
-                        <Link to="#" className="bg-gray-100">
-                          Hired / Rejected
-                        </Link>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              <div className="card">
-                <div className="card-header">
-                  <h5>Details</h5>
-                </div>
-                <div className="card-body pb-0">
-                  <div className="row align-items-center">
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Current Status</p>
-                        <span className="badge badge-soft-purple d-inline-flex align-items-center">
-                          <i className="ti ti-point-filled me-1" />
-                          New
-                        </span>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Applied Role</p>
-                        <h6 className="fw-normal">Accountant</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Applied Date</p>
-                        <h6 className="fw-normal">12 Sep 2024</h6>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="mb-3">
-                        <p className="mb-1">Recruiter</p>
-                        <div className="d-flex align-items-center">
-                          <Link
-                            to="#"
-                            className="avatar avatar-sm avatar-rounded me-2"
+          ) : (
+            <div className="row">
+              {filteredCandidates.map((cand) => (
+                <div className="col-xl-3 col-lg-4 col-md-6 mb-4" key={cand.id}>
+                  <div className="card h-100 shadow-sm border rounded">
+                    <div className="card-body p-3 d-flex flex-column justify-content-between">
+                      <div>
+                        {/* Header: Candidate Avatar & Info */}
+                        <div className="d-flex align-items-start justify-content-between mb-3">
+                          <div className="d-flex align-items-center">
+                            <div className="avatar avatar-lg bg-gradient-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold fs-18 me-2">
+                              {cand.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="overflow-hidden">
+                              <h6 className="fw-semibold text-truncate mb-0" title={cand.name}>
+                                {cand.name}
+                              </h6>
+                              <div className="d-flex align-items-center gap-1 mt-1 flex-wrap">
+                                <span className="badge bg-light text-secondary border fs-11">
+                                  {cand.candId}
+                                </span>
+                                <span className={`badge ${
+                                  (cand.matchScore || 0) >= 75 ? 'bg-success-transparent text-success' :
+                                  (cand.matchScore || 0) >= 50 ? 'bg-warning-transparent text-warning' :
+                                  'bg-danger-transparent text-danger'
+                                } fs-11`}>
+                                  <i className="ti ti-sparkles me-1" />{cand.matchScore || 0}%
+                                </span>
+                                {cand.rating > 0 && renderStars(cand.rating)}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-icon btn-sm text-danger border-0 bg-transparent p-0"
+                            onClick={() => handleDeleteApplicant(cand.id)}
+                            title="Delete Candidate"
                           >
-                            <ImageWithBasePath
-                              src="assets/img/users/user-01.jpg"
-                              alt="Users Image"
-                            />
-                          </Link>
-                          <h6>
-                            <Link to="#">Anthony Lewis</Link>
-                          </h6>
+                            <i className="ti ti-trash fs-16" />
+                          </button>
                         </div>
+
+                        {/* Contact details */}
+                        <div className="bg-light p-2 rounded mb-3 fs-12">
+                          <div className="text-muted text-truncate mb-1">
+                            <i className="ti ti-mail text-primary me-1" />
+                            <span>{cand.email}</span>
+                          </div>
+                          <div className="text-muted">
+                            <i className="ti ti-phone text-success me-1" />
+                            <span>{cand.phone}</span>
+                          </div>
+                        </div>
+
+                        {/* Applied Role & Date */}
+                        <div className="d-flex align-items-center justify-content-between fs-12 border-bottom pb-2 mb-3">
+                          <div>
+                            <span className="text-muted d-block">Applied Role</span>
+                            <span className="fw-medium text-dark">{cand.jobTitle}</span>
+                          </div>
+                          <div className="text-end">
+                            <span className="text-muted d-block">Applied Date</span>
+                            <span className="fw-medium text-dark">{cand.appliedDate}</span>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons: AI Match, Schedule, Rate, Offer & Convert */}
+                        <div className="d-flex flex-wrap gap-1 mb-2">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary flex-fill py-1 fs-11 d-flex align-items-center justify-content-center"
+                            data-bs-toggle="modal"
+                            data-bs-target="#schedule_interview_modal"
+                            onClick={() => handleOpenScheduleModal(cand)}
+                          >
+                            <i className="ti ti-calendar me-1" /> Schedule
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-warning flex-fill py-1 fs-11 d-flex align-items-center justify-content-center"
+                            data-bs-toggle="modal"
+                            data-bs-target="#submit_scorecard_modal"
+                            onClick={() => handleOpenScorecardModal(cand)}
+                          >
+                            <i className="ti ti-star me-1" /> Rate
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-success flex-fill py-1 fs-11 d-flex align-items-center justify-content-center"
+                            data-bs-toggle="modal"
+                            data-bs-target="#generate_offer_modal"
+                            onClick={() => handleOpenOfferModal(cand)}
+                          >
+                            <i className="ti ti-file-certificate me-1" /> Offer
+                          </button>
+                        </div>
+
+                        {(cand.rawStage === 'OFFER' || cand.rawStage === 'HIRED') && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-success text-white w-100 py-1 fs-12 d-flex align-items-center justify-content-center fw-medium mb-3"
+                            onClick={() => handleConvertToEmployee(cand)}
+                            disabled={converting}
+                          >
+                            <i className="ti ti-user-check me-1 fs-14" /> {converting ? 'Converting...' : 'Convert to Employee'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Footer: Stage Dropdown & Resume */}
+                      <div className="d-flex align-items-center justify-content-between pt-2 border-top">
+                        {/* Stage Selector */}
+                        <div className="dropdown">
+                          <button
+                            className={`btn btn-sm dropdown-toggle ${STAGE_CONFIG[cand.rawStage]?.badgeClass || 'bg-secondary text-white'} fs-12 fw-medium px-2 py-1`}
+                            type="button"
+                            data-bs-toggle="dropdown"
+                          >
+                            {STAGE_CONFIG[cand.rawStage]?.label || cand.rawStage}
+                          </button>
+                          <ul className="dropdown-menu p-2 shadow-sm">
+                            {Object.keys(STAGE_CONFIG).map((sk) => (
+                              <li key={sk}>
+                                <button
+                                  className={`dropdown-item rounded-1 fs-12 ${cand.rawStage === sk ? 'active' : ''}`}
+                                  onClick={() => handleUpdateStage(cand.id, sk)}
+                                >
+                                  {STAGE_CONFIG[sk].label}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Resume Button */}
+                        {cand.resumeUrl ? (
+                          <a
+                            href={cand.resumeUrl.startsWith('http') ? cand.resumeUrl : `${apiClient.defaults.baseURL || ''}${cand.resumeUrl}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm btn-outline-primary py-1 px-2 d-inline-flex align-items-center fs-12"
+                            title="View Candidate Resume"
+                          >
+                            <i className="ti ti-file-text me-1" /> Resume
+                          </a>
+                        ) : (
+                          <span className="text-muted fs-12">No Resume</span>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
-                <div className="card-footer">
-                  <div className="d-flex align-items-center justify-content-end">
-                    <Link to="#" className="btn btn-dark me-3">
-                      Reject
-                    </Link>
-                    <Link to="#" className="btn btn-primary">
-                      Move to Next Stage
-                    </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Schedule Interview Modal */}
+      <div className="modal fade" id="schedule_interview_modal">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h4 className="modal-title">Schedule Interview</h4>
+              <button
+                type="button"
+                className="btn-close custom-btn-close"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+              />
+            </div>
+            <form onSubmit={handleScheduleSubmit}>
+              <div className="modal-body">
+                {schedCand && (
+                  <div className="bg-light p-2 rounded mb-3 fs-13">
+                    <strong>Candidate:</strong> {schedCand.name} ({schedCand.email})<br />
+                    <strong>Role:</strong> {schedCand.jobTitle}
                   </div>
+                )}
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Interview Round Title</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={roundTitle}
+                    onChange={(e) => setRoundTitle(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Interview Date & Time *</label>
+                  <input
+                    type="datetime-local"
+                    className="form-control"
+                    value={interviewDate}
+                    onChange={(e) => setInterviewDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Meeting Link / Location</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Google Meet link or Conference Room 2"
+                    value={meetingLink}
+                    onChange={(e) => setMeetingLink(e.target.value)}
+                  />
                 </div>
               </div>
-            </div>
-            <div
-              className="tab-pane fade"
-              id="address2"
-              role="tabpanel"
-              aria-labelledby="address-tab2"
-              tabIndex={0}
-            >
-              <div className="card">
-                <div className="card-header">
-                  <h5>Notes</h5>
-                </div>
-                <div className="card-body">
-                  <p>
-                    Harold Gaynor is a detail-oriented and highly motivated
-                    accountant with 4 years of experience in financial
-                    reporting, auditing, and tax preparation.
-                  </p>
+              <div className="modal-footer d-flex justify-content-between align-items-center">
+                <button
+                  type="button"
+                  className="btn btn-outline-info btn-sm d-inline-flex align-items-center"
+                  onClick={handleResendEmail}
+                  disabled={scheduling || !schedCand}
+                  title="Resend email with current round, date, and link"
+                >
+                  <i className="ti ti-mail-forward me-1 fs-14" /> Resend Email to Candidate
+                </button>
+                <div>
+                  <button type="button" className="btn btn-light me-2" data-bs-dismiss="modal">
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={scheduling}>
+                    {scheduling ? 'Saving...' : 'Save & Send Email'}
+                  </button>
                 </div>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       </div>
-      {/* Candidate Details */}
+
+      {/* Submit Scorecard & Rating Modal */}
+      <div className="modal fade" id="submit_scorecard_modal">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h4 className="modal-title">Candidate Evaluation & Rating Scorecard</h4>
+              <button
+                type="button"
+                className="btn-close custom-btn-close"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+              />
+            </div>
+            <form onSubmit={handleScorecardSubmit}>
+              <div className="modal-body">
+                {evalCand && (
+                  <div className="bg-light p-2 rounded mb-3 fs-13">
+                    <strong>Candidate:</strong> {evalCand.name}<br />
+                    <strong>Applied Job:</strong> {evalCand.jobTitle}
+                  </div>
+                )}
+                <div className="mb-3">
+                  <label className="form-label fw-medium d-block">Overall Candidate Rating (1 to 5 Stars)</label>
+                  <div className="d-flex gap-2 fs-20 cursor-pointer">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <i
+                        key={star}
+                        className={`ti ti-star-filled ${star <= ratingScore ? 'text-warning' : 'text-muted opacity-25'}`}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setRatingScore(star)}
+                      />
+                    ))}
+                    <span className="fs-14 fw-bold ms-2 align-self-center text-primary">{ratingScore} / 5 Stars</span>
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fw-medium">Evaluation Feedback Notes</label>
+                  <textarea
+                    className="form-control"
+                    rows={4}
+                    value={feedbackNotes}
+                    onChange={(e) => setFeedbackNotes(e.target.value)}
+                    placeholder="Enter technical skills, communication performance, and assessment notes..."
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" data-bs-dismiss="modal">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-warning text-white" disabled={evaluating}>
+                  {evaluating ? 'Submitting...' : 'Submit Rating & Scorecard'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      {/* GENERATE OFFER LETTER MODAL */}
+      <div className="modal fade" id="generate_offer_modal" tabIndex={-1} aria-hidden="true">
+        <div className="modal-dialog modal-dialog-centered modal-lg">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">
+                <i className="ti ti-file-certificate text-success me-2" />
+                Generate Offer Letter - {offerCand?.name}
+              </h5>
+              <button type="button" className="btn-close custom-btn-close" data-bs-dismiss="modal" aria-label="Close" />
+            </div>
+            <form onSubmit={handleOfferSubmit}>
+              <div className="modal-body">
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <label className="form-label fw-medium">Candidate</label>
+                    <input type="text" className="form-control" value={`${offerCand?.name || ''} (${offerCand?.email || ''})`} disabled />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label fw-medium">Applied Position</label>
+                    <input type="text" className="form-control" value={offerCand?.jobTitle || ''} disabled />
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label fw-medium">Annual CTC (₹) *</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="e.g. 600000"
+                      required
+                      value={annualCtc}
+                      onChange={(e) => {
+                        const ctc = parseFloat(e.target.value) || 0;
+                        setAnnualCtc(e.target.value);
+                        setBasicSalary(String(Math.round(ctc * 0.5)));
+                        setHra(String(Math.round(ctc * 0.2)));
+                        setSpecialAllowance(String(Math.round(ctc * 0.3)));
+                      }}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label fw-medium">Expected Joining Date *</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      required
+                      value={joiningDate}
+                      onChange={(e) => setJoiningDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-md-4">
+                    <label className="form-label fw-medium">Basic Salary (₹ / yr)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={basicSalary}
+                      onChange={(e) => setBasicSalary(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label fw-medium">HRA (₹ / yr)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={hra}
+                      onChange={(e) => setHra(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label fw-medium">Special Allowance (₹ / yr)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={specialAllowance}
+                      onChange={(e) => setSpecialAllowance(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-md-12">
+                    <label className="form-label fw-medium">Offer Terms & Notes</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      value={offerNotes}
+                      onChange={(e) => setOfferNotes(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" data-bs-dismiss="modal">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-success text-white" disabled={generatingOffer}>
+                  {generatingOffer ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" />
+                      Generating PDF & Emailing...
+                    </>
+                  ) : (
+                    <>
+                      <i className="ti ti-mail-forward me-1" /> Generate PDF & Send Offer Email
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+
     </>
   );
 };

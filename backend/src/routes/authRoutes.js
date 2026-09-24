@@ -16,18 +16,21 @@ const UPLOAD_BASE = process.env.UPLOAD_PATH
     ? path.resolve(process.env.UPLOAD_PATH) 
     : path.resolve('uploads');
 
-const logoDir = path.join(UPLOAD_BASE, 'logos');
-if (!fs.existsSync(logoDir)) {
-    fs.mkdirSync(logoDir, { recursive: true });
-}
-
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, logoDir);
+        let dir = path.join(UPLOAD_BASE, 'logos');
+        if (file.fieldname === 'avatar' || file.fieldname === 'profileImage') {
+            dir = path.join(UPLOAD_BASE, 'profiles');
+        }
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        cb(null, dir);
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'logo-' + uniqueSuffix + path.extname(file.originalname));
+        const prefix = file.fieldname === 'avatar' || file.fieldname === 'profileImage' ? 'profile-' : 'logo-';
+        cb(null, prefix + uniqueSuffix + path.extname(file.originalname));
     }
 });
 const upload = multer({ storage });

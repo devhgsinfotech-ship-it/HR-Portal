@@ -401,6 +401,7 @@ aiConfiguration:"/ai-configuration",
   // RECRUITMENT
   jobgrid: "/job-grid",
   joblist: "/job-list",
+  publicJobApply: "/careers/job/:id",
   candidatesGrid: "/candidates-grid",
   candidateslist: "/candidates",
   candidateskanban: "/candidates-kanban",

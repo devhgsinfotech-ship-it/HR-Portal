@@ -71,6 +71,9 @@ async function getNotifications(req, res) {
         case 'DOCUMENT_VERIFIED':
           targetUrl = '/pages/profile';
           break;
+        case 'JOB_APPLICATION_RECEIVED':
+          targetUrl = '/candidates';
+          break;
         default:
           targetUrl = null;
       }
