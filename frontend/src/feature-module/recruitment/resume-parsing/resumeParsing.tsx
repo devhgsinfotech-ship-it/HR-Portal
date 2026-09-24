@@ -28,14 +28,21 @@ interface ParsedResult {
   skills: string[];
   education: string;
   summary: string;
+  matchScore?: number;
+  matchedSkills?: string[];
+  missingSkills?: string[];
+  experienceFit?: string;
+  aiRecommendation?: string;
 }
 
 const ResumeParsing: React.FC = () => {
   const [resumeList, setResumeList] = useState<ResumeParsedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [jobPostings, setJobPostings] = useState<any[]>([]);
 
   // Parsing modal states
   const [parseFile, setParseFile] = useState<File | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<string>('');
   const [parsing, setParsing] = useState(false);
   const [parsedResult, setParsedResult] = useState<ParsedResult | null>(null);
 
@@ -67,8 +74,20 @@ const ResumeParsing: React.FC = () => {
     }
   };
 
+  const fetchJobPostings = async () => {
+    try {
+      const res = await apiClient.get('/job-postings');
+      if (Array.isArray(res.data)) {
+        setJobPostings(res.data);
+      }
+    } catch (err) {
+      console.error('Error fetching job postings:', err);
+    }
+  };
+
   useEffect(() => {
     fetchResumes();
+    fetchJobPostings();
   }, []);
 
   const handleUploadAndParse = async (e: React.FormEvent) => {
@@ -82,6 +101,9 @@ const ResumeParsing: React.FC = () => {
     try {
       const formData = new FormData();
       formData.append('resume', parseFile);
+      if (selectedJobId) {
+        formData.append('jobPostingId', selectedJobId);
+      }
 
       const res = await apiClient.post('/applicants/parse-resume', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -249,29 +271,55 @@ const ResumeParsing: React.FC = () => {
             </div>
             <form onSubmit={handleUploadAndParse}>
               <div className="modal-body">
-                <div className="mb-3">
-                  <label className="form-label fw-medium">Upload Candidate Resume (.pdf, .doc, .docx)</label>
-                  <input
-                    type="file"
-                    className="form-control"
-                    accept=".pdf,.doc,.docx"
-                    onChange={(e) => setParseFile(e.target.files?.[0] || null)}
-                    required
-                  />
+                <div className="row g-3 mb-3">
+                  <div className="col-md-6">
+                    <label className="form-label fw-medium">Upload Candidate Resume (.pdf, .doc, .docx)</label>
+                    <input
+                      type="file"
+                      className="form-control"
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => setParseFile(e.target.files?.[0] || null)}
+                      required
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label fw-medium">Target Job Posting (For AI Match Score)</label>
+                    <select
+                      className="form-select"
+                      value={selectedJobId}
+                      onChange={(e) => setSelectedJobId(e.target.value)}
+                    >
+                      <option value="">-- General Match / Select Job --</option>
+                      {jobPostings.map((job) => (
+                        <option key={job.id} value={job.id}>
+                          {job.title} ({job.jobCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {parsing && (
-                  <div className="text-center py-3">
-                    <div className="spinner-border text-primary me-2" role="status" />
-                    <span>Parsing resume text & extracting candidate skills...</span>
+                  <div className="text-center py-4 bg-light rounded border">
+                    <div className="spinner-border text-primary mb-2" role="status" />
+                    <h6 className="text-primary mb-1">Analyzing Candidate Resume...</h6>
+                    <p className="text-muted fs-13 mb-0">Extracting skills, experience, and calculating AI Job Match Score</p>
                   </div>
                 )}
 
                 {parsedResult && !parsing && (
                   <div className="bg-light p-3 rounded border mt-3">
-                    <h6 className="fw-bold text-success mb-2">
-                      <i className="ti ti-circle-check me-1" /> Extracted Candidate Profile:
-                    </h6>
+                    <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-3">
+                      <h6 className="fw-bold text-success mb-0">
+                        <i className="ti ti-circle-check me-1" /> Extracted Candidate & AI Match Profile
+                      </h6>
+                      {parsedResult.matchScore !== undefined && (
+                        <span className={`badge ${parsedResult.matchScore >= 75 ? 'bg-success' : parsedResult.matchScore >= 50 ? 'bg-warning text-dark' : 'bg-danger'} fs-14 fw-bold px-3 py-1`}>
+                          <i className="ti ti-brain me-1" /> AI Match: {parsedResult.matchScore}%
+                        </span>
+                      )}
+                    </div>
+
                     <div className="row g-2 fs-13 mb-3">
                       <div className="col-md-6">
                         <strong>Name:</strong> {parsedResult.candidateName}
@@ -290,19 +338,49 @@ const ResumeParsing: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="mb-2">
-                      <strong>Extracted Skills:</strong>
-                      <div className="d-flex flex-wrap gap-1 mt-1">
+                    <div className="mb-3">
+                      <strong className="d-block mb-1">Extracted Candidate Skills:</strong>
+                      <div className="d-flex flex-wrap gap-1">
                         {parsedResult.skills.map((skill, idx) => (
-                          <span key={idx} className="badge bg-primary-light text-primary border border-primary">
+                          <span key={idx} className="badge bg-primary-light text-primary border border-primary fs-12">
                             {skill}
                           </span>
                         ))}
                       </div>
                     </div>
 
-                    <p className="fs-12 text-muted mb-0 mt-2">
-                      <strong>Executive Summary:</strong> {parsedResult.summary}
+                    {parsedResult.matchedSkills && parsedResult.matchedSkills.length > 0 && (
+                      <div className="mb-3">
+                        <strong className="d-block text-success mb-1">
+                          <i className="ti ti-check me-1" /> Matched Job Skills:
+                        </strong>
+                        <div className="d-flex flex-wrap gap-1">
+                          {parsedResult.matchedSkills.map((mSkill, idx) => (
+                            <span key={idx} className="badge bg-success-light text-success border border-success fs-12">
+                              ✓ {mSkill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {parsedResult.missingSkills && parsedResult.missingSkills.length > 0 && (
+                      <div className="mb-3">
+                        <strong className="d-block text-warning mb-1">
+                          <i className="ti ti-alert-triangle me-1" /> Missing Skill Gaps:
+                        </strong>
+                        <div className="d-flex flex-wrap gap-1">
+                          {parsedResult.missingSkills.map((gapSkill, idx) => (
+                            <span key={idx} className="badge bg-warning-light text-warning border border-warning fs-12">
+                              ! {gapSkill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="fs-12 text-muted mb-0 mt-2 bg-white p-2 rounded border">
+                      <strong>AI Executive Summary:</strong> {parsedResult.summary}
                     </p>
                   </div>
                 )}

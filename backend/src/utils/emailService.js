@@ -345,11 +345,74 @@ async function sendInterviewScheduleEmail({ toEmail, candidateName, jobTitle, ro
     }
 }
 
+/**
+ * Sends Offer Letter email with CTC breakdown to Candidate.
+ */
+async function sendOfferLetterEmail({ toEmail, candidateName, jobTitle, annualCtc, joiningDate, pdfPath, companyName = 'HGS-HRMS' }) {
+    try {
+        if (!toEmail) return;
+        const transporter = await getTransporter();
+
+        const formattedCtc = typeof annualCtc === 'number'
+            ? `₹${annualCtc.toLocaleString('en-IN')}`
+            : annualCtc;
+
+        const formattedDate = new Date(joiningDate).toLocaleDateString('en-IN', {
+            dateStyle: 'full'
+        });
+
+        const mailOptions = {
+            from: `"${companyName} HR Team" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
+            to: toEmail,
+            subject: `Job Offer Letter: ${jobTitle} | ${companyName}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                    <div style="text-align: center; padding-bottom: 15px; border-bottom: 2px solid #28a745;">
+                        <h2 style="color: #28a745; margin: 0;">${companyName}</h2>
+                        <span style="color: #777; font-size: 13px;">Official Employment Offer</span>
+                    </div>
+                    <h3 style="color: #333; margin-top: 20px;">Congratulations, ${candidateName}!</h3>
+                    <p style="color: #555; font-size: 15px; line-height: 1.6;">
+                        We are thrilled to offer you the position of <strong>${jobTitle}</strong> at <strong>${companyName}</strong>! Following your interviews, we were thoroughly impressed with your background and achievements.
+                    </p>
+                    <div style="background-color: #f4fdf7; padding: 18px; border-left: 4px solid #28a745; border-radius: 6px; margin: 20px 0;">
+                        <h4 style="margin-top: 0; color: #222;">Offer Highlights:</h4>
+                        <ul style="color: #444; line-height: 1.8; padding-left: 20px; font-size: 14px; margin-bottom: 0;">
+                            <li><strong>Designation / Position:</strong> ${jobTitle}</li>
+                            <li><strong>Annual CTC:</strong> ${formattedCtc} per annum</li>
+                            <li><strong>Expected Date of Joining:</strong> ${formattedDate}</li>
+                        </ul>
+                    </div>
+                    <p style="color: #555; font-size: 14px;">
+                        Please review the attached formal Offer Letter document for full details regarding your compensation package, benefits, and joining procedure.
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                    <p style="color: #999; font-size: 12px; text-align: center;">
+                        Best regards,<br/>
+                        <strong>${companyName} Talent Acquisition Team</strong>
+                    </p>
+                </div>
+            `,
+            attachments: pdfPath ? [{ filename: `Offer_Letter_${candidateName.replace(/\s+/g, '_')}.pdf`, path: pdfPath }] : []
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('--------------------------------------------------');
+        console.log('[Offer Letter Email] Sent to: %s (Message ID: %s)', toEmail, info.messageId);
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('--------------------------------------------------');
+        return info;
+    } catch (error) {
+        console.error('Error sending offer letter email:', error);
+    }
+}
+
 module.exports = {
     sendVerificationEmail,
     sendEmployeeInviteEmail,
     sendPasswordResetEmail,
     sendJobApplicationNotificationEmail,
-    sendInterviewScheduleEmail
+    sendInterviewScheduleEmail,
+    sendOfferLetterEmail
 };
 

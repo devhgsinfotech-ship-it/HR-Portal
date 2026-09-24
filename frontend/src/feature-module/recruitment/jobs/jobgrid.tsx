@@ -20,6 +20,7 @@ interface Job {
   applicantsCount?: number;
   bannerUrl?: string;
   description?: string;
+  requirements?: string;
   minSalary?: number;
   maxSalary?: number;
 }
@@ -36,9 +37,32 @@ const JobGrid = () => {
   const [newMinSalary, setNewMinSalary] = useState('');
   const [newMaxSalary, setNewMaxSalary] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newRequirements, setNewRequirements] = useState('');
   const [newBannerFile, setNewBannerFile] = useState<File | null>(null);
   const [newBannerPreview, setNewBannerPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // View Job Details Modal State
+  const [selectedJobDetails, setSelectedJobDetails] = useState<Job | null>(null);
+
+  const extractSkillBadges = (text: string) => {
+    if (!text) return [];
+    const skillList = [
+      'React', 'Node.js', 'JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'C#', 'PHP', 
+      'Laravel', 'Express', 'HTML', 'CSS', 'Tailwind', 'Bootstrap', 'SQL', 'PostgreSQL', 
+      'MySQL', 'MongoDB', 'Redis', 'AWS', 'Docker', 'Kubernetes', 'Git', 'REST API', 
+      'GraphQL', 'Agile', 'DevOps', 'Android', 'iOS', 'Flutter', 'React Native', 
+      'Figma', 'UI/UX', 'Communication', 'Leadership', 'Management', 'Sales', 'HR'
+    ];
+    const found: string[] = [];
+    skillList.forEach(s => {
+      const regex = new RegExp(`\\b${s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
+      if (regex.test(text)) {
+        found.push(s);
+      }
+    });
+    return found;
+  };
 
   // Apply Job Modal States
   const [applyJobId, setApplyJobId] = useState<number | null>(null);
@@ -79,6 +103,7 @@ const JobGrid = () => {
             applicantsCount: j.stageCounts?.total || 0,
             bannerUrl: j.bannerUrl,
             description: j.description,
+            requirements: j.requirements,
             minSalary: j.minSalary,
             maxSalary: j.maxSalary
           };
@@ -123,6 +148,7 @@ const JobGrid = () => {
       if (newMinSalary) formData.append('minSalary', newMinSalary);
       if (newMaxSalary) formData.append('maxSalary', newMaxSalary);
       formData.append('description', newDescription);
+      formData.append('requirements', newRequirements);
       formData.append('status', 'OPEN');
       if (newBannerFile) {
         formData.append('banner', newBannerFile);
@@ -138,6 +164,7 @@ const JobGrid = () => {
       setNewMinSalary('');
       setNewMaxSalary('');
       setNewDescription('');
+      setNewRequirements('');
       setNewBannerFile(null);
       setNewBannerPreview(null);
 
@@ -354,9 +381,19 @@ const JobGrid = () => {
                       </div>
 
                       <h5 className="fw-semibold text-truncate mb-1" title={job.title}>
-                        {job.title}
+                        <a
+                          href="#view_job_modal"
+                          data-bs-toggle="modal"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setSelectedJobDetails(job);
+                          }}
+                          className="text-dark hover-primary"
+                        >
+                          {job.title}
+                        </a>
                       </h5>
-                        <span className="text-muted fs-12 d-block mb-3">Code: {job.jobCode}</span>
+                      <span className="text-muted fs-12 d-block mb-3">Code: {job.jobCode}</span>
 
                       <div className="d-flex flex-column gap-2 fs-13 mb-3">
                         <div className="d-flex align-items-center text-dark">
@@ -374,7 +411,17 @@ const JobGrid = () => {
                       </div>
 
                       <div className="d-flex align-items-center justify-content-between border-top pt-3 flex-wrap gap-1">
-                        <div className="d-flex gap-1">
+                        <div className="d-flex gap-1 flex-wrap">
+                          <button
+                            type="button"
+                            className="btn btn-purple btn-sm text-white d-flex align-items-center"
+                            data-bs-toggle="modal"
+                            data-bs-target="#view_job_modal"
+                            onClick={() => setSelectedJobDetails(job)}
+                            title="View Job Description & Required Skills"
+                          >
+                            <i className="ti ti-eye me-1 fs-14"></i>Details
+                          </button>
                           <button
                             type="button"
                             className="btn btn-primary btn-sm d-flex align-items-center"
@@ -479,7 +526,22 @@ const JobGrid = () => {
                         className="form-control"
                         value={newDescription}
                         onChange={(e) => setNewDescription(e.target.value)}
-                        placeholder="Enter detailed job description..."
+                        placeholder="Enter detailed job roles & responsibilities..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="col-md-12">
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold text-purple">
+                        <i className="ti ti-subtask me-1" /> Required Skills & Qualifications
+                      </label>
+                      <textarea
+                        rows={2}
+                        className="form-control"
+                        value={newRequirements}
+                        onChange={(e) => setNewRequirements(e.target.value)}
+                        placeholder="e.g. React, Node.js, TypeScript, PostgreSQL, 3+ years experience, Strong REST API knowledge"
                       />
                     </div>
                   </div>
@@ -670,6 +732,137 @@ const JobGrid = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      </div>
+
+      {/* VIEW JOB DETAILS & REQUIRED SKILLS MODAL */}
+      <div className="modal fade" id="view_job_modal" tabIndex={-1} aria-hidden="true">
+        <div className="modal-dialog modal-dialog-centered modal-lg">
+          <div className="modal-content">
+            <div className="modal-header bg-gradient-primary text-white">
+              <h5 className="modal-title text-white d-flex align-items-center">
+                <i className="ti ti-briefcase fs-20 me-2" />
+                {selectedJobDetails?.title || 'Job Description & Requirements'}
+              </h5>
+              <button type="button" className="btn-close custom-btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" />
+            </div>
+            <div className="modal-body p-4">
+              {selectedJobDetails ? (
+                <div>
+                  {/* Job Banner Preview */}
+                  {selectedJobDetails.bannerUrl && (
+                    <div className="rounded overflow-hidden mb-3 border shadow-sm" style={{ maxHeight: '200px' }}>
+                      <img
+                        src={selectedJobDetails.bannerUrl.startsWith('http') ? selectedJobDetails.bannerUrl : `${apiClient.defaults.baseURL || ''}${selectedJobDetails.bannerUrl}`}
+                        alt={selectedJobDetails.title}
+                        className="w-100 h-100"
+                        style={{ objectFit: 'cover' }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Header Meta Box */}
+                  <div className="card bg-light border p-3 mb-3 rounded-3">
+                    <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                      <div>
+                        <span className="badge bg-primary me-2">{selectedJobDetails.jobCode}</span>
+                        <span className="badge bg-light text-dark border me-2">{selectedJobDetails.departmentName}</span>
+                        <span className={`badge ${selectedJobDetails.status === 'OPEN' ? 'bg-success' : 'bg-secondary'}`}>
+                          {selectedJobDetails.status || 'OPEN'}
+                        </span>
+                      </div>
+                      <div className="text-end">
+                        <span className="fw-bold text-success fs-15 d-block">{selectedJobDetails.salaryRange}</span>
+                        <span className="fs-12 text-muted">Location: <strong>{selectedJobDetails.location}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Role Specifications Grid */}
+                  <div className="row g-2 mb-3 fs-13">
+                    <div className="col-md-3 col-6">
+                      <div className="p-2 border rounded bg-white">
+                        <span className="text-muted d-block fs-11">Vacancies</span>
+                        <strong className="text-dark">{selectedJobDetails.vacancies || 1} Openings</strong>
+                      </div>
+                    </div>
+                    <div className="col-md-3 col-6">
+                      <div className="p-2 border rounded bg-white">
+                        <span className="text-muted d-block fs-11">Total Applicants</span>
+                        <strong className="text-info">{selectedJobDetails.applicantsCount || 0} Candidates</strong>
+                      </div>
+                    </div>
+                    <div className="col-md-3 col-6">
+                      <div className="p-2 border rounded bg-white">
+                        <span className="text-muted d-block fs-11">Employment Type</span>
+                        <strong className="text-dark">{selectedJobDetails.employmentType}</strong>
+                      </div>
+                    </div>
+                    <div className="col-md-3 col-6">
+                      <div className="p-2 border rounded bg-white">
+                        <span className="text-muted d-block fs-11">Posted Date</span>
+                        <strong className="text-dark">{selectedJobDetails.postedDate}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Job Description */}
+                  <div className="bg-white p-3 rounded border mb-3">
+                    <h6 className="fw-bold text-dark mb-2">
+                      <i className="ti ti-file-text me-1 text-primary" /> Job Description & Roles:
+                    </h6>
+                    <p className="fs-13 text-secondary mb-0 style-description" style={{ whiteSpace: 'pre-line' }}>
+                      {selectedJobDetails.description || 'No detailed description specified for this job posting.'}
+                    </p>
+                  </div>
+
+                  {/* Required Skills & Qualifications */}
+                  <div className="bg-white p-3 rounded border mb-3">
+                    <h6 className="fw-bold text-dark mb-2">
+                      <i className="ti ti-subtask me-1 text-purple" /> Required Skills & Qualifications:
+                    </h6>
+                    {selectedJobDetails.requirements ? (
+                      <p className="fs-13 text-secondary mb-3 style-requirements" style={{ whiteSpace: 'pre-line' }}>
+                        {selectedJobDetails.requirements}
+                      </p>
+                    ) : null}
+
+                    {/* Detected Core Skill Tags */}
+                    <div>
+                      <span className="fs-12 text-muted d-block mb-1 font-semibold">Key Skill Tags:</span>
+                      <div className="d-flex flex-wrap gap-1">
+                        {extractSkillBadges(`${selectedJobDetails.description || ''} ${selectedJobDetails.requirements || ''} ${selectedJobDetails.title}`).length > 0 ? (
+                          extractSkillBadges(`${selectedJobDetails.description || ''} ${selectedJobDetails.requirements || ''} ${selectedJobDetails.title}`).map((skill, idx) => (
+                            <span key={idx} className="badge bg-purple-transparent text-purple border border-purple fs-12">
+                              ✓ {skill}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-muted fs-12 italic">General Skill Profile</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-muted">
+                  Select a job posting to view details.
+                </div>
+              )}
+            </div>
+            <div className="modal-footer d-flex justify-content-between">
+              <button
+                type="button"
+                className="btn btn-outline-info btn-sm"
+                onClick={() => handleShareLink(selectedJobDetails?.id)}
+              >
+                <i className="ti ti-share me-1" /> Copy Share Link
+              </button>
+              <button type="button" className="btn btn-light" data-bs-dismiss="modal">
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>

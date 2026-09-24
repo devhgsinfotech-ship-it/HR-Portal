@@ -21,6 +21,8 @@ interface Candidate {
   stage: string;
   rawStage: string;
   rating?: number;
+  matchScore?: number;
+  aiInsights?: any;
   interviews?: any[];
 }
 
@@ -38,6 +40,7 @@ const CandidatesList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filterStage, setFilterStage] = useState<string>('ALL');
 
+
   // Modal States for Interview Scheduling
   const [schedCand, setSchedCand] = useState<Candidate | null>(null);
   const [interviewDate, setInterviewDate] = useState<string>('');
@@ -50,6 +53,17 @@ const CandidatesList: React.FC = () => {
   const [ratingScore, setRatingScore] = useState<number>(5);
   const [feedbackNotes, setFeedbackNotes] = useState<string>('');
   const [evaluating, setEvaluating] = useState<boolean>(false);
+
+  // Modal States for Offer Letter & Hired Conversion
+  const [offerCand, setOfferCand] = useState<Candidate | null>(null);
+  const [annualCtc, setAnnualCtc] = useState<string>('600000');
+  const [basicSalary, setBasicSalary] = useState<string>('300000');
+  const [hra, setHra] = useState<string>('120000');
+  const [specialAllowance, setSpecialAllowance] = useState<string>('180000');
+  const [joiningDate, setJoiningDate] = useState<string>('');
+  const [offerNotes, setOfferNotes] = useState<string>('Subject to background verification and document submission.');
+  const [generatingOffer, setGeneratingOffer] = useState<boolean>(false);
+  const [converting, setConverting] = useState<boolean>(false);
 
   const fetchApplicants = async () => {
     setLoading(true);
@@ -71,6 +85,8 @@ const CandidatesList: React.FC = () => {
           stage: STAGE_CONFIG[a.stage]?.label || a.stage,
           rawStage: a.stage || 'APPLIED',
           rating: a.rating || 0,
+          matchScore: a.matchScore || (a.rating > 0 ? a.rating * 18 : 82),
+          aiInsights: a.aiInsights,
           interviews: a.interviews || []
         }));
         setCandidates(mapped);
@@ -88,6 +104,7 @@ const CandidatesList: React.FC = () => {
   useEffect(() => {
     fetchApplicants();
   }, []);
+
 
   const handleUpdateStage = async (id: number, newStage: string) => {
     try {
@@ -169,6 +186,67 @@ const CandidatesList: React.FC = () => {
     setRatingScore(cand.rating || 5);
   };
 
+  // Open Offer Letter Modal
+  const handleOpenOfferModal = (cand: Candidate) => {
+    setOfferCand(cand);
+    const in15Days = new Date();
+    in15Days.setDate(in15Days.getDate() + 15);
+    setJoiningDate(in15Days.toISOString().slice(0, 10));
+  };
+
+  // Generate & Send Offer Letter Submit
+  const handleOfferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!offerCand || !annualCtc || !joiningDate) {
+      alert('Please fill in Annual CTC and Joining Date');
+      return;
+    }
+
+    setGeneratingOffer(true);
+    try {
+      const res = await apiClient.post(`/applicants/${offerCand.id}/offer-letter`, {
+        annualCtc,
+        basicSalary,
+        hra,
+        specialAllowance,
+        joiningDate,
+        notes: offerNotes
+      });
+
+      alert(`Offer letter generated and sent to ${offerCand.name} (${offerCand.email})! Stage updated to OFFER.`);
+      const closeBtn = document.querySelector('#generate_offer_modal .custom-btn-close') as HTMLElement;
+      if (closeBtn) closeBtn.click();
+
+      if (res.data?.offerLetterUrl) {
+        window.open(`${apiClient.defaults.baseURL || ''}${res.data.offerLetterUrl}`, '_blank');
+      }
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to generate offer letter');
+    } finally {
+      setGeneratingOffer(false);
+    }
+  };
+
+  // One-Click Convert Hired Candidate to Employee
+  const handleConvertToEmployee = async (cand: Candidate) => {
+    if (!window.confirm(`Are you sure you want to convert candidate "${cand.name}" into a full Employee? This will generate their employee profile and send onboarding credentials.`)) return;
+
+    setConverting(true);
+    try {
+      const res = await apiClient.post(`/applicants/${cand.id}/convert-to-employee`, {
+        dateOfJoining: new Date().toISOString().slice(0, 10)
+      });
+
+      alert(`Success! ${cand.name} converted to Employee (${res.data.employeeCode}). Onboarding invite sent to ${cand.email}.`);
+      fetchApplicants();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to convert candidate to employee');
+    } finally {
+      setConverting(false);
+    }
+  };
+
   // Submit Scorecard Rating
   const handleScorecardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,7 +305,9 @@ const CandidatesList: React.FC = () => {
           <div>
             <h6 className="fw-medium mb-0">{record.name}</h6>
             <span className="text-muted fs-12">{record.email}</span>
-            <div className="mt-1">{renderStars(record.rating || 0)}</div>
+            <div className="d-flex align-items-center gap-1 mt-1">
+              {renderStars(record.rating || 0)}
+            </div>
           </div>
         </div>
       ),
@@ -337,6 +417,29 @@ const CandidatesList: React.FC = () => {
           >
             <i className="ti ti-star me-1 fs-14" /> Rate
           </button>
+
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-success py-1 px-2 d-inline-flex align-items-center"
+            data-bs-toggle="modal"
+            data-bs-target="#generate_offer_modal"
+            onClick={() => handleOpenOfferModal(record)}
+            title="Generate & Send Offer Letter"
+          >
+            <i className="ti ti-file-certificate me-1 fs-14" /> Offer
+          </button>
+
+          {(record.rawStage === 'OFFER' || record.rawStage === 'HIRED') && (
+            <button
+              type="button"
+              className="btn btn-sm btn-success text-white py-1 px-2 d-inline-flex align-items-center"
+              onClick={() => handleConvertToEmployee(record)}
+              disabled={converting}
+              title="Convert Candidate to Active Employee Profile"
+            >
+              <i className="ti ti-user-check me-1 fs-14" /> {converting ? 'Converting...' : 'Convert'}
+            </button>
+          )}
 
           <button
             type="button"
@@ -587,6 +690,120 @@ const CandidatesList: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* GENERATE OFFER LETTER MODAL */}
+      <div className="modal fade" id="generate_offer_modal" tabIndex={-1} aria-hidden="true">
+        <div className="modal-dialog modal-dialog-centered modal-lg">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">
+                <i className="ti ti-file-certificate text-success me-2" />
+                Generate Offer Letter - {offerCand?.name}
+              </h5>
+              <button type="button" className="btn-close custom-btn-close" data-bs-dismiss="modal" aria-label="Close" />
+            </div>
+            <form onSubmit={handleOfferSubmit}>
+              <div className="modal-body">
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <label className="form-label fw-medium">Candidate</label>
+                    <input type="text" className="form-control" value={`${offerCand?.name || ''} (${offerCand?.email || ''})`} disabled />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label fw-medium">Applied Position</label>
+                    <input type="text" className="form-control" value={offerCand?.jobTitle || ''} disabled />
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label fw-medium">Annual CTC (₹) *</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="e.g. 600000"
+                      required
+                      value={annualCtc}
+                      onChange={(e) => {
+                        const ctc = parseFloat(e.target.value) || 0;
+                        setAnnualCtc(e.target.value);
+                        setBasicSalary(String(Math.round(ctc * 0.5)));
+                        setHra(String(Math.round(ctc * 0.2)));
+                        setSpecialAllowance(String(Math.round(ctc * 0.3)));
+                      }}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label fw-medium">Expected Joining Date *</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      required
+                      value={joiningDate}
+                      onChange={(e) => setJoiningDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-md-4">
+                    <label className="form-label fw-medium">Basic Salary (₹ / yr)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={basicSalary}
+                      onChange={(e) => setBasicSalary(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label fw-medium">HRA (₹ / yr)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={hra}
+                      onChange={(e) => setHra(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label fw-medium">Special Allowance (₹ / yr)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={specialAllowance}
+                      onChange={(e) => setSpecialAllowance(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-md-12">
+                    <label className="form-label fw-medium">Offer Terms & Notes</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      value={offerNotes}
+                      onChange={(e) => setOfferNotes(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" data-bs-dismiss="modal">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-success text-white" disabled={generatingOffer}>
+                  {generatingOffer ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" />
+                      Generating PDF & Emailing...
+                    </>
+                  ) : (
+                    <>
+                      <i className="ti ti-mail-forward me-1" /> Generate PDF & Send Offer Email
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+
     </>
   );
 };

@@ -39,7 +39,8 @@ router.put('/:id/stage', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), applican
 router.post('/:id/schedule-interview', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), applicantController.scheduleInterview);
 router.post('/:id/resend-interview-email', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), applicantController.resendInterviewEmail);
 router.put('/interview/:interviewId/scorecard', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), applicantController.submitInterviewScorecard);
-router.post('/parse-resume', upload.single('resume'), applicantController.parseResume);
+router.post('/:id/offer-letter', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), applicantController.generateOfferLetter);
+router.post('/:id/convert-to-employee', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), applicantController.convertToEmployee);
 router.delete('/:id', requireRole('COMPANY_ADMIN', 'HR'), applicantController.deleteApplicant);
 
 module.exports = router;

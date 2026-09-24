@@ -1,6 +1,10 @@
-// backend/src/controllers/applicantController.js
+const PDFDocument = require('pdfkit');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const prisma = require('../config/prisma');
-const { sendJobApplicationNotificationEmail, sendInterviewScheduleEmail } = require('../utils/emailService');
+const { sendJobApplicationNotificationEmail, sendInterviewScheduleEmail, sendOfferLetterEmail, sendEmployeeInviteEmail } = require('../utils/emailService');
+const { extractSkillsFromText, extractExperienceYears, calculateSkillMatch } = require('../utils/aiSkillMatcher');
 
 // Helper to send email alerts and create in-app notifications for HR & Company Admin when an application is submitted
 async function sendApplicationNotificationToHR(job, applicant) {
@@ -94,6 +98,7 @@ async function getApplicants(req, res) {
       resumeUrl: app.resumeUrl,
       stage: app.stage,
       rating: app.rating,
+
       notes: app.notes,
       appliedAt: app.appliedAt,
       jobPostingId: app.jobPostingId,
@@ -424,44 +429,238 @@ async function publicApplyJob(req, res) {
   }
 }
 
-// ── RESUME PARSER ──────────────────────────────────────────────
-async function parseResume(req, res) {
-  try {
-    let resumeUrl = req.body.resumeUrl || null;
-    let originalName = 'uploaded-resume.pdf';
 
-    if (req.file) {
-      resumeUrl = `/uploads/documents/${req.file.filename}`;
-      originalName = req.file.originalname;
+
+// ── GENERATE & SEND OFFER LETTER ───────────────────────────────
+async function generateOfferLetter(req, res) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { annualCtc, joiningDate, basicSalary, hra, specialAllowance, notes, sendEmail = true } = req.body;
+
+    if (isNaN(id) || !annualCtc || !joiningDate) {
+      return res.status(400).json({ message: 'Applicant ID, Annual CTC, and Joining Date are required' });
     }
 
-    const cleanName = originalName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, ' ');
-    const nameParts = cleanName.split(' ');
-    const extractedName = nameParts.length > 1 ? cleanName : 'Applicant Candidate';
-    const extractedEmail = `${cleanName.toLowerCase().replace(/\s+/g, '.')}@example.com`;
+    const applicant = await prisma.applicant.findUnique({
+      where: { id },
+      include: { jobPosting: { include: { company: true } } }
+    });
 
-    // Extracted sample skills & experience keywords
-    const sampleSkills = ['React.js', 'Node.js', 'TypeScript', 'MySQL', 'HRMS Management', 'REST API', 'Communication'];
-    const experienceYears = Math.floor(Math.random() * 5) + 2;
+    if (!applicant) {
+      return res.status(404).json({ message: 'Applicant not found' });
+    }
+
+    const companyName = applicant.jobPosting?.company?.name || 'HGS-HRMS';
+    const candidateName = applicant.fullName || `${applicant.firstName || ''} ${applicant.lastName || ''}`.trim() || 'Candidate';
+    const jobTitle = applicant.jobPosting?.title || 'Position';
+    const parsedCtc = parseFloat(annualCtc);
+    const formattedCtc = `₹${parsedCtc.toLocaleString('en-IN')}`;
+
+    // 1. Generate Offer Letter PDF with PDFKit
+    const docDir = path.resolve('uploads', 'documents');
+    if (!fs.existsSync(docDir)) {
+      fs.mkdirSync(docDir, { recursive: true });
+    }
+
+    const filename = `offer-letter-${id}-${Date.now()}.pdf`;
+    const fullPdfPath = path.join(docDir, filename);
+    const relativePdfUrl = `/uploads/documents/${filename}`;
+
+    const doc = new PDFDocument({ margin: 50 });
+    const writeStream = fs.createWriteStream(fullPdfPath);
+    doc.pipe(writeStream);
+
+    // Title / Header
+    doc.fillColor('#28a745').fontSize(22).text(companyName, { align: 'center' });
+    doc.fontSize(12).fillColor('#777777').text('OFFICIAL OFFER OF EMPLOYMENT', { align: 'center' }).moveDown(1.5);
+
+    doc.fillColor('#333333').fontSize(11).text(`Date: ${new Date().toLocaleDateString('en-IN')}`);
+    doc.text(`Candidate: ${candidateName}`);
+    doc.text(`Email: ${applicant.email}`).moveDown(1);
+
+    doc.fontSize(14).fillColor('#28a745').text(`Dear ${candidateName},`, { underline: false }).moveDown(0.5);
+    doc.fontSize(11).fillColor('#333333').text(
+      `We are pleased to offer you the position of "${jobTitle}" at ${companyName}. Based on your performance during our selection process, we believe your experience and skills will be a valuable asset to our organization.`,
+      { align: 'justify' }
+    ).moveDown(1);
+
+    // Compensation Summary Box
+    doc.fontSize(12).fillColor('#28a745').text('COMPENSATION & BENEFITS BREAKDOWN:').moveDown(0.5);
+    doc.fontSize(10).fillColor('#444444');
+    doc.text(`• Annual CTC: ${formattedCtc} per annum`);
+    if (basicSalary) doc.text(`• Basic Salary: ₹${parseFloat(basicSalary).toLocaleString('en-IN')} / year`);
+    if (hra) doc.text(`• House Rent Allowance (HRA): ₹${parseFloat(hra).toLocaleString('en-IN')} / year`);
+    if (specialAllowance) doc.text(`• Special Allowance: ₹${parseFloat(specialAllowance).toLocaleString('en-IN')} / year`);
+    doc.text(`• Expected Joining Date: ${new Date(joiningDate).toLocaleDateString('en-IN', { dateStyle: 'full' })}`).moveDown(1);
+
+    if (notes) {
+      doc.fontSize(11).fillColor('#333333').text('Terms & Additional Notes:').moveDown(0.3);
+      doc.fontSize(10).fillColor('#555555').text(notes).moveDown(1);
+    }
+
+    doc.fontSize(11).fillColor('#333333').text(
+      `Please review and sign this offer letter within 5 working days. We look forward to welcoming you aboard!`,
+      { align: 'justify' }
+    ).moveDown(2);
+
+    doc.text(`Authorized Signatory,`, { align: 'right' });
+    doc.fontSize(12).fillColor('#28a745').text(`${companyName} Human Resources`, { align: 'right' });
+
+    doc.end();
+
+    // Wait for PDF file stream to finish writing
+    await new Promise((resolve, reject) => {
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+    });
+
+    // 2. Update Applicant Stage to OFFER
+    await prisma.applicant.update({
+      where: { id },
+      data: {
+        stage: 'OFFER',
+        notes: `Offer Letter Generated (CTC: ${formattedCtc}, Joining: ${joiningDate})`
+      }
+    });
+
+    // 3. Send Email Notification
+    if (sendEmail && applicant.email) {
+      await sendOfferLetterEmail({
+        toEmail: applicant.email,
+        candidateName,
+        jobTitle,
+        annualCtc: parsedCtc,
+        joiningDate,
+        pdfPath: fullPdfPath,
+        companyName
+      });
+    }
 
     res.json({
       success: true,
-      message: 'Resume parsed successfully!',
-      parsedData: {
-        fileName: originalName,
-        resumeUrl,
-        candidateName: extractedName,
-        email: extractedEmail,
-        phone: '+91 98765 43210',
-        experienceYears: `${experienceYears}+ Years`,
-        skills: sampleSkills,
-        education: 'Bachelor of Technology (B.Tech) / HR Administration',
-        summary: `Experienced professional with ${experienceYears}+ years in software engineering & HR portal operations.`
-      }
+      message: `Offer letter generated and sent successfully to ${applicant.email}!`,
+      offerLetterUrl: relativePdfUrl,
+      applicantStage: 'OFFER'
     });
   } catch (error) {
-    console.error('Error parsing resume:', error);
-    res.status(500).json({ message: error.message || 'Failed to parse resume document' });
+    console.error('Error generating offer letter:', error);
+    res.status(500).json({ message: error.message || 'Failed to generate offer letter' });
+  }
+}
+
+// ── ONE-CLICK CONVERT HIRED CANDIDATE TO EMPLOYEE ──────────────
+async function convertToEmployee(req, res) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { departmentId, designationId, employeeCode, dateOfJoining } = req.body;
+
+    if (isNaN(id)) return res.status(400).json({ message: 'Invalid applicant ID' });
+
+    const applicant = await prisma.applicant.findUnique({
+      where: { id },
+      include: { jobPosting: true }
+    });
+
+    if (!applicant) {
+      return res.status(404).json({ message: 'Applicant not found' });
+    }
+
+    const companyId = applicant.companyId;
+
+    // Check if user account already exists with candidate email
+    let user = await prisma.user.findUnique({ where: { email: applicant.email } });
+    if (!user) {
+      // Create User Account with temporary random password
+      const tempPassword = crypto.randomBytes(8).toString('hex');
+      const bcrypt = require('bcryptjs');
+      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+      user = await prisma.user.create({
+        data: {
+          email: applicant.email,
+          password: hashedPassword,
+          name: applicant.fullName || `${applicant.firstName || ''} ${applicant.lastName || ''}`.trim() || 'Employee',
+          role: 'EMPLOYEE',
+          companyId,
+          accountStatus: 'ACTIVE'
+        }
+      });
+    }
+
+    // Auto-generate employeeCode if not provided
+    let empCode = employeeCode;
+    if (!empCode) {
+      const empCount = await prisma.employee.count({ where: { user: { companyId } } });
+      empCode = `EMP-${String(empCount + 1).padStart(3, '0')}`;
+    }
+
+    // Check if Employee profile already exists
+    let employee = await prisma.employee.findUnique({ where: { userId: user.id } });
+    if (!employee) {
+      employee = await prisma.employee.create({
+        data: {
+          userId: user.id,
+          employeeCode: empCode,
+          firstName: applicant.firstName || 'Candidate',
+          lastName: applicant.lastName || '',
+          phone: applicant.phone || null,
+          departmentId: departmentId ? parseInt(departmentId, 10) : (applicant.jobPosting?.departmentId || null),
+          designationId: designationId ? parseInt(designationId, 10) : null,
+          dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : new Date(),
+          onboardingStatus: 'INVITED'
+        }
+      });
+    }
+
+    // Create Onboarding Invite Token
+    const inviteToken = crypto.randomBytes(32).toString('hex');
+    await prisma.inviteToken.create({
+      data: {
+        employeeId: employee.id,
+        userId: user.id,
+        token: inviteToken,
+        expiresAt: new Date(Date.now() + 48 * 3600 * 1000) // 48 hours
+      }
+    });
+
+    // Send Onboarding Email to New Employee
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
+    const baseDomain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
+    const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { name: true, subdomain: true }
+    });
+
+    const companyName = company?.name || 'HGS-HRMS';
+    const workspaceUrl = company?.subdomain
+      ? `${protocol}://${company.subdomain}.${baseDomain}`
+      : (process.env.APP_URL || `${protocol}://${baseDomain}`);
+
+    await sendEmployeeInviteEmail(
+      applicant.email,
+      inviteToken,
+      companyName,
+      `${applicant.firstName} ${applicant.lastName || ''}`.trim(),
+      workspaceUrl
+    );
+
+    // Update applicant stage to HIRED
+    await prisma.applicant.update({
+      where: { id },
+      data: { stage: 'HIRED' }
+    });
+
+    res.json({
+      success: true,
+      message: `Candidate converted to Employee (${empCode}) successfully! Onboarding invitation sent.`,
+      employeeId: employee.id,
+      employeeCode: empCode
+    });
+  } catch (error) {
+    console.error('Error converting candidate to employee:', error);
+    res.status(500).json({ message: error.message || 'Failed to convert candidate to employee' });
   }
 }
 
@@ -492,7 +691,9 @@ module.exports = {
   scheduleInterview,
   resendInterviewEmail,
   submitInterviewScorecard,
-  parseResume,
+  generateOfferLetter,
+  convertToEmployee,
+
   deleteApplicant
 };
 

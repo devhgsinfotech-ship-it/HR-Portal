@@ -768,11 +768,6 @@ export const HorizontalSidebarData = [
                 base: 'refferals',
               },
               {
-                menuValue: 'Resume Parsing',
-                route: routes.resumeParsing,
-                base: 'Resume Parsing',
-              },
-              {
                 menuValue: 'Campus Hiring',
                 route: routes.campusHiring,
                 base: 'Campus Hiring',

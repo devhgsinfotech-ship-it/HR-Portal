@@ -58,7 +58,7 @@ const getRouteRoles = (path: string | undefined): Role[] => {
 
   // Other Recruitment module routes (Company Admin, HR & Manager feature — Hides from Super Admin)
   const recruitmentKeywords = [
-    "recruitment", "job", "candidate", "resume-parsing", "campus-hiring"
+    "recruitment", "job", "candidate", "campus-hiring"
   ];
   if (recruitmentKeywords.some(keyword => p.includes(keyword))) {
     return ["COMPANY_ADMIN", "HR", "MANAGER"];
