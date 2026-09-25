@@ -86,45 +86,9 @@ async function seedDefaultPlans() {
         console.log(`[SEED] Created 14-day trial subscription for Company "${comp.name}" (ID: ${comp.id})`);
       }
     }
-
-    // Seed Super Admin if no SUPER_ADMIN exists
-    await seedSuperAdmin();
   } catch (error) {
     console.error('[SEED] Error seeding default subscription plans:', error);
   }
 }
 
-async function seedSuperAdmin() {
-  try {
-    const bcrypt = require('bcryptjs');
-    const adminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@aaups.com';
-    const adminPass = process.env.SUPER_ADMIN_PASSWORD || 'SuperAdmin@123';
-
-    // Check if Super Admin exists
-    const existingSuperAdmin = await prisma.user.findFirst({
-      where: { role: 'SUPER_ADMIN' }
-    });
-
-    if (!existingSuperAdmin) {
-      console.log(`[SEED] Creating default Super Admin account (${adminEmail})...`);
-      const hashedPassword = await bcrypt.hash(adminPass, 10);
-
-      await prisma.user.create({
-        data: {
-          name: 'Super Admin',
-          email: adminEmail,
-          password: hashedPassword,
-          role: 'SUPER_ADMIN',
-          accountStatus: 'ACTIVE'
-        }
-      });
-      console.log(`[SEED] Super Admin created successfully! Credentials: Email=${adminEmail}`);
-    } else {
-      console.log(`[SEED] Super Admin exists: ${existingSuperAdmin.email}`);
-    }
-  } catch (err) {
-    console.error('[SEED] Error seeding Super Admin:', err);
-  }
-}
-
-module.exports = { seedDefaultPlans, seedSuperAdmin, DEFAULT_PLANS };
+module.exports = { seedDefaultPlans, DEFAULT_PLANS };
