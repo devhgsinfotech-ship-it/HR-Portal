@@ -236,6 +236,17 @@ app.get('/admin/db-push', async (req, res) => {
     }
 });
 
+// Admin endpoint to trigger Super Admin creation
+app.get('/admin/seed-superadmin', async (req, res) => {
+    try {
+        const { seedSuperAdmin } = require('./src/utils/seedDefaultPlans');
+        await seedSuperAdmin();
+        res.json({ success: true, message: 'Super Admin check/creation complete.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
