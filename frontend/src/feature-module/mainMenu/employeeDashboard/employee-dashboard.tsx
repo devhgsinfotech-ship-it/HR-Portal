@@ -76,7 +76,7 @@ const EmployeeDashboard = () => {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const apiUrl = APP_CONFIG.getBackendUrl();
 
-  const [activeTab, setActiveTab] = useState<'birthdays' | 'anniversaries' | 'joinees'>('anniversaries');
+  const [activeTab, setActiveTab] = useState<'all' | 'birthdays' | 'anniversaries' | 'joinees'>('all');
   const [newPostText, setNewPostText] = useState('');
   const [postCommentsInputs, setPostCommentsInputs] = useState<Record<string, string>>({});
   const [posts, setPosts] = useState<any[]>([]);
@@ -389,48 +389,82 @@ const EmployeeDashboard = () => {
   };
 
 
-  const renderTimeProgressRing = (valueStr: string, valueMs: number, targetMs: number, label: string, color: string) => {
-    const radius = 24;
-    const strokeWidth = 3.5;
+  const renderTimeProgressRing = (
+    valueStr: string,
+    valueMs: number,
+    targetMs: number,
+    label: string,
+    color1: string,
+    color2: string,
+    gradientId: string,
+    badgeText: string
+  ) => {
+    const size = 110;
+    const strokeWidth = 7.5;
+    const radius = (size - strokeWidth) / 2 - 2;
     const circumference = 2 * Math.PI * radius;
-    const percent = targetMs > 0 ? Math.min(100, (valueMs / targetMs) * 100) : 0;
+    const percent = targetMs > 0 ? Math.min(100, Math.round((valueMs / targetMs) * 100)) : 0;
     const strokeDashoffset = circumference - (percent / 100) * circumference;
 
     return (
-      <div className="d-flex flex-column align-items-center justify-content-center py-2">
-        <div className="position-relative d-inline-flex align-items-center justify-content-center" style={{ width: '64px', height: '64px' }}>
-          <svg width="64" height="64" viewBox="0 0 64 64">
+      <div
+        className="d-flex flex-column align-items-center justify-content-center p-3 rounded-4 bg-white border border-light position-relative shadow-sm"
+        style={{ transition: 'all 0.3s ease-in-out', backgroundColor: '#FAFCFE' }}
+      >
+        <div className="position-relative d-inline-flex align-items-center justify-content-center mb-2" style={{ width: `${size}px`, height: `${size}px` }}>
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            <defs>
+              <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor={color1} />
+                <stop offset="100%" stopColor={color2} />
+              </linearGradient>
+              <filter id={`glow-${gradientId}`} x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor={color1} floodOpacity="0.25" />
+              </filter>
+            </defs>
+            {/* Background Grey Ring */}
             <circle
-              cx="32"
-              cy="32"
+              cx={size / 2}
+              cy={size / 2}
               r={radius}
               fill="none"
-              stroke="#EAEEF2"
+              stroke="#E2E8F0"
               strokeWidth={strokeWidth}
             />
+            {/* Animated Gradient Progress Ring */}
             <circle
-              cx="32"
-              cy="32"
+              cx={size / 2}
+              cy={size / 2}
               r={radius}
               fill="none"
-              stroke={color}
+              stroke={`url(#${gradientId})`}
               strokeWidth={strokeWidth}
               strokeDasharray={circumference}
               strokeDashoffset={strokeDashoffset}
               strokeLinecap="round"
+              filter={`url(#glow-${gradientId})`}
               style={{
                 transform: 'rotate(-90deg)',
                 transformOrigin: 'center',
-                transition: 'stroke-dashoffset 0.35s',
+                transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
               }}
             />
           </svg>
-          <span className="position-absolute fw-bold text-gray-9" style={{ fontSize: '10px' }}>
-            {valueStr.replace(/\s+/g, '')}
-          </span>
+          <div className="position-absolute text-center d-flex flex-column align-items-center justify-content-center" style={{ lineHeight: 1.1 }}>
+            <span className="fw-bold text-dark" style={{ fontSize: '13px', letterSpacing: '-0.02em' }}>
+              {valueStr}
+            </span>
+            <span className="badge rounded-pill bg-light text-muted border border-1 mt-1 fs-9 fw-semibold px-2 py-0.5">
+              {percent}%
+            </span>
+          </div>
         </div>
-        <span className="d-block text-gray-5 mt-2 fw-semibold text-uppercase text-center" style={{ letterSpacing: '0.03em', fontSize: '9px' }}>
+
+        <span className="d-block text-gray-7 fw-bold text-uppercase text-center" style={{ letterSpacing: '0.04em', fontSize: '11px' }}>
           {label}
+        </span>
+        <span className="text-muted fs-10 fw-medium mt-0.5" style={{ opacity: 0.85 }}>
+          {badgeText}
         </span>
       </div>
     );
@@ -454,12 +488,16 @@ const EmployeeDashboard = () => {
   let prodMs = 0;
   let overMs = 0;
 
-  if (attendanceStatus?.record) {
-    const record = attendanceStatus.record;
+  const currentRecord = attendanceStatus?.record || (attendanceStatus?.checkInTime ? {
+    checkIn: attendanceStatus.checkInTime,
+    checkOut: attendanceStatus.checkOutTime,
+    breakIn: attendanceStatus.breakInTime,
+    breakOut: attendanceStatus.breakOutTime
+  } : null);
 
-    // Total Hours (Elapsed since checkIn)
-    const checkInTime = new Date(record.checkIn).getTime();
-    const endTime = record.checkOut ? new Date(record.checkOut).getTime() : Date.now();
+  if (currentRecord && currentRecord.checkIn) {
+    const checkInTime = new Date(currentRecord.checkIn).getTime();
+    const endTime = currentRecord.checkOut ? new Date(currentRecord.checkOut).getTime() : Date.now();
     totalMs = Math.max(0, endTime - checkInTime);
 
     const totalH = Math.floor(totalMs / 3600000);
@@ -467,9 +505,9 @@ const EmployeeDashboard = () => {
     totalHoursStr = `${totalH.toString().padStart(2, '0')}h ${totalM.toString().padStart(2, '0')}m`;
 
     // Break Hours
-    if (record.breakIn) {
-      const bIn = new Date(record.breakIn).getTime();
-      const bOut = record.breakOut ? new Date(record.breakOut).getTime() : Date.now();
+    if (currentRecord.breakIn) {
+      const bIn = new Date(currentRecord.breakIn).getTime();
+      const bOut = currentRecord.breakOut ? new Date(currentRecord.breakOut).getTime() : Date.now();
       breakMs = Math.max(0, bOut - bIn);
     }
     const breakM = Math.floor(breakMs / 60000);
@@ -1007,21 +1045,37 @@ const EmployeeDashboard = () => {
               <LiveClockWidget handlePunch={handlePunch} attendanceStatus={attendanceStatus} />
 
 
-              <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-                <div className="card-body p-3">
-                  <h6 className="fw-medium text-gray-9 mb-4">Time Progress</h6>
+              {/* TIME PROGRESS CARD */}
+              <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '16px' }}>
+                <div className="card-body p-4">
+                  <div className="d-flex align-items-center justify-content-between mb-4">
+                    <div className="d-flex align-items-center gap-2">
+                      <div className="avatar avatar-sm bg-primary-transparent rounded-circle d-flex align-items-center justify-content-center" style={{ width: '36px', height: '36px' }}>
+                        <i className="ti ti-clock-play fs-18 text-primary" />
+                      </div>
+                      <div>
+                        <h6 className="fw-bold text-gray-9 mb-0" style={{ fontSize: '16px' }}>Time Progress</h6>
+                        <span className="text-muted fs-11 fw-medium">Today's Live Hours Tracking</span>
+                      </div>
+                    </div>
+                    <span className={`badge ${attendanceStatus?.isCheckedIn ? 'bg-success-transparent text-success border border-success' : 'bg-light text-muted border'} rounded-pill fs-11 px-3 py-1.5 fw-semibold d-flex align-items-center gap-1.5`}>
+                      <span className={`d-inline-block rounded-circle ${attendanceStatus?.isCheckedIn ? 'bg-success' : 'bg-secondary'}`} style={{ width: '7px', height: '7px' }} />
+                      {attendanceStatus?.isCheckedIn ? 'Clocked In' : 'Not Clocked In'}
+                    </span>
+                  </div>
+
                   <div className="row g-3">
-                    <div className="col-6">
-                      {renderTimeProgressRing(totalHoursStr, totalMs, 9 * 3600000, "Total Working", "#8F9BBA")}
+                    <div className="col-6 col-sm-6">
+                      {renderTimeProgressRing(totalHoursStr, totalMs, 9 * 3600000, "Total Working", "#6366F1", "#8B5CF6", "grad-total", "Target 9h")}
                     </div>
-                    <div className="col-6">
-                      {renderTimeProgressRing(productiveHoursStr, prodMs, 8 * 3600000, "Productive", "#28C76F")}
+                    <div className="col-6 col-sm-6">
+                      {renderTimeProgressRing(productiveHoursStr, prodMs, 8 * 3600000, "Productive", "#10B981", "#059669", "grad-prod", "Target 8h")}
                     </div>
-                    <div className="col-6">
-                      {renderTimeProgressRing(breakHoursStr, breakMs, 1 * 3600000, "Break Hours", "#FF9F43")}
+                    <div className="col-6 col-sm-6">
+                      {renderTimeProgressRing(breakHoursStr, breakMs, 1 * 3600000, "Break Hours", "#F59E0B", "#F97316", "grad-break", "Target 1h")}
                     </div>
-                    <div className="col-6">
-                      {renderTimeProgressRing(overtimeStr, overMs, 4 * 3600000, "Overtime", "#3A9BF2")}
+                    <div className="col-6 col-sm-6">
+                      {renderTimeProgressRing(overtimeStr, overMs, 4 * 3600000, "Overtime", "#06B6D4", "#3B82F6", "grad-over", "Goal >8h")}
                     </div>
                   </div>
                 </div>
@@ -1251,16 +1305,29 @@ const EmployeeDashboard = () => {
                     </div>
                   </div>
 
-                  {/* ANNOUNCEMENTS CARD */}
+                  {/* ANNOUNCEMENTS CARD WITH UPLOADED MEGAPHONE ICON */}
                   <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px', backgroundColor: '#F4F7FB' }}>
                     <div className="card-body p-3">
                       <div className="d-flex align-items-center justify-content-between mb-2">
                         <div className="d-flex align-items-center gap-3">
-                          <span className="d-inline-flex align-items-center justify-content-center rounded-circle flex-shrink-0" style={{ width: '40px', height: '40px', color: '#00BCD4', backgroundColor: '#E0F7FA' }}>
-                            <i className="ti ti-megaphone-filled fs-20" />
+                          <span
+                            className="d-inline-flex align-items-center justify-content-center rounded-circle flex-shrink-0 shadow-sm border border-2 border-warning"
+                            style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '50%',
+                              overflow: 'hidden',
+                              padding: '0'
+                            }}
+                          >
+                            <img
+                              src="/assets/img/icons/announcement-megaphone.png"
+                              alt="Announcements Megaphone"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                            />
                           </span>
                           <div>
-                            <h6 className="fw-semibold text-gray-9 mb-0 fs-14">Announcements</h6>
+                            <h6 className="fw-bold text-gray-9 mb-0 fs-14">Announcements</h6>
                             <p className="text-gray-5 fs-12 mb-0">
                               {announcements.length > 0 ? `${announcements.length} active ${announcements.length === 1 ? 'announcement' : 'announcements'}` : 'No new announcements today'}
                             </p>
@@ -1310,163 +1377,224 @@ const EmployeeDashboard = () => {
                   </div>
 
                   {/* EVENTS TABS CARD (Birthdays, Work Anniversary, New Joinees) */}
-                  <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
-                    <div className="card-body p-3">
-                      {/* Tabs Header */}
-                      <ul className="nav nav-tabs nav-tabs-solid border-0 mb-3 gap-2">
-                        <li className="nav-item">
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab('birthdays')}
-                            className={`nav-link border-0 rounded-pill px-3 py-2 fs-13 d-flex align-items-center gap-2 fw-medium ${activeTab === 'birthdays' ? 'active text-danger bg-danger-transparent' : 'text-gray-6 bg-light'}`}
-                            style={{ transition: 'all 0.2s' }}
-                          >
-                            <span className="d-inline-block rounded-circle bg-danger" style={{ width: '8px', height: '8px' }} />
-                            Birthdays <span className="badge bg-danger text-white rounded-pill ms-1 fs-10" style={{ padding: '2px 6px' }}>{events.birthdays?.today?.length || 0}</span>
-                          </button>
-                        </li>
-                        <li className="nav-item">
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab('anniversaries')}
-                            className={`nav-link border-0 rounded-pill px-3 py-2 fs-13 d-flex align-items-center gap-2 fw-medium ${activeTab === 'anniversaries' ? 'active text-warning bg-warning-transparent' : 'text-gray-6 bg-light'}`}
-                            style={{ transition: 'all 0.2s' }}
-                          >
-                            <span className="d-inline-block rounded-circle bg-warning" style={{ width: '8px', height: '8px' }} />
-                            Work Anniversary <span className="badge bg-warning text-dark rounded-pill ms-1 fs-10" style={{ padding: '2px 6px' }}>{events.anniversaries.length}</span>
-                          </button>
-                        </li>
-                        <li className="nav-item">
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab('joinees')}
-                            className={`nav-link border-0 rounded-pill px-3 py-2 fs-13 d-flex align-items-center gap-2 fw-medium ${activeTab === 'joinees' ? 'active text-info bg-info-transparent' : 'text-gray-6 bg-light'}`}
-                            style={{ transition: 'all 0.2s' }}
-                          >
-                            <span className="d-inline-block rounded-circle bg-info" style={{ width: '8px', height: '8px' }} />
-                            New Joinees <span className="badge bg-info text-white rounded-pill ms-1 fs-10" style={{ padding: '2px 6px' }}>{events.joinees.length}</span>
-                          </button>
-                        </li>
-                      </ul>
+                  {(() => {
+                    const birthdayCount = (events.birthdays?.today?.length || 0) + (events.birthdays?.upcoming?.length || 0);
+                    const anniversaryCount = events.anniversaries?.length || 0;
+                    const joineeCount = events.joinees?.length || 0;
+                    const totalAllCount = birthdayCount + anniversaryCount + joineeCount;
 
-                      {/* Tabs Content */}
-                      <div className="tab-content">
-                        {activeTab === 'birthdays' && (
+                    const combinedEventsList: Array<{
+                      id: number | string;
+                      name: string;
+                      profilePhotoUrl?: string;
+                      designation?: string;
+                      eventType: 'birthday' | 'anniversary' | 'joinee';
+                      badgeClass: string;
+                      badgeText: string;
+                      dateStr: string;
+                      isToday?: boolean;
+                    }> = [
+                      ...(events.birthdays?.today || []).map((b: any) => ({
+                        id: `bday-today-${b.id}`,
+                        name: b.name || `${b.firstName || ''} ${b.lastName || ''}`.trim() || 'Employee',
+                        profilePhotoUrl: b.profilePhotoUrl,
+                        designation: b.designation,
+                        eventType: 'birthday' as const,
+                        badgeClass: 'bg-danger text-white',
+                        badgeText: '🎂 Today',
+                        dateStr: 'Today',
+                        isToday: true
+                      })),
+                      ...(events.birthdays?.upcoming || []).map((b: any) => ({
+                        id: `bday-up-${b.id}`,
+                        name: b.name || `${b.firstName || ''} ${b.lastName || ''}`.trim() || 'Employee',
+                        profilePhotoUrl: b.profilePhotoUrl,
+                        designation: b.designation,
+                        eventType: 'birthday' as const,
+                        badgeClass: 'bg-danger-transparent text-danger border border-danger',
+                        badgeText: '🎂 Birthday',
+                        dateStr: b.dateStr || 'Upcoming',
+                        isToday: false
+                      })),
+                      ...(events.anniversaries || []).map((a: any) => ({
+                        id: `anniv-${a.id}`,
+                        name: a.name || `${a.firstName || ''} ${a.lastName || ''}`.trim() || 'Employee',
+                        profilePhotoUrl: a.profilePhotoUrl,
+                        designation: a.designation,
+                        eventType: 'anniversary' as const,
+                        badgeClass: 'bg-warning-transparent text-warning border border-warning',
+                        badgeText: `🎉 ${a.years || 'Anniversary'}`,
+                        dateStr: a.dateStr || a.years || 'Anniversary',
+                        isToday: a.isToday
+                      })),
+                      ...(events.joinees || []).map((j: any) => ({
+                        id: `join-${j.id}`,
+                        name: j.name || `${j.firstName || ''} ${j.lastName || ''}`.trim() || 'Employee',
+                        profilePhotoUrl: j.profilePhotoUrl,
+                        designation: j.designation,
+                        eventType: 'joinee' as const,
+                        badgeClass: 'bg-info-transparent text-info border border-info',
+                        badgeText: '✨ New Joinee',
+                        dateStr: j.dateStr || (j.dateOfJoining ? new Date(j.dateOfJoining).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'Recent'),
+                        isToday: false
+                      }))
+                    ];
+
+                    const displayedEvents = activeTab === 'all'
+                      ? combinedEventsList
+                      : activeTab === 'birthdays'
+                      ? combinedEventsList.filter(item => item.eventType === 'birthday')
+                      : activeTab === 'anniversaries'
+                      ? combinedEventsList.filter(item => item.eventType === 'anniversary')
+                      : combinedEventsList.filter(item => item.eventType === 'joinee');
+
+                    return (
+                      <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                        <div className="card-body p-3">
+                          {/* Tabs Header */}
+                          <ul className="nav nav-tabs nav-tabs-solid border-0 mb-3 gap-2 flex-wrap">
+                            <li className="nav-item">
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('all')}
+                                className={`nav-link border-0 rounded-pill px-3 py-2 fs-13 d-flex align-items-center gap-2 fw-medium ${activeTab === 'all' ? 'active bg-primary text-white' : 'text-gray-6 bg-light'}`}
+                                style={{ transition: 'all 0.2s' }}
+                              >
+                                <i className="ti ti-sparkles fs-14" />
+                                All Events <span className={`badge ${activeTab === 'all' ? 'bg-white text-primary' : 'bg-secondary text-white'} rounded-pill ms-1 fs-10`} style={{ padding: '2px 7px' }}>{totalAllCount}</span>
+                              </button>
+                            </li>
+                            <li className="nav-item">
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('birthdays')}
+                                className={`nav-link border-0 rounded-pill px-3 py-2 fs-13 d-flex align-items-center gap-2 fw-medium ${activeTab === 'birthdays' ? 'active bg-danger text-white' : 'text-gray-6 bg-light'}`}
+                                style={{ transition: 'all 0.2s' }}
+                              >
+                                <span className="d-inline-block rounded-circle bg-danger" style={{ width: '8px', height: '8px' }} />
+                                Birthdays <span className={`badge ${activeTab === 'birthdays' ? 'bg-white text-danger' : 'bg-danger text-white'} rounded-pill ms-1 fs-10`} style={{ padding: '2px 7px' }}>{birthdayCount}</span>
+                              </button>
+                            </li>
+                            <li className="nav-item">
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('anniversaries')}
+                                className={`nav-link border-0 rounded-pill px-3 py-2 fs-13 d-flex align-items-center gap-2 fw-medium ${activeTab === 'anniversaries' ? 'active bg-warning text-dark' : 'text-gray-6 bg-light'}`}
+                                style={{ transition: 'all 0.2s' }}
+                              >
+                                <span className="d-inline-block rounded-circle bg-warning" style={{ width: '8px', height: '8px' }} />
+                                Work Anniversary <span className={`badge ${activeTab === 'anniversaries' ? 'bg-dark text-warning' : 'bg-warning text-dark'} rounded-pill ms-1 fs-10`} style={{ padding: '2px 7px' }}>{anniversaryCount}</span>
+                              </button>
+                            </li>
+                            <li className="nav-item">
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('joinees')}
+                                className={`nav-link border-0 rounded-pill px-3 py-2 fs-13 d-flex align-items-center gap-2 fw-medium ${activeTab === 'joinees' ? 'active bg-info text-white' : 'text-gray-6 bg-light'}`}
+                                style={{ transition: 'all 0.2s' }}
+                              >
+                                <span className="d-inline-block rounded-circle bg-info" style={{ width: '8px', height: '8px' }} />
+                                New Joinees <span className={`badge ${activeTab === 'joinees' ? 'bg-white text-info' : 'bg-info text-white'} rounded-pill ms-1 fs-10`} style={{ padding: '2px 7px' }}>{joineeCount}</span>
+                              </button>
+                            </li>
+                          </ul>
+
+                          {/* Events Display Content */}
                           <div className="p-2">
-                            {/* Birthdays Today Section */}
-                            <div className="mb-4">
-                              <h6 className="text-gray-9 fw-semibold fs-13 mb-3">Birthdays today</h6>
-                              <div className="d-flex align-items-center flex-wrap gap-4">
-                                {events.birthdays?.today?.length > 0 ? (
-                                  events.birthdays.today.map((b: any) => (
-                                    <div key={b.id} className="text-center d-flex flex-column align-items-center" style={{ width: '70px' }}>
-                                      <span className="avatar avatar-lg rounded-circle border border-2 border-danger overflow-hidden mb-2" style={{ width: '56px', height: '56px' }}>
-                                        {b.profilePhotoUrl ? (
-                                          <img src={b.profilePhotoUrl.startsWith('http') ? b.profilePhotoUrl : `${apiUrl}${b.profilePhotoUrl}`} alt="Img" className="img-fluid rounded-circle" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            {displayedEvents.length > 0 ? (
+                              <div className="d-flex align-items-center flex-wrap gap-3">
+                                {displayedEvents.map((item) => (
+                                  <div
+                                    key={item.id}
+                                    className="text-center d-flex flex-column align-items-center p-3 rounded-4 border bg-white position-relative shadow-sm"
+                                    style={{
+                                      width: '125px',
+                                      transition: 'all 0.25s ease-in-out',
+                                      borderColor: '#e2e8f0'
+                                    }}
+                                  >
+                                    <div className="position-relative mb-2">
+                                      <span
+                                        className={`avatar avatar-xl rounded-circle overflow-hidden d-inline-block shadow-sm ${
+                                          item.eventType === 'birthday'
+                                            ? 'border border-2 border-danger'
+                                            : item.eventType === 'anniversary'
+                                            ? 'border border-2 border-warning'
+                                            : 'border border-2 border-info'
+                                        }`}
+                                        style={{ width: '60px', height: '60px' }}
+                                      >
+                                        {item.profilePhotoUrl ? (
+                                          <img
+                                            src={item.profilePhotoUrl.startsWith('http') ? item.profilePhotoUrl : `${apiUrl}${item.profilePhotoUrl}`}
+                                            alt={item.name || 'Employee'}
+                                            className="img-fluid rounded-circle"
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                          />
                                         ) : (
-                                          <ImageWithBasePath src="assets/img/users/user-02.jpg" alt="Img" className="img-fluid rounded-circle" />
+                                          <div
+                                            className="w-100 h-100 text-white d-flex align-items-center justify-content-center fw-bold fs-15 rounded-circle shadow-inner"
+                                            style={{
+                                              background: item.eventType === 'birthday'
+                                                ? 'linear-gradient(135deg, #ef4444 0%, #f87171 100%)'
+                                                : item.eventType === 'anniversary'
+                                                ? 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)'
+                                                : 'linear-gradient(135deg, #0284c7 0%, #38bdf8 100%)'
+                                            }}
+                                          >
+                                            {(item.name || 'Employee').split(' ').filter(Boolean).map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'EM'}
+                                          </div>
                                         )}
                                       </span>
-                                      <span className="d-block text-gray-9 fs-12 fw-medium text-truncate w-100" title={b.name} style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-                                        {b.name.split(' ')[0]}
-                                      </span>
-                                      <button type="button" className="btn btn-link p-0 border-0 text-decoration-none fs-12 fw-semibold" style={{ color: '#00BCD4', outline: 'none' }}>
-                                        Wish
+                                    </div>
+
+                                    {/* Employee Name */}
+                                    <span
+                                      className="d-block text-dark fs-13 fw-semibold text-truncate w-100 mb-1"
+                                      title={item.name || 'Employee'}
+                                      style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' }}
+                                    >
+                                      {(item.name || 'Employee').split(' ')[0]}
+                                    </span>
+
+                                    {/* Event Badge Tag */}
+                                    <span
+                                      className={`badge ${item.badgeClass} fs-11 px-2.5 py-1 rounded-pill d-inline-block text-nowrap max-w-100 mb-1`}
+                                      style={{ letterSpacing: '0.01em', whiteSpace: 'nowrap' }}
+                                    >
+                                      {item.badgeText}
+                                    </span>
+
+                                    {/* Event Date / Status */}
+                                    <span className="d-block text-muted fs-11 text-nowrap fw-medium">
+                                      {item.dateStr}
+                                    </span>
+
+                                    {/* Action Button */}
+                                    {item.eventType === 'birthday' && item.isToday && (
+                                      <button type="button" className="btn btn-link p-0 border-0 text-decoration-none fs-11 fw-bold text-danger mt-1">
+                                        Wish 🎂
                                       </button>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="text-gray-5 fs-12 mb-0 ps-1">No birthdays today</p>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Upcoming Birthdays Section */}
-                            <div>
-                              <h6 className="text-gray-9 fw-semibold fs-13 mb-3">Upcoming Birthdays</h6>
-                              <div className="d-flex align-items-center flex-wrap gap-4">
-                                {events.birthdays?.upcoming?.length > 0 ? (
-                                  events.birthdays.upcoming.map((b: any) => (
-                                    <div key={b.id} className="text-center d-flex flex-column align-items-center" style={{ width: '75px' }}>
-                                      <span className="avatar avatar-lg rounded-circle border border-1 border-light overflow-hidden mb-2" style={{ width: '56px', height: '56px' }}>
-                                        {b.profilePhotoUrl ? (
-                                          <img src={b.profilePhotoUrl.startsWith('http') ? b.profilePhotoUrl : `${apiUrl}${b.profilePhotoUrl}`} alt="Img" className="img-fluid rounded-circle" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                        ) : (
-                                          <ImageWithBasePath src="assets/img/users/user-02.jpg" alt="Img" className="img-fluid rounded-circle" />
-                                        )}
-                                      </span>
-                                      <span className="d-block text-gray-9 fs-12 fw-medium text-truncate w-100" title={b.name} style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-                                        {b.name.split(' ')[0]}
-                                      </span>
-                                      <span className="d-block text-gray-4 fs-10 text-nowrap mt-1">
-                                        {b.dateStr}
-                                      </span>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="text-gray-5 fs-12 mb-0 ps-1">No upcoming birthdays</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {activeTab === 'anniversaries' && (
-                          <div className="p-2">
-                            <div className="d-flex align-items-center flex-wrap gap-4">
-                              {events.anniversaries?.length > 0 ? (
-                                events.anniversaries.map((a: any) => (
-                                  <div key={a.id} className="text-center d-flex flex-column align-items-center" style={{ width: '75px' }}>
-                                    <span className="avatar avatar-lg rounded-circle border border-2 border-warning overflow-hidden mb-2" style={{ width: '56px', height: '56px' }}>
-                                      {a.profilePhotoUrl ? (
-                                        <img src={a.profilePhotoUrl.startsWith('http') ? a.profilePhotoUrl : `${apiUrl}${a.profilePhotoUrl}`} alt="Img" className="img-fluid rounded-circle" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                      ) : (
-                                        <ImageWithBasePath src="assets/img/users/user-02.jpg" alt="Img" className="img-fluid rounded-circle" />
-                                      )}
-                                    </span>
-                                    <span className="d-block text-gray-9 fs-12 fw-medium text-truncate w-100" title={a.name} style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-                                      {a.name.split(' ')[0]}
-                                    </span>
-                                    <span className="d-block text-gray-4 fs-10 text-nowrap mt-1">
-                                      {a.years}
-                                    </span>
+                                    )}
                                   </div>
-                                ))
-                              ) : (
-                                <p className="text-gray-5 fs-12 mb-0 ps-1">No work anniversaries today</p>
-                              )}
-                            </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center py-4 px-3">
+                                <i className="ti ti-calendar-event fs-32 text-muted mb-2 d-block" />
+                                <p className="text-muted fs-13 mb-0">
+                                  {activeTab === 'birthdays' ? 'No birthdays scheduled this month' :
+                                   activeTab === 'anniversaries' ? 'No work anniversaries scheduled this month' :
+                                   activeTab === 'joinees' ? 'No new joinees joined recently' :
+                                   'No company events or celebrations scheduled'}
+                                </p>
+                              </div>
+                            )}
                           </div>
-                        )}
-                        {activeTab === 'joinees' && (
-                          <div className="p-2">
-                            <div className="d-flex align-items-center flex-wrap gap-4">
-                              {events.joinees?.length > 0 ? (
-                                events.joinees.map((j: any) => (
-                                  <div key={j.id} className="text-center d-flex flex-column align-items-center" style={{ width: '75px' }}>
-                                    <span className="avatar avatar-lg rounded-circle border border-2 border-info overflow-hidden mb-2" style={{ width: '56px', height: '56px' }}>
-                                      {j.profilePhotoUrl ? (
-                                        <img src={j.profilePhotoUrl.startsWith('http') ? j.profilePhotoUrl : `${apiUrl}${j.profilePhotoUrl}`} alt="Img" className="img-fluid rounded-circle" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                      ) : (
-                                        <ImageWithBasePath src="assets/img/users/user-02.jpg" alt="Img" className="img-fluid rounded-circle" />
-                                      )}
-                                    </span>
-                                    <span className="d-block text-gray-9 fs-12 fw-medium text-truncate w-100" title={j.name} style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-                                      {j.name.split(' ')[0]}
-                                    </span>
-                                    <span className="d-block text-gray-4 fs-10 text-nowrap mt-1">
-                                      {new Date(j.dateOfJoining).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                                    </span>
-                                  </div>
-                                ))
-                              ) : (
-                                <p className="text-gray-5 fs-12 mb-0 ps-1">No new joinees recently</p>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* POSTS FEED */}
                   <div className="posts-feed-container">
