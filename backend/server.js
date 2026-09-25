@@ -179,37 +179,53 @@ app.get('/health', async (req, res) => {
 
 // Auto-run prisma db push on startup to sync schema with database
 const { execSync } = require('child_process');
+const fs = require('fs');
 
-function getPrismaCmd() {
+function getPrismaSyncConfig() {
+    // Dynamically locate schema.prisma file (checks backend/prisma or root prisma)
+    let schemaPath = path.join(__dirname, 'prisma', 'schema.prisma');
+    if (!fs.existsSync(schemaPath)) {
+        const altPath = path.join(__dirname, '..', 'prisma', 'schema.prisma');
+        if (fs.existsSync(altPath)) {
+            schemaPath = altPath;
+        }
+    }
+
     const prismaCli = require.resolve('prisma/build/index.js');
-    return `"${process.execPath}" "${prismaCli}" db push --accept-data-loss`;
+    const cmd = `"${process.execPath}" "${prismaCli}" db push --schema="${schemaPath}" --accept-data-loss`;
+
+    return { cmd, env: { ...process.env } };
 }
 
 function runDbPush() {
     try {
         console.log('[DB] Running prisma db push to sync schema...');
-        const output = execSync(getPrismaCmd(), {
+        const { cmd, env } = getPrismaSyncConfig();
+        const output = execSync(cmd, {
             cwd: __dirname,
             timeout: 60000,
-            env: { ...process.env }
+            env
         }).toString();
         console.log('[DB] Schema sync complete:', output.trim());
     } catch (err) {
-        console.error('[DB] Schema sync failed:', err.message, err.stderr?.toString());
+        const stdErrOutput = err.stderr ? err.stderr.toString() : '';
+        console.error('[DB] Schema sync failed:', err.message, stdErrOutput);
     }
 }
 
-// TEMPORARY admin endpoint — remove after first successful sync
+// Admin endpoint to manually trigger database sync
 app.get('/admin/db-push', async (req, res) => {
     try {
-        const output = execSync(getPrismaCmd(), {
+        const { cmd, env } = getPrismaSyncConfig();
+        const output = execSync(cmd, {
             cwd: __dirname,
             timeout: 60000,
-            env: { ...process.env }
+            env
         }).toString();
         res.json({ success: true, output });
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message, stderr: err.stderr?.toString() });
+        const stdErrOutput = err.stderr ? err.stderr.toString() : '';
+        res.status(500).json({ success: false, error: err.message, stderr: stdErrOutput });
     }
 });
 
