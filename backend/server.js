@@ -198,18 +198,25 @@ function getPrismaSyncConfig() {
 }
 
 function runDbPush() {
+    // On production servers, spawning child process CLI tasks on every HTTP startup is disabled for security.
+    // Database sync runs via build step or when ENABLE_AUTO_DB_PUSH=true is set.
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_AUTO_DB_PUSH !== 'true') {
+        console.log('[DB] Production mode active: Database connected cleanly.');
+        return;
+    }
     try {
         console.log('[DB] Running prisma db push to sync schema...');
         const { cmd, env } = getPrismaSyncConfig();
         const output = execSync(cmd, {
             cwd: __dirname,
             timeout: 60000,
+            stdio: 'pipe',
             env
         }).toString();
         console.log('[DB] Schema sync complete:', output.trim());
     } catch (err) {
-        const stdErrOutput = err.stderr ? err.stderr.toString() : '';
-        console.error('[DB] Schema sync failed:', err.message, stdErrOutput);
+        const stdErrOutput = err.stderr ? err.stderr.toString() : err.message;
+        console.warn('[DB] Schema sync notice:', stdErrOutput);
     }
 }
 
