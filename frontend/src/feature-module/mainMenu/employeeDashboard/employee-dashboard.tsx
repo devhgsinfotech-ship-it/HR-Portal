@@ -1305,16 +1305,29 @@ const EmployeeDashboard = () => {
                     </div>
                   </div>
 
-                  {/* ANNOUNCEMENTS CARD */}
+                  {/* ANNOUNCEMENTS CARD WITH UPLOADED MEGAPHONE ICON */}
                   <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px', backgroundColor: '#F4F7FB' }}>
                     <div className="card-body p-3">
                       <div className="d-flex align-items-center justify-content-between mb-2">
                         <div className="d-flex align-items-center gap-3">
-                          <span className="d-inline-flex align-items-center justify-content-center rounded-circle flex-shrink-0" style={{ width: '40px', height: '40px', color: '#00BCD4', backgroundColor: '#E0F7FA' }}>
-                            <i className="ti ti-megaphone-filled fs-20" />
+                          <span
+                            className="d-inline-flex align-items-center justify-content-center rounded-circle flex-shrink-0 shadow-sm border border-2 border-warning"
+                            style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '50%',
+                              overflow: 'hidden',
+                              padding: '0'
+                            }}
+                          >
+                            <img
+                              src="/assets/img/icons/announcement-megaphone.png"
+                              alt="Announcements Megaphone"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                            />
                           </span>
                           <div>
-                            <h6 className="fw-semibold text-gray-9 mb-0 fs-14">Announcements</h6>
+                            <h6 className="fw-bold text-gray-9 mb-0 fs-14">Announcements</h6>
                             <p className="text-gray-5 fs-12 mb-0">
                               {announcements.length > 0 ? `${announcements.length} active ${announcements.length === 1 ? 'announcement' : 'announcements'}` : 'No new announcements today'}
                             </p>
