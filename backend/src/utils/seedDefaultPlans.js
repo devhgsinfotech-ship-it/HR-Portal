@@ -85,6 +85,8 @@ async function seedDefaultPlans() {
         });
         console.log(`[SEED] Created 14-day trial subscription for Company "${comp.name}" (ID: ${comp.id})`);
       }
+    }
+
     // Seed Super Admin if no SUPER_ADMIN exists
     await seedSuperAdmin();
   } catch (error) {
