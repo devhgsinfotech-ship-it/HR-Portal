@@ -768,11 +768,6 @@ export const HorizontalSidebarData = [
                 base: 'refferals',
               },
               {
-                menuValue: 'Resume Parsing',
-                route: routes.resumeParsing,
-                base: 'Resume Parsing',
-              },
-              {
                 menuValue: 'Campus Hiring',
                 route: routes.campusHiring,
                 base: 'Campus Hiring',
@@ -1020,6 +1015,11 @@ export const HorizontalSidebarData = [
             customSubmenuTwo: true,
             base: 'website-settings',
             subMenusTwo: [
+              {
+                menuValue: 'Company Settings',
+                route: routes.companySettings,
+                base: 'company-settings',
+              },
               {
                 menuValue: 'Business Settings',
                 route: routes.businessSettings,

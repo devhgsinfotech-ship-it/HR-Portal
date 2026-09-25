@@ -10,17 +10,30 @@ const LazyAuthFeature = lazy(() => import("../feature-module/authFeature"));
 const LazyLayoutFeature = lazy(() => import("../feature-module/layoutFeature"));
 const OnboardingWizard = lazy(() => import("../feature-module/onboarding/OnboardingWizard"));
 
-type Role = "SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
+type Role = "SUPER_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
 
 const getRouteRoles = (path: string | undefined): Role[] => {
-  if (!path) return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  if (!path) return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
 
   const p = path.toLowerCase();
 
   // 1. Super Admin ONLY routes
   if (p.startsWith("/super-admin")) return ["SUPER_ADMIN"];
 
-  // 2. Employee Self-Service routes (Accessible by all)
+  // 2. Job postings & Employee Referrals (Accessible by Company Admin, HR, Manager & Employee)
+  if (p.includes("job-grid") || p.includes("job-list") || p.includes("jobgrid") || p.includes("joblist") || p.includes("refferal")) {
+    return ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
+  // Other Recruitment module routes (Company Admin, HR & Manager feature — Hides from Super Admin)
+  const recruitmentKeywords = [
+    "recruitment", "job", "candidate", "campus-hiring"
+  ];
+  if (recruitmentKeywords.some(keyword => p.includes(keyword))) {
+    return ["COMPANY_ADMIN", "HR", "MANAGER"];
+  }
+
+  // 3. Employee Self-Service routes (Accessible by all)
   const employeeAllowedPrefixes = [
     "/employee-dashboard", "/attendance-employee", "/leaves-employee",
     "/pages/profile", "/hrm/holidays", "/payslip", "/application",
@@ -28,20 +41,30 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     "/org", "/org-directory"
   ];
   if (employeeAllowedPrefixes.some(prefix => p.startsWith(prefix))) {
-    return ["SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
 
-  // 3. Manager & HR Approvals
+  // 3. Asset Categories (Admin/HR Configuration — Exclude Employee)
+  if (p.includes("category") || p.includes("categories")) {
+    return ["COMPANY_ADMIN", "HR", "MANAGER"];
+  }
+
+  // 4. Company Internal Assets & My Assets (Accessible by Employee, Manager, HR & Admin — Hides from Super Admin)
+  if (p.includes("asset")) {
+    return ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
+  // 4. Manager & HR Approvals
   const adminApprovalPrefixes = [
     "/leaves", "/attendance-admin", "/timesheet", "/performance", "/training",
     "/tickets"
   ];
   if (adminApprovalPrefixes.some(prefix => p.startsWith(prefix))) {
-    return ["SUPER_ADMIN", "HR", "MANAGER"];
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER"];
   }
 
-  // 4. Default: Restricted to HR & Super Admin (Security by default)
-  return ["SUPER_ADMIN", "HR"];
+  // 5. Default: Restricted to Company Admin, HR & Super Admin (Security by default)
+  return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"];
 };
 
 const ALLRoutes: React.FC = () => {

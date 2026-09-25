@@ -16,6 +16,7 @@ datasource db {
 
 enum Role {
   SUPER_ADMIN
+  COMPANY_ADMIN
   HR
   MANAGER
   EMPLOYEE
@@ -75,6 +76,7 @@ enum AttendanceStatus {
 enum AssetStatus {
   AVAILABLE
   ASSIGNED
+  RETURN_REQUESTED
   MAINTENANCE
   RETIRED
 }
@@ -94,7 +96,9 @@ enum NotificationType {
   HOLIDAY_REMINDER
   ANNOUNCEMENT
   ASSET_ASSIGNED
+  ASSET_RETURN_REQUESTED
   DOCUMENT_VERIFIED
+  JOB_APPLICATION_RECEIVED
 }
 
 enum ProjectStatus {
@@ -139,6 +143,26 @@ enum TaskStatus {
   ON_HOLD
 }
 
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum InvoiceStatus {
+  PAID
+  UNPAID
+  OVERDUE
+  VOID
+}
+
 // ============================================================
 // COMPANY — each registered company's workspace
 // ============================================================
@@ -178,8 +202,76 @@ model Company {
   timeLogs         TimeLog[]
   companyRoles     CompanyRole[]
   payrollPeriods   PayrollPeriod[]
+  subscription     Subscription?
+  invoices         Invoice[]
+  jobPostings      JobPosting[]
+  applicants       Applicant[]
+  referrals        Referral[]
 
   @@map("companies")
+}
+
+// ============================================================
+// SAAS SUBSCRIPTION BILLING & TENANT MANAGEMENT
+// ============================================================
+
+model SubscriptionPlan {
+  id            Int            @id @default(autoincrement())
+  name          String
+  code          String         @unique
+  description   String?        @db.Text
+  priceMonthly  Float
+  priceYearly   Float
+  maxEmployees  Int            @default(10)
+  maxStorageGb  Float          @default(5.0)
+  features      Json?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id           Int                @id @default(autoincrement())
+  companyId    Int                @unique
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId       Int
+  plan         SubscriptionPlan   @relation(fields: [planId], references: [id])
+  status       SubscriptionStatus @default(TRIAL)
+  billingCycle BillingCycle       @default(MONTHLY)
+  startDate    DateTime           @default(now())
+  endDate      DateTime?
+  trialEndsAt  DateTime
+  autoRenew    Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  invoices     Invoice[]
+
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id             Int            @id @default(autoincrement())
+  companyId      Int
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  subscriptionId Int?
+  subscription   Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  invoiceNumber  String         @unique
+  amount         Float
+  currency       String         @default("INR")
+  status         InvoiceStatus  @default(UNPAID)
+  dueDate        DateTime
+  paidAt         DateTime?
+  paymentMethod  String?
+  pdfUrl         String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("invoices")
 }
 
 // ============================================================
@@ -206,6 +298,7 @@ model User {
   regularizations       AttendanceRegularization[]
   passwordResetTokens   PasswordResetToken[]
   tasksCreated          Task[]             @relation("TaskCreator")
+  referrals             Referral[]         @relation("ReferrerUser")
 
   @@map("users")
 }
@@ -301,6 +394,7 @@ model Employee {
   postComments        PostComment[]
   commentLikes        CommentLike[]
   announcementsCreated Announcement[] @relation("AnnouncementsCreated")
+  interviews          Interview[]    @relation("Interviewer")
 
   @@map("employees")
 }
@@ -320,6 +414,7 @@ model Department {
   updatedAt   DateTime  @updatedAt
 
   employees   Employee[]
+  jobPostings JobPosting[]
 
   @@unique([companyId, name])
   @@map("departments")
@@ -1221,5 +1316,129 @@ model PayrollEntry {
 
   @@unique([payrollPeriodId, employeeId])
   @@map("payroll_entries")
+}
+
+// ============================================================
+// RECRUITMENT & APPLICANT TRACKING SYSTEM (ATS)
+// ============================================================
+
+enum JobPostingStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+enum ApplicantStage {
+  APPLIED
+  SHORTLISTED
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+model JobPosting {
+  id              Int              @id @default(autoincrement())
+  companyId       Int
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobCode         String           @unique
+  title           String
+  departmentId    Int?
+  department      Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  employmentType  EmploymentType   @default(FULL_TIME)
+  experienceLevel String?
+  location        String?
+  vacancies       Int              @default(1)
+  minSalary       Float?
+  maxSalary       Float?
+  status          JobPostingStatus @default(OPEN)
+  description     String?          @db.Text
+  requirements    String?          @db.Text
+  bannerUrl       String?          @db.Text
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  applicants      Applicant[]
+  referrals       Referral[]
+
+  @@map("job_postings")
+}
+
+model Applicant {
+  id           Int            @id @default(autoincrement())
+  companyId    Int
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobPostingId Int
+  jobPosting   JobPosting     @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+  firstName    String
+  lastName     String
+  email        String
+  phone        String?
+  resumeUrl    String?
+  stage        ApplicantStage @default(APPLIED)
+  rating       Int            @default(0)
+  notes        String?        @db.Text
+  appliedAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  interviews   Interview[]
+
+  @@map("applicants")
+}
+
+model Interview {
+  id              Int             @id @default(autoincrement())
+  applicantId     Int
+  applicant       Applicant       @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  interviewerId   Int?
+  interviewer     Employee?       @relation("Interviewer", fields: [interviewerId], references: [id], onDelete: SetNull)
+  scheduledAt     DateTime
+  locationOrLink  String?
+  status          InterviewStatus @default(SCHEDULED)
+  scorecardRating Int?
+  feedbackNotes   String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("interviews")
+}
+
+// ============================================================
+// EMPLOYEE REFERRALS
+// ============================================================
+
+enum ReferralStatus {
+  PENDING
+  REVIEWED
+  HIRED
+  REJECTED
+}
+
+model Referral {
+  id              Int            @id @default(autoincrement())
+  companyId       Int
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  referrerId      Int
+  referrer        User           @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
+  jobPostingId    Int?
+  jobPosting      JobPosting?    @relation(fields: [jobPostingId], references: [id], onDelete: SetNull)
+  candidateName   String
+  candidateEmail  String
+  candidatePhone  String?
+  relationship    String?
+  resumeUrl       String?
+  notes           String?        @db.Text
+  status          ReferralStatus @default(PENDING)
+  rewardAmount    Float          @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("referrals")
 }
 

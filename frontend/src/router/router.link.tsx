@@ -2,6 +2,7 @@ import { Navigate, Route } from "react-router";
 import { all_routes } from "./all_routes";
 import TestTheme from "../test-theme";
 import OrgDirectory from "../feature-module/hrm/employees/OrgDirectory";
+import PublicJobApply from "../feature-module/pages/PublicJobApply";
 
 // Import all lazy-loaded components
 import {
@@ -1069,6 +1070,11 @@ export const publicRoutes = [
     route: Route,
   },
   {
+    path: "/company-settings",
+    element: <CompanySettings />,
+    route: Route,
+  },
+  {
     path: routes.localizationSettings,
     element: <Localizationsettings />,
     route: Route,
@@ -1711,6 +1717,11 @@ export const publicRoutes = [
     route: Route,
   },
   {
+    path: "/super-admin/subscriptions",
+    element: <Subscription />,
+    route: Route,
+  },
+  {
     path: routes.superAdminPackages,
     element: <Packages />,
     route: Route,
@@ -1888,6 +1899,10 @@ export const publicRoutes = [
 ];
 
 export const authRoutes = [
+  {
+    path: routes.publicJobApply,
+    element: <PublicJobApply />,
+  },
   {
     path: "/invite/:token",
     element: <AcceptInvite />,

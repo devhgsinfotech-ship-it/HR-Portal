@@ -8,10 +8,13 @@ import CollapseHeader from '../../../core/common/collapse-header/collapse-header
 import apiClient, { getSubdomain } from '../../../core/utils/apiClient';
 import dayjs from 'dayjs';
 
+import VerifyEmployeeModal from './VerifyEmployeeModal';
+
 type PasswordField = "password" | "confirmPassword";
 
 const EmployeesGrid = () => {
     const [dbEmployees, setDbEmployees] = useState<any[]>([]);
+    const [verifyEmp, setVerifyEmp] = useState<any>(null);
     const [dbDepartments, setDbDepartments] = useState<any[]>([]);
     const [dbDesignations, setDbDesignations] = useState<any[]>([]);
     const [selectedDesignation, setSelectedDesignation] = useState<string>('All');
@@ -646,6 +649,53 @@ const EmployeesGrid = () => {
                                                                 Edit
                                                             </Link>
                                                         </li>
+                                                        {['DOCS_SUBMITTED', 'CORRECTION_REQUESTED'].includes(emp.onboardingStatus || '') && (
+                                                            <li>
+                                                                <Link
+                                                                    className="dropdown-item rounded-1 text-warning"
+                                                                    to="#"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        setVerifyEmp({
+                                                                            id: emp.id,
+                                                                            aadhaarPath: emp.aadhaarPath,
+                                                                            panPath: emp.panPath,
+                                                                            resumePath: emp.resumePath,
+                                                                            raw: emp
+                                                                        });
+                                                                        const modalEl = document.getElementById('verify_employee_modal');
+                                                                        if (modalEl) {
+                                                                            // @ts-ignore
+                                                                            const modal = window.bootstrap?.Modal?.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+                                                                            modal.show();
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <i className="ti ti-check me-1" />
+                                                                    Review Onboarding
+                                                                </Link>
+                                                            </li>
+                                                        )}
+                                                        {emp.onboardingStatus === 'INVITED' && (
+                                                            <li>
+                                                                <Link
+                                                                    className="dropdown-item rounded-1 text-info"
+                                                                    to="#"
+                                                                    onClick={async (e) => {
+                                                                        e.preventDefault();
+                                                                        try {
+                                                                            await apiClient.post(`/employees/${emp.id}/resend-invite`);
+                                                                            alert('Invite resent successfully!');
+                                                                        } catch (err: any) {
+                                                                            alert(err.response?.data?.message || 'Error resending invite');
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <i className="ti ti-mail-forward me-1" />
+                                                                    Resend Invite
+                                                                </Link>
+                                                            </li>
+                                                        )}
                                                         <li>
                                                             <Link
                                                                 className="dropdown-item rounded-1 text-danger"
@@ -1688,7 +1738,7 @@ const EmployeesGrid = () => {
                     </div>
                 </div>
             </div>
-            {/* /Delete Modal */}
+            <VerifyEmployeeModal employee={verifyEmp} onSuccess={fetchData} />
         </>
     );
 };

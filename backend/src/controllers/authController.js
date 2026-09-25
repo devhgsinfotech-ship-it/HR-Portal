@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const emailService = require('../utils/emailService');
+const { seedDefaultCompanyRoles } = require('../utils/seedDefaultRoles');
 
 async function login(req, res) {
     try {
@@ -201,7 +202,7 @@ async function register(req, res) {
                     name: contactPerson,
                     email,
                     password: hashedPassword,
-                    role: 'HR',
+                    role: 'COMPANY_ADMIN',
                     accountStatus: 'PENDING',
                 },
             });
@@ -213,6 +214,25 @@ async function register(req, res) {
             await tx.companySetting.create({
                 data: { companyId: company.id },
             });
+
+            // Seed standard default company roles & permission matrix
+            await seedDefaultCompanyRoles(tx, company.id);
+
+            // Auto-provision 14-day trial Subscription on Starter Plan
+            const starterPlan = await tx.subscriptionPlan.findFirst({ where: { code: 'STARTER' } });
+            if (starterPlan) {
+                const trialEndsAt = new Date();
+                trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+                await tx.subscription.create({
+                    data: {
+                        companyId: company.id,
+                        planId: starterPlan.id,
+                        status: 'TRIAL',
+                        billingCycle: 'MONTHLY',
+                        trialEndsAt
+                    }
+                });
+            }
 
             return { company, user };
         });
@@ -256,46 +276,61 @@ async function verifyEmail(req, res) {
         // Find the token in the database
         const verifyRecord = await prisma.emailVerifyToken.findUnique({
             where: { token },
-            include: { user: true },
+            include: { user: { include: { company: true } } },
         });
         if (!verifyRecord) {
-            return res.status(400).json({ message: 'Invalid verification token' });
+            return res.status(400).json({ message: 'Invalid or missing verification token' });
         }
-        if (verifyRecord.used) {
-            return res.status(400).json({ message: 'Token has already been used' });
+
+        const company = verifyRecord.user?.company;
+
+        if (verifyRecord.used || verifyRecord.user?.accountStatus === 'ACTIVE') {
+            return res.json({
+                success: true,
+                alreadyVerified: true,
+                message: 'Your email has already been verified! You can log in to your workspace.',
+                subdomain: company?.subdomain || null,
+                companyName: company?.name || null,
+                logoUrl: company?.logoUrl || null,
+            });
         }
+
         if (new Date() > verifyRecord.expiresAt) {
-            return res.status(400).json({ message: 'Verification token has expired' });
+            return res.status(400).json({
+                message: 'Verification token has expired. Please log in or request a new verification link.',
+                subdomain: company?.subdomain || null,
+                logoUrl: company?.logoUrl || null,
+            });
         }
-        // Mark email as verified and activate the account
-        await prisma.$transaction([
-            prisma.emailVerifyToken.update({
+
+        await prisma.$transaction(async (tx) => {
+            await tx.emailVerifyToken.update({
                 where: { token },
                 data: { used: true },
-            }),
-            prisma.user.update({
+            });
+            await tx.user.update({
                 where: { id: verifyRecord.userId },
                 data: { accountStatus: 'ACTIVE' },
-            }),
-            prisma.company.update({
-                where: { id: verifyRecord.user.companyId },
-                data: { isEmailVerified: true },
-            }),
-        ]);
-
-        // Fetch the company subdomain to send back
-        const company = await prisma.company.findUnique({
-            where: { id: verifyRecord.user.companyId },
-            select: { subdomain: true },
+            });
+            if (verifyRecord.user?.companyId) {
+                await tx.company.update({
+                    where: { id: verifyRecord.user.companyId },
+                    data: { isEmailVerified: true },
+                });
+            }
         });
+
         res.json({
-            message: 'Email verified successfully! You can now log in.',
+            success: true,
+            message: 'Email verified successfully! You can now log in to your workspace.',
             subdomain: company?.subdomain || null,
+            companyName: company?.name || null,
+            logoUrl: company?.logoUrl || null,
         });
 
     } catch (error) {
         console.error('Verify Email Error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(500).json({ message: 'Internal server error: ' + error.message });
     }
 }
 
@@ -448,7 +483,50 @@ async function acceptInvite(req, res) {
             console.warn('Secondary cleanup error ignored:', secondaryErr.message);
         }
 
-        return res.json({ message: 'Account set up successfully! You can now log in.' });
+        // Auto-login & Return JWT token and Onboarding redirect URL based on company subdomain
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
+        const baseDomain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
+        const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
+
+        const updatedUser = await prisma.user.findUnique({
+            where: { id: targetUserId },
+            include: { company: true, employee: true }
+        });
+
+        const jwtToken = jwt.sign(
+            {
+                id: updatedUser.id,
+                role: updatedUser.role,
+                email: updatedUser.email,
+                companyId: updatedUser.companyId,
+                subdomain: updatedUser.company?.subdomain || null,
+            },
+            process.env.JWT_SECRET || 'fallback_secret_key',
+            { expiresIn: '7d' }
+        );
+
+        const companySubdomain = updatedUser.company?.subdomain;
+        const redirectUrl = companySubdomain
+            ? `${protocol}://${companySubdomain}.${baseDomain}/onboarding`
+            : `${protocol}://${baseDomain}/onboarding`;
+
+        return res.json({
+            success: true,
+            message: 'Account set up successfully! Redirecting to onboarding...',
+            token: jwtToken,
+            user: {
+                id: updatedUser.id,
+                name: updatedUser.name,
+                email: updatedUser.email,
+                role: updatedUser.role,
+                companyId: updatedUser.companyId,
+                subdomain: companySubdomain || null,
+                companyLogoUrl: updatedUser.company?.logoUrl || null,
+                profilePhotoUrl: updatedUser.employee?.profilePhotoUrl || null,
+                onboardingStatus: updatedUser.role === 'EMPLOYEE' ? (updatedUser.employee?.onboardingStatus || 'INVITED') : 'COMPLETED',
+            },
+            redirectUrl
+        });
     } catch (error) {
         console.error('Accept Invite Error:', error);
         res.status(500).json({ message: error.message || 'Internal server error' });
@@ -634,15 +712,33 @@ async function resetPassword(req, res) {
 
 async function getCompanyLogo(req, res) {
     try {
-        const { subdomain, email, emailDomain } = req.query;
+        const { subdomain, email, emailDomain, token } = req.query;
         let company = null;
 
-        if (subdomain) {
+        if (token) {
+            const verifyRecord = await prisma.emailVerifyToken.findUnique({
+                where: { token },
+                include: { user: { include: { company: true } } }
+            });
+            if (verifyRecord?.user?.company) {
+                company = verifyRecord.user.company;
+            } else {
+                const inviteRecord = await prisma.inviteToken.findFirst({
+                    where: { token },
+                    include: { user: { include: { company: true } } }
+                });
+                if (inviteRecord?.user?.company) {
+                    company = inviteRecord.user.company;
+                }
+            }
+        }
+
+        if (!company && subdomain) {
             company = await prisma.company.findUnique({
                 where: { subdomain },
                 select: { logoUrl: true, name: true }
             });
-        } else if (email) {
+        } else if (!company && email) {
             const domain = email.split('@')[1]?.toLowerCase();
             if (domain) {
                 company = await prisma.company.findFirst({
@@ -650,7 +746,7 @@ async function getCompanyLogo(req, res) {
                     select: { logoUrl: true, name: true }
                 });
             }
-        } else if (emailDomain) {
+        } else if (!company && emailDomain) {
             company = await prisma.company.findFirst({
                 where: { emailDomain: emailDomain.toLowerCase() },
                 select: { logoUrl: true, name: true }
@@ -668,6 +764,190 @@ async function getCompanyLogo(req, res) {
     }
 }
 
+async function getCompanySettings(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user account' });
+        }
+        const company = await prisma.company.findUnique({
+            where: { id: companyId },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                subdomain: true,
+                emailDomain: true,
+                industry: true,
+                companySize: true,
+                address: true,
+                logoUrl: true,
+                createdAt: true,
+            }
+        });
+        if (!company) {
+            return res.status(404).json({ message: 'Company not found' });
+        }
+        res.json({ success: true, company });
+    } catch (err) {
+        console.error('Error fetching company settings:', err);
+        res.status(500).json({ message: 'Failed to fetch company settings' });
+    }
+}
+
+async function updateCompanySettings(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user account' });
+        }
+
+        if (req.user.role !== 'COMPANY_ADMIN' && req.user.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ message: 'Unauthorized: Only Company Admins can modify company settings' });
+        }
+
+        const { name, phone, email, address, industry, companySize, logoUrl } = req.body;
+        
+        let newLogoUrl = logoUrl;
+        if (req.file) {
+            newLogoUrl = `/uploads/logos/${req.file.filename}`;
+        }
+
+        const updateData = {};
+        if (name !== undefined) updateData.name = name;
+        if (phone !== undefined) updateData.phone = phone;
+        if (email !== undefined) updateData.email = email;
+        if (address !== undefined) updateData.address = address;
+        if (industry !== undefined) updateData.industry = industry;
+        if (companySize !== undefined) updateData.companySize = companySize;
+        if (newLogoUrl !== undefined) updateData.logoUrl = newLogoUrl;
+
+        const updatedCompany = await prisma.company.update({
+            where: { id: companyId },
+            data: updateData,
+        });
+
+        res.json({ success: true, message: 'Company settings updated successfully', company: updatedCompany });
+    } catch (err) {
+        console.error('Error updating company settings:', err);
+        res.status(500).json({ message: 'Failed to update company settings' });
+    }
+}
+
+async function getProfile(req, res) {
+    try {
+        const userId = req.user.id;
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                company: true,
+                employee: true,
+            }
+        });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const profileData = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            companyName: user.company?.name || null,
+            subdomain: user.company?.subdomain || null,
+            firstName: user.employee?.firstName || user.name.split(' ')[0] || '',
+            lastName: user.employee?.lastName || user.name.split(' ').slice(1).join(' ') || '',
+            phone: user.employee?.phone || user.company?.phone || '',
+            address: user.employee?.address || '',
+            country: user.employee?.country || '',
+            state: user.employee?.state || '',
+            city: user.employee?.city || '',
+            postalCode: user.employee?.postalCode || '',
+            gender: user.employee?.gender || null,
+            dateOfBirth: user.employee?.dateOfBirth ? user.employee.dateOfBirth.toISOString().split('T')[0] : null,
+            profilePhotoUrl: user.employee?.profilePhotoUrl || null,
+            emergencyContactName: user.employee?.emergencyContactName || '',
+            emergencyContactPhone: user.employee?.emergencyContactPhone || '',
+        };
+
+        res.json({ success: true, profile: profileData });
+    } catch (err) {
+        console.error('Error fetching profile:', err);
+        res.status(500).json({ message: 'Failed to fetch user profile' });
+    }
+}
+
+async function updateProfile(req, res) {
+    try {
+        const userId = req.user.id;
+        const {
+            name, firstName, lastName, phone, address,
+            country, state, city, postalCode, gender,
+            dateOfBirth, emergencyContactName, emergencyContactPhone, profilePhotoUrl
+        } = req.body;
+
+        let newPhotoUrl = profilePhotoUrl;
+        if (req.file) {
+            newPhotoUrl = `/uploads/profiles/${req.file.filename}`;
+        }
+
+        const fullName = name || (firstName && lastName ? `${firstName} ${lastName}` : firstName || undefined);
+
+        if (fullName) {
+            await prisma.user.update({
+                where: { id: userId },
+                data: { name: fullName }
+            });
+        }
+
+        const employeeData = {};
+        if (firstName !== undefined) employeeData.firstName = firstName;
+        if (lastName !== undefined) employeeData.lastName = lastName;
+        if (phone !== undefined) employeeData.phone = phone;
+        if (address !== undefined) employeeData.address = address;
+        if (country !== undefined) employeeData.country = country;
+        if (state !== undefined) employeeData.state = state;
+        if (city !== undefined) employeeData.city = city;
+        if (postalCode !== undefined) employeeData.postalCode = postalCode;
+        if (gender !== undefined) employeeData.gender = gender;
+        if (dateOfBirth) employeeData.dateOfBirth = new Date(dateOfBirth);
+        if (emergencyContactName !== undefined) employeeData.emergencyContactName = emergencyContactName;
+        if (emergencyContactPhone !== undefined) employeeData.emergencyContactPhone = emergencyContactPhone;
+        if (newPhotoUrl !== undefined) employeeData.profilePhotoUrl = newPhotoUrl;
+
+        const existingEmp = await prisma.employee.findUnique({ where: { userId } });
+        let updatedEmp;
+        if (existingEmp) {
+            updatedEmp = await prisma.employee.update({
+                where: { userId },
+                data: employeeData,
+            });
+        } else {
+            const userRec = await prisma.user.findUnique({ where: { id: userId } });
+            updatedEmp = await prisma.employee.create({
+                data: {
+                    userId,
+                    employeeCode: `EMP-${Date.now().toString().slice(-5)}`,
+                    firstName: firstName || userRec.name.split(' ')[0] || 'User',
+                    lastName: lastName || userRec.name.split(' ').slice(1).join(' ') || '',
+                    ...employeeData,
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            employee: updatedEmp
+        });
+    } catch (err) {
+        console.error('Error updating profile:', err);
+        res.status(500).json({ message: 'Failed to update profile' });
+    }
+}
+
 module.exports = {
     login,
     register,
@@ -677,5 +957,9 @@ module.exports = {
     resendVerification,
     forgotPassword,
     resetPassword,
-    getCompanyLogo
+    getCompanyLogo,
+    getCompanySettings,
+    updateCompanySettings,
+    getProfile,
+    updateProfile
 };

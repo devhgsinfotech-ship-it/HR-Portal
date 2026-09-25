@@ -77,10 +77,20 @@ const AcceptInvite = () => {
         password
       });
 
-      setSuccessMsg(res.data.message || 'Account set up successfully! You can now login.');
+      if (res.data?.token && res.data?.user) {
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('user', JSON.stringify(res.data.user));
+      }
+
+      setSuccessMsg(res.data.message || 'Account set up successfully! Redirecting to onboarding...');
+
       setTimeout(() => {
-        navigate(all_routes.login);
-      }, 3000);
+        if (res.data?.redirectUrl) {
+          window.location.href = res.data.redirectUrl;
+        } else {
+          navigate(all_routes.login);
+        }
+      }, 1500);
     } catch (err: any) {
       setErrorMsg(err.response?.data?.message || 'Failed to set up account.');
     } finally {

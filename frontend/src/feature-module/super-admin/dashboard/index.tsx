@@ -3,8 +3,9 @@ import { all_routes } from '../../../router/all_routes'
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
 import ImageWithBasePath from '../../../core/common/imageWithBasePath'
 import ReactApexChart from "react-apexcharts";
-import React, { type ReactNode } from 'react';
+import React, { type ReactNode, useState, useEffect } from 'react';
 import PredefinedDatePicker from '@/core/common/datePicker';
+import apiClient from '../../../core/utils/apiClient';
 
 // Error Boundary
 interface ErrorBoundaryProps {
@@ -62,6 +63,33 @@ interface ApexChartOptions {
 
 const SuperAdminDashboard: React.FC = () => {
   const routes = all_routes;
+
+  const [summary, setSummary] = useState<any>({
+    totalCompanies: 0,
+    activeCompanies: 0,
+    totalSubscribers: 0,
+    totalEarnings: 0,
+    newCompaniesToday: 0,
+    recentCompanies: []
+  });
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const fetchSummary = async () => {
+      try {
+        setLoading(true);
+        const res = await apiClient.get('/super-admin/dashboard-summary');
+        if (res.data) {
+          setSummary(res.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch super admin dashboard summary:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSummary();
+  }, []);
 
   // Replace all useState<any> with useState<ApexChartOptions>
   const [CompanyChart] = React.useState<ApexChartOptions>({
@@ -522,8 +550,8 @@ const SuperAdminDashboard: React.FC = () => {
           <div className="welcome-wrap mb-4">
             <div className=" d-flex align-items-center justify-content-between flex-wrap">
               <div className="mb-3">
-                <h2 className="mb-1 text-white">Welcome Back, Adrian</h2>
-                <p className="text-light">14 New Companies Subscribed Today !!!</p>
+                <h2 className="mb-1 text-white">Welcome Back, Super Admin</h2>
+                <p className="text-light">{summary.newCompaniesToday} New Companies Subscribed Today</p>
               </div>
               <div className="d-flex align-items-center flex-wrap mb-1">
                 <Link to={routes.superAdminCompanies} className="btn btn-dark btn-md me-2 mb-2">
@@ -562,11 +590,11 @@ const SuperAdminDashboard: React.FC = () => {
                     <span className="avatar avatar-md bg-dark mb-3">
                       <i className="ti ti-building fs-16" />
                     </span>
-                    <span className="badge bg-success fw-normal mb-3">+19.01%</span>
+                    <span className="badge bg-success fw-normal mb-3">Live</span>
                   </div>
                   <div className="d-flex align-items-center justify-content-between">
                     <div>
-                      <h2 className="mb-1">5468</h2>
+                      <h2 className="mb-1">{summary.totalCompanies}</h2>
                       <p className="fs-13">Total Companies</p>
                     </div>
                     <ReactApexChart
@@ -588,11 +616,11 @@ const SuperAdminDashboard: React.FC = () => {
                     <span className="avatar avatar-md bg-dark mb-3">
                       <i className="ti ti-carousel-vertical fs-16" />
                     </span>
-                    <span className="badge bg-danger fw-normal mb-3">-12%</span>
+                    <span className="badge bg-success fw-normal mb-3">Active</span>
                   </div>
                   <div className="d-flex align-items-center justify-content-between">
                     <div>
-                      <h2 className="mb-1">4598</h2>
+                      <h2 className="mb-1">{summary.activeCompanies}</h2>
                       <p className="fs-13">Active Companies</p>
                     </div>
                     <ReactApexChart
@@ -614,11 +642,11 @@ const SuperAdminDashboard: React.FC = () => {
                     <span className="avatar avatar-md bg-dark mb-3">
                       <i className="ti ti-chalkboard-off fs-16" />
                     </span>
-                    <span className="badge bg-success fw-normal mb-3">+6%</span>
+                    <span className="badge bg-info fw-normal mb-3">SaaS</span>
                   </div>
                   <div className="d-flex align-items-center justify-content-between">
                     <div>
-                      <h2 className="mb-1">3698</h2>
+                      <h2 className="mb-1">{summary.totalSubscribers}</h2>
                       <p className="fs-13">Total Subscribers</p>
                     </div>
                     <ReactApexChart
@@ -640,11 +668,11 @@ const SuperAdminDashboard: React.FC = () => {
                     <span className="avatar avatar-md bg-dark mb-3">
                       <i className="ti ti-businessplan fs-16" />
                     </span>
-                    <span className="badge bg-danger fw-normal mb-3">-16%</span>
+                    <span className="badge bg-success fw-normal mb-3">INR</span>
                   </div>
                   <div className="d-flex align-items-center justify-content-between">
                     <div>
-                      <h2 className="mb-1">$89,878,58</h2>
+                      <h2 className="mb-1">₹{summary.totalEarnings.toLocaleString('en-IN')}</h2>
                       <p className="fs-13">Total Earnings</p>
                     </div>
                     <ReactApexChart

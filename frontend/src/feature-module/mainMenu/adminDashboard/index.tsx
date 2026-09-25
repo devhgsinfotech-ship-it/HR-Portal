@@ -537,24 +537,30 @@ const AdminDashboard = () => {
                         <h1 className="display-4 text-white mb-0 fw-normal" style={{ fontSize: '2rem', lineHeight: '1' }}>{hhmm}</h1>
                         <span className="fs-13 ms-1" style={{ opacity: 0.85 }}>{ssAmPm}</span>
                       </div>
-                      <button 
-                        onClick={handlePunch} 
-                        disabled={clockLoading}
-                        className="btn px-3 py-2 border-0 fw-medium fs-13 rounded-3 text-white shadow-sm" 
-                        style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s', opacity: clockLoading ? 0.7 : 1 }}
-                      >
-                        {clockLoading ? (
-                          <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" />
-                        ) : attendanceStatus?.isCheckedIn ? (
-                          <>
-                            <i className="ti ti-clock-off me-1" /> Clock-out
-                          </>
-                        ) : (
-                          <>
-                            <i className="ti ti-clock-check me-1" /> Clock-in
-                          </>
-                        )}
-                      </button>
+                      {attendanceStatus?.isNotApplicable ? (
+                        <span className="badge bg-white-transparent text-white px-3 py-2 fs-12 fw-medium border border-white-50 rounded-3">
+                          <i className="ti ti-shield-check me-1" /> Admin Account (No Punch Req.)
+                        </span>
+                      ) : (
+                        <button 
+                          onClick={handlePunch} 
+                          disabled={clockLoading}
+                          className="btn px-3 py-2 border-0 fw-medium fs-13 rounded-3 text-white shadow-sm" 
+                          style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s', opacity: clockLoading ? 0.7 : 1 }}
+                        >
+                          {clockLoading ? (
+                            <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" />
+                          ) : attendanceStatus?.isCheckedIn ? (
+                            <>
+                              <i className="ti ti-clock-off me-1" /> Clock-out
+                            </>
+                          ) : (
+                            <>
+                              <i className="ti ti-clock-check me-1" /> Clock-in
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -581,6 +587,88 @@ const AdminDashboard = () => {
             </div>
           </div>
           {/* /Welcome Wrap */}
+
+          {/* Company Admin Quick Control Panel */}
+          {(user?.role === 'COMPANY_ADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'HR') && (
+            <div className="row mb-4">
+              <div className="col-12">
+                <div className="card border-0 shadow-sm bg-light-subtle" style={{ borderRadius: '12px' }}>
+                  <div className="card-body p-3">
+                    <div className="d-md-flex align-items-center justify-content-between mb-3">
+                      <div>
+                        <h5 className="mb-1 text-dark fw-bold">
+                          <i className="ti ti-building-cog me-2 text-primary fs-20" />
+                          Company &amp; Workspace Management
+                        </h5>
+                        <p className="text-muted mb-0 fs-13">Quick shortcuts to manage your tenant settings, custom roles, employee permissions, and workspace.</p>
+                      </div>
+                      <span className="badge bg-primary-transparent text-primary px-3 py-2 rounded-pill fs-12 fw-medium mt-2 mt-md-0">
+                        Role: {user?.role === 'COMPANY_ADMIN' ? 'Company Admin (Owner)' : user?.role}
+                      </span>
+                    </div>
+
+                    <div className="row g-3">
+                      <div className="col-xl-3 col-md-6">
+                        <Link to="/company-settings" className="card border hover-shadow text-decoration-none transition-all h-100 mb-0">
+                          <div className="card-body p-3 d-flex align-items-center">
+                            <div className="avatar avatar-md bg-primary-transparent rounded-circle me-3 flex-shrink-0">
+                              <i className="ti ti-building-store fs-18 text-primary" />
+                            </div>
+                            <div>
+                              <h6 className="mb-1 text-dark fw-semibold">Company Settings</h6>
+                              <span className="fs-12 text-muted">Manage logo, address &amp; details</span>
+                            </div>
+                          </div>
+                        </Link>
+                      </div>
+
+                      <div className="col-xl-3 col-md-6">
+                        <Link to={all_routes.rolePermission} className="card border hover-shadow text-decoration-none transition-all h-100 mb-0">
+                          <div className="card-body p-3 d-flex align-items-center">
+                            <div className="avatar avatar-md bg-success-transparent rounded-circle me-3 flex-shrink-0">
+                              <i className="ti ti-shield-lock fs-18 text-success" />
+                            </div>
+                            <div>
+                              <h6 className="mb-1 text-dark fw-semibold">Roles &amp; Permissions</h6>
+                              <span className="fs-12 text-muted">Manage 8 auto-seeded roles &amp; permissions</span>
+                            </div>
+                          </div>
+                        </Link>
+                      </div>
+
+                      <div className="col-xl-3 col-md-6">
+                        <Link to={all_routes.employeeList} className="card border hover-shadow text-decoration-none transition-all h-100 mb-0">
+                          <div className="card-body p-3 d-flex align-items-center">
+                            <div className="avatar avatar-md bg-info-transparent rounded-circle me-3 flex-shrink-0">
+                              <i className="ti ti-users-group fs-18 text-info" />
+                            </div>
+                            <div>
+                              <h6 className="mb-1 text-dark fw-semibold">Employee Directory</h6>
+                              <span className="fs-12 text-muted">Invite users, assign roles &amp; onboarding</span>
+                            </div>
+                          </div>
+                        </Link>
+                      </div>
+
+                      <div className="col-xl-3 col-md-6">
+                        <Link to={all_routes.profilesettings} className="card border hover-shadow text-decoration-none transition-all h-100 mb-0">
+                          <div className="card-body p-3 d-flex align-items-center">
+                            <div className="avatar avatar-md bg-warning-transparent rounded-circle me-3 flex-shrink-0">
+                              <i className="ti ti-settings-automation fs-18 text-warning" />
+                            </div>
+                            <div>
+                              <h6 className="mb-1 text-dark fw-semibold">Workspace Settings</h6>
+                              <span className="fs-12 text-muted">Security, preferences &amp; notifications</span>
+                            </div>
+                          </div>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="row">
             {/* Widget Info */}
             <div className="col-xxl-8 d-flex">

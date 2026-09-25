@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 
 type PasswordField = "password" | "confirmPassword";
 
@@ -147,12 +148,23 @@ const Register = () => {
             <div className="col-md-6 col-lg-5 mx-auto px-3">
               <div className="card shadow-sm text-center p-4">
                 <div className="mb-3">
-                  <div className="mx-auto mb-3" style={{ maxWidth: 160 }}>
-                    <ImageWithBasePath
-                      src="assets/img/logo.svg"
-                      className="img-fluid"
-                      alt="Logo"
-                    />
+                  <div className="mx-auto mb-3" style={{ maxWidth: 220, minHeight: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {logoUrl ? (
+                      <img
+                        src={`${APP_CONFIG.getBackendUrl().replace(/\/$/, '')}${logoUrl}`}
+                        className="img-fluid"
+                        alt={companyName || "Company Logo"}
+                        style={{ maxHeight: 75, objectFit: "contain" }}
+                      />
+                    ) : companyName ? (
+                      <h3 className="fw-bold text-primary mb-0">{companyName}</h3>
+                    ) : (
+                      <ImageWithBasePath
+                        src="assets/img/hgs-logo-HR.webp"
+                        className="img-fluid"
+                        alt="Logo"
+                      />
+                    )}
                   </div>
                   <i
                     className="ti ti-circle-check text-success d-block mb-2"

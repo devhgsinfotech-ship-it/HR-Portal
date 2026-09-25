@@ -2,11 +2,20 @@
 const prisma = require('../config/prisma');
 
 /**
- * Check if user has a required system role (SUPER_ADMIN, HR, MANAGER, EMPLOYEE)
+ * Check if user has a required system role (SUPER_ADMIN, COMPANY_ADMIN, HR, MANAGER, EMPLOYEE)
  */
 const checkSystemRole = (allowedRoles) => (req, res, next) => {
   const userRole = req.user?.role;
-  if (!userRole || !allowedRoles.includes(userRole)) {
+  if (!userRole) {
+    return res.status(401).json({ message: 'Unauthorized.' });
+  }
+
+  // SUPER_ADMIN and COMPANY_ADMIN automatically pass all system role checks
+  if (userRole === 'SUPER_ADMIN' || userRole === 'COMPANY_ADMIN') {
+    return next();
+  }
+
+  if (!allowedRoles.includes(userRole)) {
     return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
   }
   next();
@@ -14,15 +23,15 @@ const checkSystemRole = (allowedRoles) => (req, res, next) => {
 
 /**
  * Check if user has a specific module permission via CompanyRole
- * Falls back to system role check for SUPER_ADMIN / HR
+ * Falls back to system role check for SUPER_ADMIN / COMPANY_ADMIN / HR
  */
 const checkModulePermission = (module, action) => async (req, res, next) => {
   try {
     const user = req.user;
     if (!user) return res.status(401).json({ message: 'Unauthorized.' });
 
-    // Super admin always has access
-    if (user.role === 'SUPER_ADMIN') return next();
+    // Super Admin and Company Admin always have full access
+    if (user.role === 'SUPER_ADMIN' || user.role === 'COMPANY_ADMIN') return next();
 
     // HR always has access to project ops (but not budget)
     if (user.role === 'HR' && action !== 'budget') return next();
@@ -65,10 +74,10 @@ const checkModulePermission = (module, action) => async (req, res, next) => {
 };
 
 // Shorthand middleware factories
-const requireProjectAdmin = checkSystemRole(['SUPER_ADMIN', 'HR', 'MANAGER']);
-const requireFinanceAccess = checkSystemRole(['SUPER_ADMIN', 'HR']);
-const requireProjectAccess = checkSystemRole(['SUPER_ADMIN', 'HR', 'MANAGER', 'EMPLOYEE']);
-const requireAdminOnly = checkSystemRole(['SUPER_ADMIN', 'HR']);
+const requireProjectAdmin = checkSystemRole(['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR', 'MANAGER']);
+const requireFinanceAccess = checkSystemRole(['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR']);
+const requireProjectAccess = checkSystemRole(['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR', 'MANAGER', 'EMPLOYEE']);
+const requireAdminOnly = checkSystemRole(['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR']);
 
 module.exports = {
   checkSystemRole,
@@ -78,3 +87,4 @@ module.exports = {
   requireProjectAccess,
   requireAdminOnly,
 };
+

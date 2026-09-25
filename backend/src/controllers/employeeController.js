@@ -186,8 +186,23 @@ async function createEmployee(req, res) {
 async function getEmployees(req, res) {
     try {
         const companyId = req.user.companyId;
+        let whereClause = {};
+        if (companyId) {
+            whereClause.user = { companyId };
+        }
+
+        if (req.user.role === 'MANAGER') {
+            const managerEmployee = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+            if (managerEmployee) {
+                whereClause.OR = [
+                    { id: managerEmployee.id },
+                    { reportingManagerId: managerEmployee.id }
+                ];
+            }
+        }
+
         const employees = await prisma.employee.findMany({
-            where: { user: { companyId } },
+            where: whereClause,
             include: {
                 user: {
                     include: {
@@ -213,9 +228,13 @@ async function getEmployees(req, res) {
 async function getEmployeeById(req, res) {
     try {
         const { id } = req.params;
+        const parsedId = parseInt(id, 10);
+        if (isNaN(parsedId)) {
+            return res.status(400).json({ message: 'Invalid employee ID' });
+        }
         const companyId = req.user.companyId;
         const employee = await prisma.employee.findUnique({
-            where: { id: parseInt(id, 10) },
+            where: { id: parsedId },
             include: {
                 user: true,
                 department: true,
@@ -921,15 +940,36 @@ async function getCompanyEvents(req, res) {
 
             if (emp.dateOfJoining) {
                 const doj = new Date(emp.dateOfJoining);
-                if (doj.getDate() === currentDay && doj.getMonth() === currentMonth) {
-                    if (doj.getFullYear() < today.getFullYear()) {
-                        const years = today.getFullYear() - doj.getFullYear();
+                if (doj.getFullYear() < today.getFullYear()) {
+                    const years = today.getFullYear() - doj.getFullYear();
+                    const annivThisYear = new Date(today.getFullYear(), doj.getMonth(), doj.getDate());
+                    annivThisYear.setHours(0, 0, 0, 0);
+                    let nextAnniv = annivThisYear;
+                    if (annivThisYear.getTime() < today.getTime()) {
+                        nextAnniv = new Date(today.getFullYear() + 1, doj.getMonth(), doj.getDate());
+                    }
+                    const diffDaysAnniv = Math.ceil((nextAnniv.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                    const formattedAnniv = nextAnniv.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+
+                    if (doj.getDate() === currentDay && doj.getMonth() === currentMonth) {
                         anniversaries.push({
                             id: emp.id,
                             name: `${emp.firstName} ${emp.lastName || ''}`.trim(),
                             profilePhotoUrl: emp.profilePhotoUrl,
                             designation: emp.designation?.name || 'N/A',
-                            years: `${years} Year${years > 1 ? 's' : ''}`
+                            years: `${years} Year${years > 1 ? 's' : ''}`,
+                            dateStr: 'Today',
+                            isToday: true
+                        });
+                    } else if (doj.getMonth() === currentMonth || diffDaysAnniv <= 30) {
+                        anniversaries.push({
+                            id: emp.id,
+                            name: `${emp.firstName} ${emp.lastName || ''}`.trim(),
+                            profilePhotoUrl: emp.profilePhotoUrl,
+                            designation: emp.designation?.name || 'N/A',
+                            years: `${years} Year${years > 1 ? 's' : ''}`,
+                            dateStr: formattedAnniv,
+                            isToday: false
                         });
                     }
                 }
@@ -940,7 +980,8 @@ async function getCompanyEvents(req, res) {
                         name: `${emp.firstName} ${emp.lastName || ''}`.trim(),
                         profilePhotoUrl: emp.profilePhotoUrl,
                         designation: emp.designation?.name || 'N/A',
-                        dateOfJoining: doj
+                        dateOfJoining: doj,
+                        dateStr: doj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
                     });
                 }
             }
@@ -1652,7 +1693,14 @@ async function getDashboardSummary(req, res) {
         const statusPromise = prisma.attendanceRecord.findFirst({
             where: { employee: { userId }, date: { gte: todayStart, lte: todayEnd } },
             orderBy: { createdAt: 'desc' }
-        }).then(log => ({ isCheckedIn: log ? !log.checkOut : false, checkInTime: log?.checkIn, checkOutTime: log?.checkOut }));
+        }).then(log => ({ 
+            isCheckedIn: log ? !log.checkOut : false, 
+            checkInTime: log?.checkIn, 
+            checkOutTime: log?.checkOut,
+            breakInTime: log?.breakIn,
+            breakOutTime: log?.breakOut,
+            record: log || null
+        }));
 
         const logsPromise = prisma.attendanceRecord.findMany({
             where: { employee: { userId } },

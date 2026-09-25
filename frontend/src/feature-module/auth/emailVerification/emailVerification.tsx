@@ -15,6 +15,8 @@ const EmailVerification = () => {
   const [state, setState] = useState<VerifyState>(token ? "loading" : "no-token");
   const [message, setMessage] = useState("");
   const [subdomain, setSubdomain] = useState<string | null>(null);
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -22,23 +24,45 @@ const EmailVerification = () => {
       return;
     }
 
-    const verify = async () => {
+    const fetchLogoAndVerify = async () => {
+      try {
+        const logoRes = await apiClient.get(`/auth/company-logo?token=${token}`);
+        if (logoRes.data?.logoUrl) {
+          setCompanyLogoUrl(logoRes.data.logoUrl);
+        }
+        if (logoRes.data?.companyName) {
+          setCompanyName(logoRes.data.companyName);
+        }
+      } catch (e) {
+        // Logo fetch error ignored
+      }
+
       try {
         const response = await apiClient.post("/auth/verify-email", { token });
         setMessage(response.data.message || "Email verified successfully!");
-        // Try to extract subdomain from response if available
         if (response.data.subdomain) {
           setSubdomain(response.data.subdomain);
+        }
+        if (response.data.logoUrl) {
+          setCompanyLogoUrl(response.data.logoUrl);
+        }
+        if (response.data.companyName) {
+          setCompanyName(response.data.companyName);
         }
         setState("success");
       } catch (err: any) {
         setMessage(err.response?.data?.message || "Verification failed. The link may be invalid or expired.");
+        if (err.response?.data?.logoUrl) {
+          setCompanyLogoUrl(err.response.data.logoUrl);
+        }
         setState("error");
       }
     };
 
-    verify();
+    fetchLogoAndVerify();
   }, [token]);
+
+  const backendUrl = APP_CONFIG.getBackendUrl();
 
   return (
     <div className="container-fuild">
@@ -48,8 +72,19 @@ const EmailVerification = () => {
             <div className="card shadow-sm p-4 text-center">
 
               <div className="mb-4">
-                <div className="mx-auto mb-3" style={{ maxWidth: 160 }}>
-                  <ImageWithBasePath src="assets/img/logo.svg" className="img-fluid" alt="Logo" />
+                <div className="mx-auto mb-3" style={{ maxWidth: 220, minHeight: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {companyLogoUrl ? (
+                    <img 
+                      src={`${backendUrl.replace(/\/$/, '')}${companyLogoUrl}`} 
+                      className="img-fluid" 
+                      alt={companyName || "Company Logo"} 
+                      style={{ maxHeight: 75, objectFit: "contain" }} 
+                    />
+                  ) : companyName ? (
+                    <h3 className="fw-bold text-primary mb-0">{companyName}</h3>
+                  ) : (
+                    <ImageWithBasePath src="assets/img/hgs-logo-HR.webp" className="img-fluid" alt="Logo" />
+                  )}
                 </div>
               </div>
 

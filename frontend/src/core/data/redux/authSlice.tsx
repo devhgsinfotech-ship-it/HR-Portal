@@ -17,7 +17,7 @@ export interface AuthUser {
     id: number;
     name: string;
     email: string;
-    role: "SUPER_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
+    role: "SUPER_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
     companyId: number | null;
     subdomain: string | null;
     companyLogoUrl?: string | null;

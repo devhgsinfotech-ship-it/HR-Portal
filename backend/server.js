@@ -96,6 +96,15 @@ const timesheetRoutes = require('./src/routes/timesheetRoutes');
 const roleRoutes = require('./src/routes/roleRoutes');
 const payrollRoutes = require('./src/routes/payrollRoutes');
 
+// SaaS Subscription Billing Routes & Seeder
+const subscriptionRoutes = require('./src/routes/subscriptionRoutes');
+const { seedDefaultPlans } = require('./src/utils/seedDefaultPlans');
+
+// Phase 4 Routes: Assets, Documents & Notifications
+const assetRoutes = require('./src/routes/assetRoutes');
+const documentRoutes = require('./src/routes/documentRoutes');
+const notificationRoutes = require('./src/routes/notificationRoutes');
+
 // Initialize Cron Jobs
 require('./src/cron/attendanceJobs');
 
@@ -131,6 +140,30 @@ app.use('/roles', roleRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/payroll', payrollRoutes);
 app.use('/api/payroll', payrollRoutes);
+
+// SaaS Subscriptions & Plans
+app.use('/super-admin', subscriptionRoutes);
+app.use('/api/super-admin', subscriptionRoutes);
+app.use('/api/subscription', subscriptionRoutes);
+
+// Phase 4 APIs
+app.use('/assets', assetRoutes);
+app.use('/api/assets', assetRoutes);
+app.use('/documents', documentRoutes);
+app.use('/api/documents', documentRoutes);
+app.use('/notifications', notificationRoutes);
+app.use('/api/notifications', notificationRoutes);
+
+// Phase 5.1 & 5.2 Recruitment ATS & Referral Routes
+const jobPostingRoutes = require('./src/routes/jobPostingRoutes');
+const applicantRoutes = require('./src/routes/applicantRoutes');
+const referralRoutes = require('./src/routes/referralRoutes');
+app.use('/job-postings', jobPostingRoutes);
+app.use('/api/job-postings', jobPostingRoutes);
+app.use('/applicants', applicantRoutes);
+app.use('/api/applicants', applicantRoutes);
+app.use('/referrals', referralRoutes);
+app.use('/api/referrals', referralRoutes);
 
 
 const prisma = require('./src/config/prisma');
@@ -181,8 +214,9 @@ app.get('/admin/db-push', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     // Sync database schema after server starts
     runDbPush();
+    await seedDefaultPlans();
 });

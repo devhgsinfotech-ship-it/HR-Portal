@@ -27,7 +27,14 @@ const verifyToken = (req, res, next) => {
 
 const requireRole = (...roles) => {
     return (req, res, next) => {
-        if (!req.user || !roles.includes(req.user.role)) {
+        if (!req.user) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+        // SUPER_ADMIN and COMPANY_ADMIN have full workspace administration rights
+        if (req.user.role === 'SUPER_ADMIN' || req.user.role === 'COMPANY_ADMIN') {
+            return next();
+        }
+        if (!roles.includes(req.user.role)) {
             return res.status(403).json({ message: 'Forbidden: Insufficient privileges' });
         }
         next();

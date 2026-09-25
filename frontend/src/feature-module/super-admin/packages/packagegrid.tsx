@@ -1,11 +1,22 @@
-import { Link } from 'react-router-dom'
-import { all_routes } from '../../../router/all_routes'
-import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
-import ImageWithBasePath from '../../../core/common/imageWithBasePath'
-import CommonSelect from '../../../core/common/commonSelect'
-
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { all_routes } from '../../../router/all_routes';
+import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
+import ImageWithBasePath from '../../../core/common/imageWithBasePath';
+import CommonSelect from '../../../core/common/commonSelect';
+import apiClient from '../../../core/utils/apiClient';
 
 const PackagesGrid = () => {
+  const [plans, setPlans] = useState<any[]>([]);
+  const [isYearly, setIsYearly] = useState<boolean>(false);
+
+  useEffect(() => {
+    apiClient.get('/super-admin/plans')
+      .then(res => {
+        if (Array.isArray(res.data)) setPlans(res.data);
+      })
+      .catch(err => console.error('Failed to fetch grid plans:', err));
+  }, []);
 
   const planName = [
     { value: "Advanced", label: "Advanced" },
@@ -17,8 +28,7 @@ const PackagesGrid = () => {
     { value: "Yearly", label: "Yearly" },
   ];
   const currency = [
-    { value: "USD", label: "USD" },
-    { value: "Euro", label: "Euro" },
+    { value: "INR", label: "INR (₹)" },
   ];
   const planPosition = [
     { value: "1", label: "1" },
@@ -315,229 +325,77 @@ const PackagesGrid = () => {
             <div className="card">
               <div className="card-body">
                 <div className="d-flex justify-content-center align-items-center mb-4">
-                  <p className="mb-0 me-2">Monthly</p>
+                  <p className={`mb-0 me-2 ${!isYearly ? 'fw-bold text-primary' : ''}`}>Monthly</p>
                   <div className="form-check form-switch">
                     <input
                       className="form-check-input"
                       type="checkbox"
                       id="flexSwitchCheckDefault"
+                      checked={isYearly}
+                      onChange={(e) => setIsYearly(e.target.checked)}
                     />
                   </div>
-                  <p>Yearly</p>
+                  <p className={`mb-0 ms-2 ${isYearly ? 'fw-bold text-primary' : ''}`}>Yearly</p>
                 </div>
                 <div className="row justify-content-center">
-                  <div className="col-lg-3 col-md-6 col-sm-12 d-flex">
-                    <div className="card flex-fill">
-                      <div className="card-body">
-                        <div className="card">
-                          <div className="card-body">
-                            <h4>Basic</h4>
-                            <h1>
-                              $50
-                              <span className="fs-14 fw-normal text-gray">
-                                /monthly
-                              </span>
-                            </h1>
-                          </div>
-                        </div>
-                        <div className="pricing-content rounded bg-light mb-3">
-                          <div className="price-hdr">
-                            <h6 className="fs-14 fw-medium text-gray w-100">
-                              Features Includes
-                            </h6>
-                          </div>
-                          <div>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              10 Employees
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              50 Projects
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              50 Clients
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              50 GB Storage
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-circle-x-filled text-danger me-2" />
-                              Voice &amp; Video Chat
-                            </span>
-                            <span className="text-dark d-flex align-items-center">
-                              <i className="ti ti-circle-x-filled text-danger me-2" />
-                              CRM
-                            </span>
-                          </div>
-                        </div>
-                        <Link to="#" className="btn btn-dark w-100">
-                          Choose Plan
-                        </Link>
-                      </div>
+                  {plans.length === 0 ? (
+                    <div className="col-12 text-center py-5">
+                      <p className="text-muted fs-15">No subscription plans found in database.</p>
                     </div>
-                  </div>
-                  <div className="col-lg-3 col-md-6 col-sm-12 d-flex">
-                    <div className="card flex-fill">
-                      <div className="card-body">
-                        <div className="card">
-                          <div className="card-body">
-                            <h4>Advanced</h4>
-                            <h1>
-                              $200
-                              <span className="fs-14 fw-normal text-gray">
-                                /monthly
-                              </span>
-                            </h1>
+                  ) : (
+                    plans.map((p) => {
+                      const price = isYearly ? p.priceYearly : p.priceMonthly;
+                      const period = isYearly ? '/yearly' : '/monthly';
+                      const featList = Array.isArray(p.features) ? p.features : [];
+
+                      return (
+                        <div className="col-lg-4 col-md-6 col-sm-12 d-flex mb-4" key={p.id}>
+                          <div className="card flex-fill border shadow-sm rounded">
+                            <div className="card-body d-flex flex-column justify-content-between">
+                              <div>
+                                <div className="d-flex justify-content-between align-items-center mb-3">
+                                  <h4 className="fw-bold mb-0">{p.name}</h4>
+                                  <span className={`badge ${p.isActive ? 'badge-success' : 'badge-danger'} d-inline-flex align-items-center`}>
+                                    <i className="ti ti-point-filled me-1" />
+                                    {p.isActive ? 'Active' : 'Inactive'}
+                                  </span>
+                                </div>
+                                <div className="card bg-light p-3 mb-3 border-0">
+                                  <h2 className="text-primary mb-1">
+                                    ₹{Number(price).toLocaleString('en-IN')}
+                                    <span className="fs-14 fw-normal text-muted ms-1">
+                                      {period}
+                                    </span>
+                                  </h2>
+                                  <p className="fs-12 text-muted mb-0">
+                                    Code: {p.code} | Max {p.maxEmployees >= 99999 ? 'Unlimited' : p.maxEmployees} Employees | {p.maxStorageGb} GB Storage
+                                  </p>
+                                </div>
+                                <div className="pricing-content rounded bg-light p-3 mb-3">
+                                  <h6 className="fs-14 fw-medium text-gray mb-3">
+                                    Features Included
+                                  </h6>
+                                  {featList.length > 0 ? (
+                                    featList.map((f: string, idx: number) => (
+                                      <span className="text-dark d-flex align-items-center mb-2" key={idx}>
+                                        <i className="ti ti-discount-check-filled text-success me-2 fs-15" />
+                                        {f}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-muted fs-13">All Core Modules Included</span>
+                                  )}
+                                </div>
+                              </div>
+                              <button className="btn btn-dark w-100 mt-2">
+                                Active Plan
+                              </button>
+                            </div>
                           </div>
                         </div>
-                        <div className="pricing-content rounded bg-light mb-3">
-                          <div className="price-hdr">
-                            <h6 className="fs-14 fw-medium text-gray w-100">
-                              Features Includes
-                            </h6>
-                          </div>
-                          <div>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              50 Employees
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              100 Projects
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              100 Clients
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              50 GB Storage
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              Voice &amp; Video Chat
-                            </span>
-                            <span className="text-dark d-flex align-items-center">
-                              <i className="ti ti-circle-x-filled text-danger me-2" />
-                              CRM
-                            </span>
-                          </div>
-                        </div>
-                        <Link to="#" className="btn btn-dark w-100">
-                          Choose Plan
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-lg-3 col-md-6 col-sm-12 d-flex">
-                    <div className="card flex-fill">
-                      <div className="card-body">
-                        <div className="card">
-                          <div className="card-body">
-                            <h4>Premium</h4>
-                            <h1>
-                              $300
-                              <span className="fs-14 fw-normal text-gray">
-                                /monthly
-                              </span>
-                            </h1>
-                          </div>
-                        </div>
-                        <div className="pricing-content rounded bg-light mb-3">
-                          <div className="price-hdr">
-                            <h6 className="fs-14 fw-medium text-gray w-100">
-                              Features Includes
-                            </h6>
-                          </div>
-                          <div>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              100 Employees
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              200 Projects
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              100 Clients
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              100 GB Storage
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              Voice &amp; Video Chat
-                            </span>
-                            <span className="text-dark d-flex align-items-center">
-                              <i className="ti ti-circle-x-filled text-danger me-2" />
-                              CRM
-                            </span>
-                          </div>
-                        </div>
-                        <Link to="#" className="btn btn-dark w-100">
-                          Choose Plan
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-lg-3 col-md-6 col-sm-12 d-flex">
-                    <div className="card flex-fill">
-                      <div className="card-body">
-                        <div className="card">
-                          <div className="card-body">
-                            <h4>Enterprise</h4>
-                            <h1>
-                              $400
-                              <span className="fs-14 fw-normal text-gray">
-                                /monthly
-                              </span>
-                            </h1>
-                          </div>
-                        </div>
-                        <div className="pricing-content rounded bg-light mb-3">
-                          <div className="price-hdr">
-                            <h6 className="fs-14 fw-medium text-gray w-100">
-                              Features Includes
-                            </h6>
-                          </div>
-                          <div>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              Unlimited Employees
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              Unlimited Clients
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              Unlimited Projects
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              Unlimited Storage
-                            </span>
-                            <span className="text-dark d-flex align-items-center mb-3">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              Voice &amp; Video Chat
-                            </span>
-                            <span className="text-dark d-flex align-items-center">
-                              <i className="ti ti-discount-check-filled text-success me-2" />
-                              CRM
-                            </span>
-                          </div>
-                        </div>
-                        <Link to="#" className="btn btn-dark w-100">
-                          Choose Plan
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>

@@ -4,25 +4,33 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { login, register, verifyEmail, verifyInviteToken, acceptInvite, resendVerification, forgotPassword, resetPassword, getCompanyLogo } = require('../controllers/authController');
+const { 
+    login, register, verifyEmail, verifyInviteToken, acceptInvite, 
+    resendVerification, forgotPassword, resetPassword, getCompanyLogo,
+    getCompanySettings, updateCompanySettings, getProfile, updateProfile
+} = require('../controllers/authController');
+const { verifyToken } = require('../middleware/authMiddleware');
 
 // Use persistent upload directory configured in env (falls back to local uploads folder)
 const UPLOAD_BASE = process.env.UPLOAD_PATH 
     ? path.resolve(process.env.UPLOAD_PATH) 
     : path.resolve('uploads');
 
-const logoDir = path.join(UPLOAD_BASE, 'logos');
-if (!fs.existsSync(logoDir)) {
-    fs.mkdirSync(logoDir, { recursive: true });
-}
-
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, logoDir);
+        let dir = path.join(UPLOAD_BASE, 'logos');
+        if (file.fieldname === 'avatar' || file.fieldname === 'profileImage') {
+            dir = path.join(UPLOAD_BASE, 'profiles');
+        }
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        cb(null, dir);
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'logo-' + uniqueSuffix + path.extname(file.originalname));
+        const prefix = file.fieldname === 'avatar' || file.fieldname === 'profileImage' ? 'profile-' : 'logo-';
+        cb(null, prefix + uniqueSuffix + path.extname(file.originalname));
     }
 });
 const upload = multer({ storage });
@@ -36,6 +44,14 @@ router.post('/upload-logo', upload.single('logo'), (req, res) => {
     const fileUrl = `/uploads/logos/${req.file.filename}`;
     res.json({ success: true, url: fileUrl });
 });
+
+// Company Settings endpoints
+router.get('/company-settings', verifyToken, getCompanySettings);
+router.put('/company-settings', verifyToken, upload.single('logo'), updateCompanySettings);
+
+// User Profile endpoints
+router.get('/profile', verifyToken, getProfile);
+router.put('/profile', verifyToken, upload.single('avatar'), updateProfile);
 
 // POST /auth/login
 router.post('/login', login);
