@@ -186,9 +186,13 @@ async function createEmployee(req, res) {
 async function getEmployees(req, res) {
     try {
         const companyId = req.user.companyId;
-        let whereClause = {};
+        let whereClause = {
+            user: {
+                role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] }
+            }
+        };
         if (companyId) {
-            whereClause.user = { companyId };
+            whereClause.user.companyId = companyId;
         }
 
         if (req.user.role === 'MANAGER') {
@@ -499,8 +503,8 @@ async function getMe(req, res) {
             }
         });
 
-        // If the logged-in user (HR, SUPER_ADMIN, MANAGER, etc.) does not have an employee profile yet,
-        // attempt to auto-create one or return a synthesized profile.
+        // If the logged-in user does not have an employee profile yet:
+        // For COMPANY_ADMIN and SUPER_ADMIN, return a virtual profile (do NOT create DB record).
         if (!employee) {
             const user = await prisma.user.findUnique({ 
                 where: { id: userId },
@@ -512,6 +516,24 @@ async function getMe(req, res) {
                 const lastName = nameParts.slice(1).join(' ') || (user.role === 'HR' ? 'Manager' : '');
                 const companyPrefix = user.company ? getCompanyPrefix(user.company.name) : 'EMP';
                 const employeeCode = `${companyPrefix}-${user.role}-${Date.now().toString().slice(-6)}`;
+
+                // COMPANY_ADMIN & SUPER_ADMIN are system administrators, NOT employees!
+                if (user.role === 'COMPANY_ADMIN' || user.role === 'SUPER_ADMIN') {
+                    return res.json({
+                        id: 0,
+                        userId: user.id,
+                        employeeCode,
+                        firstName,
+                        lastName,
+                        phone: user.company?.phone || 'N/A',
+                        address: user.company?.address || 'N/A',
+                        user: { id: user.id, name: user.name || `${firstName} ${lastName}`, email: user.email, role: user.role, company: user.company },
+                        department: { name: 'Management' },
+                        designation: { name: user.role === 'COMPANY_ADMIN' ? 'Company Administrator' : 'Super Administrator' },
+                        reportingManager: null,
+                        dateOfJoining: user.createdAt
+                    });
+                }
 
                 try {
                     employee = await prisma.employee.create({
@@ -588,19 +610,48 @@ async function updateMe(req, res) {
         const userId = req.user.id;
         const { firstName, lastName, phone, password, address, country, state, city, postalCode } = req.body;
         
-        const existing = await prisma.employee.findUnique({
+        let existing = await prisma.employee.findUnique({
             where: { userId },
-            include: { user: true }
+            include: { user: { include: { company: true } } }
         });
 
         if (!existing) {
-            return res.status(404).json({ message: 'Employee profile not found' });
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                include: { company: true }
+            });
+            if (!user) {
+                return res.status(404).json({ message: 'User not found' });
+            }
+
+            const nameParts = (user.name || '').trim().split(/\s+/).filter(Boolean);
+            const fName = firstName || nameParts[0] || (user.role === 'SUPER_ADMIN' ? 'Admin' : 'User');
+            const lName = lastName || nameParts.slice(1).join(' ') || '';
+            const companyPrefix = user.company ? getCompanyPrefix(user.company.name) : 'EMP';
+            const employeeCode = `${companyPrefix}-${user.role}-${Date.now().toString().slice(-6)}`;
+
+            existing = await prisma.employee.create({
+                data: {
+                    userId: user.id,
+                    employeeCode,
+                    firstName: fName,
+                    lastName: lName,
+                    phone: phone || user.company?.phone || null,
+                    address: address || user.company?.address || null,
+                    country: country && country !== 'Select' ? country : null,
+                    state: state && state !== 'Select' ? state : null,
+                    city: city && city !== 'Select' ? city : null,
+                    postalCode: postalCode || null,
+                    onboardingStatus: 'COMPLETED'
+                },
+                include: { user: { include: { company: true } } }
+            });
         }
 
         const dataToUpdate = {};
         if (firstName) dataToUpdate.firstName = firstName;
         if (lastName) dataToUpdate.lastName = lastName;
-        if (phone) dataToUpdate.phone = phone;
+        if (phone !== undefined) dataToUpdate.phone = phone;
         if (address !== undefined) dataToUpdate.address = address;
         if (country !== undefined) dataToUpdate.country = country;
         if (state !== undefined) dataToUpdate.state = state;

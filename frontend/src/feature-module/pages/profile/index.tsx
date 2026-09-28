@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import CommonSelect from "../../../core/common/commonSelect";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
 import { all_routes } from "../../../router/all_routes";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { updateUser } from "../../../core/data/redux/authSlice";
 import apiClient from "../../../core/utils/apiClient";
 import { APP_CONFIG } from "../../../environment";
@@ -16,6 +16,7 @@ type PasswordField =
 
 const Profile = () => {
   const dispatch = useDispatch();
+  const authUser = useSelector((state: any) => state.auth.user);
   const [passwordVisibility, setPasswordVisibility] = useState({
     oldPassword: false,
     newPassword: false,
@@ -389,7 +390,7 @@ const Profile = () => {
                   </div>
                 </div>
 
-                {salaryStructure && (
+                {salaryStructure && authUser?.role !== 'COMPANY_ADMIN' && authUser?.role !== 'SUPER_ADMIN' && (
                   <div className="border-bottom mb-3 pb-3">
                     <h6 className="mb-3">Salary Details (Read-Only)</h6>
                     <div className="row bg-light rounded p-4 mx-0">

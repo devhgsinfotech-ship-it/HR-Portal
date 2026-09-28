@@ -2,7 +2,9 @@
 const prisma = require('../config/prisma');
 
 /**
- * Check if user has a required system role (SUPER_ADMIN, COMPANY_ADMIN, HR, MANAGER, EMPLOYEE)
+ * checkSystemRole — Platform-level check.
+ * SUPER_ADMIN and COMPANY_ADMIN both auto-bypass.
+ * Use for READ/VIEW operations.
  */
 const checkSystemRole = (allowedRoles) => (req, res, next) => {
   const userRole = req.user?.role;
@@ -22,6 +24,33 @@ const checkSystemRole = (allowedRoles) => (req, res, next) => {
 };
 
 /**
+ * checkCompanyRole — Company-level operational check.
+ * Only COMPANY_ADMIN auto-bypasses.
+ * SUPER_ADMIN must be explicitly listed in allowedRoles.
+ *
+ * Use for WRITE operations on company data (projects, tasks, assets, timesheets, finance).
+ * SUPER_ADMIN = platform manager, not company HR/PM operator.
+ */
+const checkCompanyRole = (allowedRoles) => (req, res, next) => {
+  const userRole = req.user?.role;
+  if (!userRole) {
+    return res.status(401).json({ message: 'Unauthorized.' });
+  }
+
+  // Only COMPANY_ADMIN gets automatic bypass for company-level write operations
+  if (userRole === 'COMPANY_ADMIN') {
+    return next();
+  }
+
+  if (!allowedRoles.includes(userRole)) {
+    return res.status(403).json({
+      message: 'Access denied. This operation requires company-level admin privileges.'
+    });
+  }
+  next();
+};
+
+/**
  * Check if user has a specific module permission via CompanyRole
  * Falls back to system role check for SUPER_ADMIN / COMPANY_ADMIN / HR
  */
@@ -30,8 +59,19 @@ const checkModulePermission = (module, action) => async (req, res, next) => {
     const user = req.user;
     if (!user) return res.status(401).json({ message: 'Unauthorized.' });
 
-    // Super Admin and Company Admin always have full access
-    if (user.role === 'SUPER_ADMIN' || user.role === 'COMPANY_ADMIN') return next();
+    // Infer action from req.method if action parameter is omitted
+    const effectiveAction = action || (req.method === 'GET' ? 'read' : 'write');
+
+    // Company Admin always has full access to company ops
+    if (user.role === 'COMPANY_ADMIN') return next();
+
+    // Super Admin: platform-level read/support only (no write access to company modules)
+    if (user.role === 'SUPER_ADMIN') {
+      if (effectiveAction === 'read') return next();
+      return res.status(403).json({
+        message: 'Super Admin has view-only access to company modules. Use Company Admin for operational tasks.'
+      });
+    }
 
     // HR always has access to project ops (but not budget)
     if (user.role === 'HR' && action !== 'budget') return next();
@@ -73,18 +113,22 @@ const checkModulePermission = (module, action) => async (req, res, next) => {
   }
 };
 
-// Shorthand middleware factories
-const requireProjectAdmin = checkSystemRole(['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR', 'MANAGER']);
-const requireFinanceAccess = checkSystemRole(['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR']);
-const requireProjectAccess = checkSystemRole(['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR', 'MANAGER', 'EMPLOYEE']);
-const requireAdminOnly = checkSystemRole(['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR']);
+// ─── Shorthand middleware factories ──────────────────────────────────────────
+
+// READ — SUPER_ADMIN + COMPANY_ADMIN both bypass (support/view access)
+const requireProjectAccess  = checkSystemRole(['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR', 'MANAGER', 'EMPLOYEE']);
+
+// WRITE — COMPANY_ADMIN bypass only; SUPER_ADMIN must be explicitly in list
+const requireProjectAdmin   = checkCompanyRole(['COMPANY_ADMIN', 'HR', 'MANAGER']);
+const requireFinanceAccess  = checkCompanyRole(['COMPANY_ADMIN', 'HR']);
+const requireAdminOnly      = checkCompanyRole(['COMPANY_ADMIN', 'HR']);
 
 module.exports = {
   checkSystemRole,
+  checkCompanyRole,
   checkModulePermission,
   requireProjectAdmin,
   requireFinanceAccess,
   requireProjectAccess,
   requireAdminOnly,
 };
-
