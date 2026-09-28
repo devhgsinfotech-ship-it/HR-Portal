@@ -259,10 +259,13 @@ const Sidebar = React.memo(() => {
   // Filter sidebar data deeply based on role
   const filteredSidebarData = useMemo(() => {
     const dataCopy = JSON.parse(JSON.stringify(SidebarDataTest)) as SidebarMainMenu[];
-    return dataCopy.map(mainMenu => {
-      mainMenu.submenuItems = filterMenu(mainMenu.submenuItems, currentRole);
-      return mainMenu;
-    }).filter(mainMenu => mainMenu.submenuItems.length > 0);
+    return dataCopy
+      .filter((mainMenu) => !(currentRole === "SUPER_ADMIN" && mainMenu.tittle === "HRM"))
+      .map(mainMenu => {
+        mainMenu.submenuItems = filterMenu(mainMenu.submenuItems, currentRole);
+        return mainMenu;
+      })
+      .filter(mainMenu => mainMenu.submenuItems.length > 0);
   }, [currentRole]);
 
   const [openMenus, setOpenMenus] = useState<Set<string>>(
