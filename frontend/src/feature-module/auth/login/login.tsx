@@ -258,7 +258,7 @@ const Login = () => {
                               className="img-fluid"
                               src="assets/img/icons/facebook-logo.svg"
                               alt="Facebook"
-                              style={{ width: "20px" }}
+                              width={20}
                             />
                             <span className="ms-2 fs-14">Continue with Facebook</span>
                           </Link>
@@ -270,7 +270,7 @@ const Login = () => {
                               className="img-fluid"
                               src="assets/img/icons/google-logo.svg"
                               alt="Google"
-                              style={{ width: "20px" }}
+                              width={20}
                             />
                             <span className="ms-2 fs-14">Continue with Google</span>
                           </Link>
@@ -282,7 +282,7 @@ const Login = () => {
                               className="img-fluid"
                               src="assets/img/icons/apple-logo.svg"
                               alt="Apple"
-                              style={{ width: "20px" }}
+                              width={20}
                             />
                             <span className="ms-2 fs-14">Continue with Apple</span>
                           </Link>
