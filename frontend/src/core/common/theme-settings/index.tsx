@@ -1011,7 +1011,7 @@ useEffect(() => {
       </div>
       <div className="p-3 pt-0">
         <div className="row gx-3">
-          <div className="col-6">
+          <div className="col-12">
             <Link
               to="#"
               id="resetbutton"
@@ -1020,17 +1020,6 @@ useEffect(() => {
             >
               <i className="ti ti-restore me-1" />
               Reset
-            </Link>
-          </div>
-          <div className="col-6">
-            <Link
-              to="#"
-              className="btn btn-primary w-100"
-              data-bs-dismiss="offcanvas"
-              onClick={buyNow}
-            >
-              <i className="ti ti-shopping-cart-plus me-1" />
-              Buy Product
             </Link>
           </div>
         </div>
