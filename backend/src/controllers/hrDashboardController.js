@@ -37,15 +37,17 @@ async function getHrDashboardSummary(req, res) {
             }
         }
 
-        // ── 1. Total employees (direct count from database) ──────────
+        // ── 1. Total employees (excluding SUPER_ADMIN & COMPANY_ADMIN) ──────────
+        const nonAdminUserFilter = { companyId, role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } };
+
         const totalEmployees = await prisma.employee.count({
-            where: { user: { companyId } }
+            where: { user: nonAdminUserFilter }
         });
 
         // ── 1b. On Leave Today Count ──────────────────────────────────
         const onLeaveTodayCount = await prisma.leaveRequest.count({
             where: {
-                employee: { user: { companyId } },
+                employee: { user: nonAdminUserFilter },
                 status: 'APPROVED',
                 startDate: { lte: rangeEnd },
                 endDate: { gte: rangeStart }
@@ -55,14 +57,14 @@ async function getHrDashboardSummary(req, res) {
         // ── 2. New joinees in the date range ─────────────────────────
         const newJoinees = await prisma.employee.count({
             where: {
-                user: { companyId },
+                user: nonAdminUserFilter,
                 dateOfJoining: { gte: rangeStart, lte: rangeEnd }
             }
         });
 
         // ── 3. Employee type breakdown ────────────────────────────────
         const allEmployees = await prisma.employee.findMany({
-            where: { user: { companyId } },
+            where: { user: nonAdminUserFilter },
             select: { employmentType: true }
         });
 
@@ -714,7 +716,8 @@ async function getAdminDashboardSummary(req, res) {
             companyId = null;
         }
 
-        const userWhere = companyId ? { user: { companyId } } : {};
+        const nonAdminFilter = { role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } };
+        const userWhere = companyId ? { user: { companyId, ...nonAdminFilter } } : { user: nonAdminFilter };
         const companyWhere = companyId ? { companyId } : {};
 
         // 1. Total employees

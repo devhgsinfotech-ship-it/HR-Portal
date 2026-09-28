@@ -524,46 +524,48 @@ const AdminDashboard = () => {
                 </div>
               </div>
               <div className="d-flex align-items-center flex-wrap mb-1">
-                {/* ── Clock In / Clock Out Widget for Admin Login Display ── */}
-                <div className="card border-0 shadow-sm text-start me-3 mb-2" style={{ backgroundColor: '#162E5B', borderRadius: '12px', minWidth: '320px' }}>
-                  <div className="card-body p-3 text-white">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <span className="text-white fs-13 fw-medium">Time Today - {getFormattedDate()}</span>
-                      <Link to={all_routes.attendanceemployee} className="text-white text-decoration-underline fs-12 fw-medium">View All</Link>
-                    </div>
-                    <span className="d-block text-white-50 fs-11 fw-bold tracking-wide mb-1" style={{ letterSpacing: '0.05em' }}>CURRENT TIME</span>
-                    <div className="d-flex align-items-end justify-content-between">
-                      <div className="d-flex align-items-baseline text-white me-3">
-                        <h1 className="display-4 text-white mb-0 fw-normal" style={{ fontSize: '2rem', lineHeight: '1' }}>{hhmm}</h1>
-                        <span className="fs-13 ms-1" style={{ opacity: 0.85 }}>{ssAmPm}</span>
+                {/* ── Clock In / Clock Out Widget (Only for HR, Manager, Employees - Not for Company Admin/Super Admin) ── */}
+                {!(user?.role === 'COMPANY_ADMIN' || user?.role === 'SUPER_ADMIN') && (
+                  <div className="card border-0 shadow-sm text-start me-3 mb-2" style={{ backgroundColor: '#162E5B', borderRadius: '12px', minWidth: '320px' }}>
+                    <div className="card-body p-3 text-white">
+                      <div className="d-flex align-items-center justify-content-between mb-2">
+                        <span className="text-white fs-13 fw-medium">Time Today - {getFormattedDate()}</span>
+                        <Link to={all_routes.attendanceemployee} className="text-white text-decoration-underline fs-12 fw-medium">View All</Link>
                       </div>
-                      {attendanceStatus?.isNotApplicable ? (
-                        <span className="badge bg-white-transparent text-white px-3 py-2 fs-12 fw-medium border border-white-50 rounded-3">
-                          <i className="ti ti-shield-check me-1" /> Admin Account (No Punch Req.)
-                        </span>
-                      ) : (
-                        <button 
-                          onClick={handlePunch} 
-                          disabled={clockLoading}
-                          className="btn px-3 py-2 border-0 fw-medium fs-13 rounded-3 text-white shadow-sm" 
-                          style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s', opacity: clockLoading ? 0.7 : 1 }}
-                        >
-                          {clockLoading ? (
-                            <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" />
-                          ) : attendanceStatus?.isCheckedIn ? (
-                            <>
-                              <i className="ti ti-clock-off me-1" /> Clock-out
-                            </>
-                          ) : (
-                            <>
-                              <i className="ti ti-clock-check me-1" /> Clock-in
-                            </>
-                          )}
-                        </button>
-                      )}
+                      <span className="d-block text-white-50 fs-11 fw-bold tracking-wide mb-1" style={{ letterSpacing: '0.05em' }}>CURRENT TIME</span>
+                      <div className="d-flex align-items-end justify-content-between">
+                        <div className="d-flex align-items-baseline text-white me-3">
+                          <h1 className="display-4 text-white mb-0 fw-normal" style={{ fontSize: '2rem', lineHeight: '1' }}>{hhmm}</h1>
+                          <span className="fs-13 ms-1" style={{ opacity: 0.85 }}>{ssAmPm}</span>
+                        </div>
+                        {attendanceStatus?.isNotApplicable ? (
+                          <span className="badge bg-white-transparent text-white px-3 py-2 fs-12 fw-medium border border-white-50 rounded-3">
+                            <i className="ti ti-shield-check me-1" /> Admin Account (No Punch Req.)
+                          </span>
+                        ) : (
+                          <button 
+                            onClick={handlePunch} 
+                            disabled={clockLoading}
+                            className="btn px-3 py-2 border-0 fw-medium fs-13 rounded-3 text-white shadow-sm" 
+                            style={{ backgroundColor: attendanceStatus?.isCheckedIn ? '#FF655A' : '#03C95A', transition: 'all 0.2s', opacity: clockLoading ? 0.7 : 1 }}
+                          >
+                            {clockLoading ? (
+                              <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" />
+                            ) : attendanceStatus?.isCheckedIn ? (
+                              <>
+                                <i className="ti ti-clock-off me-1" /> Clock-out
+                              </>
+                            ) : (
+                              <>
+                                <i className="ti ti-clock-check me-1" /> Clock-in
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <Link
                   to="#"
