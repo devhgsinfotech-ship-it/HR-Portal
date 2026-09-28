@@ -257,7 +257,7 @@ async function getPayrollInputs(req, res) {
         const allDates = getDatesInRange(new Date(period.periodStart), new Date(period.periodEnd));
 
         const employees = await prisma.employee.findMany({
-            where: { user: { companyId } },
+            where: { user: { companyId, role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } } },
             include: {
                 user:           { select: { accountStatus: true } },
                 salaryStructure: true,
@@ -322,7 +322,7 @@ async function calculatePayrollBatch(req, res) {
         const allDates = getDatesInRange(new Date(period.periodStart), new Date(period.periodEnd));
 
         const employees = await prisma.employee.findMany({
-            where:   { user: { companyId } },
+            where:   { user: { companyId, role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } } },
             include: { salaryStructure: true }
         });
 
@@ -574,6 +574,11 @@ async function getPayslips(req, res) {
         const { employeeId, month, year, ownOnly } = req.query;
         let where = {};
 
+        // Company Admin and Super Admin are not employees — they have no payslips.
+        if (role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN') {
+            return res.json([]);
+        }
+
         if (role === 'EMPLOYEE' || ownOnly === 'true') {
             const emp = await prisma.employee.findUnique({ where: { userId } });
             if (!emp) return res.json([]);
@@ -649,7 +654,7 @@ async function listSalaryStructures(req, res) {
     try {
         const companyId = req.user.companyId;
         const structures = await prisma.salaryStructure.findMany({
-            where: { employee: { user: { companyId } } },
+            where: { employee: { user: { companyId, role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } } } },
             include: {
                 employee: {
                     include: {

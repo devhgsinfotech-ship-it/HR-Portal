@@ -9,7 +9,7 @@ services:
       MYSQL_USER: hr_user
       MYSQL_PASSWORD: hr_password
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       # Schema creation is on hold for now — no init script mounted.

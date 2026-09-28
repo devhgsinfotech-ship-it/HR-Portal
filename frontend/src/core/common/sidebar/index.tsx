@@ -43,28 +43,43 @@ interface SidebarMainMenu {
 type Role = "SUPER_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
 
 const getRouteRoles = (path: string | undefined): Role[] => {
-  if (!path) return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  if (!path) return ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   let p = path.toLowerCase();
   if (!p.startsWith('/')) {
     p = '/' + p;
   }
 
-  if (p.startsWith("/super-admin")) return ["SUPER_ADMIN"];
+  // --- 1. SUPER ADMIN EXPLICIT ALLOW LIST ---
+  // Paths related to Super Admin responsibilities: 
+  // Companies, Plans & Subscriptions, Billing, Platform Users, Roles, Settings, Integrations, Audit Logs
+  const superAdminAllowed = [
+    "super-admin", "superadmin", 
+    "compan", "plan", "subscription", "package", 
+    "billing", "payment", "tax", "currency", // Billing & Financial Settings
+    "platform-user", "user", 
+    "role", "permission", 
+    "setting", "integration", "audit", 
+    "gdpr", "maintenance", "css", "js", "cronjob", "storage", "ban", "backup", "cache", // System/Other Settings
+    "template" // Email/SMS templates
+  ];
+  const isSuperAdminRoute = superAdminAllowed.some(kw => p.includes(kw));
 
-  // 2. Job postings & Employee Referrals (Accessible by Company Admin, HR, Manager & Employee)
+  // --- 2. HIDE DASHBOARD ---
+  if (p === "/index" || p.includes("dashboard")) {
+    return ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
+  // --- 3. EXISTING COMPANY-LEVEL FILTERS ---
+  
   if (p.includes("job-grid") || p.includes("job-list") || p.includes("jobgrid") || p.includes("joblist") || p.includes("jobs") || p.includes("refferal")) {
     return ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
 
-  // Other Recruitment module routes (Company Admin, HR & Manager feature — Hides from Super Admin)
-  const recruitmentKeywords = [
-    "recruitment", "job", "candidate", "campus-hiring"
-  ];
+  const recruitmentKeywords = ["recruitment", "job", "candidate", "campus-hiring"];
   if (recruitmentKeywords.some(keyword => p.includes(keyword))) {
     return ["COMPANY_ADMIN", "HR", "MANAGER"];
   }
 
-  // 3. Employee Self-Service routes (Accessible by all)
   const employeeAllowedPrefixes = [
     "/employee-dashboard", "/attendance-employee", "/leaves-employee",
     "/pages/profile", "/hrm/holidays", "/application",
@@ -72,34 +87,41 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     "/org", "/org-directory"
   ];
   if (employeeAllowedPrefixes.some(prefix => p.startsWith(prefix))) {
-    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+    return isSuperAdminRoute 
+      ? ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"]
+      : ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
   
   if (p === "/payslip" || p.startsWith("/payslip/")) {
-    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+    return ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
 
-  // 3. Asset Categories (Admin/HR Configuration — Exclude Employee)
   if (p.includes("category") || p.includes("categories")) {
-    return ["COMPANY_ADMIN", "HR", "MANAGER"];
+    return isSuperAdminRoute 
+      ? ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER"]
+      : ["COMPANY_ADMIN", "HR", "MANAGER"];
   }
 
-  // 4. Company Internal Assets & My Assets (Accessible by Employee, Manager, HR & Admin — Hides from Super Admin)
   if (p.includes("asset")) {
     return ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
 
-  // 4. Manager & HR Approvals
   const adminApprovalPrefixes = [
     "/leaves", "/attendance-admin", "/timesheet", "/performance", "/training",
     "/tickets"
   ];
   if (adminApprovalPrefixes.some(prefix => p.startsWith(prefix))) {
-    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER"];
+    return ["COMPANY_ADMIN", "HR", "MANAGER"];
   }
 
-  // 4. Default: Restricted to Company Admin, HR & Super Admin (Security by default)
-  return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"];
+  // --- 4. DEFAULT FALLBACK ---
+  // If the route matches the Super Admin allowed list, give them access.
+  // Otherwise, fallback to Company Admin and HR.
+  if (isSuperAdminRoute) {
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"];
+  }
+
+  return ["COMPANY_ADMIN", "HR"];
 };
 
 const filterMenu = (items: SidebarMenuItem[] | undefined, role: Role): SidebarMenuItem[] => {
