@@ -1042,44 +1042,47 @@ const EmployeeDashboard = () => {
                 </div>
               </div>
 
-              <LiveClockWidget handlePunch={handlePunch} attendanceStatus={attendanceStatus} />
+              {!(authUser?.role === 'COMPANY_ADMIN' || authUser?.role === 'SUPER_ADMIN') && (
+                <>
+                  <LiveClockWidget handlePunch={handlePunch} attendanceStatus={attendanceStatus} />
 
-
-              {/* TIME PROGRESS CARD */}
-              <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '16px' }}>
-                <div className="card-body p-4">
-                  <div className="d-flex align-items-center justify-content-between mb-4">
-                    <div className="d-flex align-items-center gap-2">
-                      <div className="avatar avatar-sm bg-primary-transparent rounded-circle d-flex align-items-center justify-content-center" style={{ width: '36px', height: '36px' }}>
-                        <i className="ti ti-clock-play fs-18 text-primary" />
+                  {/* TIME PROGRESS CARD */}
+                  <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '16px' }}>
+                    <div className="card-body p-4">
+                      <div className="d-flex align-items-center justify-content-between mb-4">
+                        <div className="d-flex align-items-center gap-2">
+                          <div className="avatar avatar-sm bg-primary-transparent rounded-circle d-flex align-items-center justify-content-center" style={{ width: '36px', height: '36px' }}>
+                            <i className="ti ti-clock-play fs-18 text-primary" />
+                          </div>
+                          <div>
+                            <h6 className="fw-bold text-gray-9 mb-0" style={{ fontSize: '16px' }}>Time Progress</h6>
+                            <span className="text-muted fs-11 fw-medium">Today's Live Hours Tracking</span>
+                          </div>
+                        </div>
+                        <span className={`badge ${attendanceStatus?.isCheckedIn ? 'bg-success-transparent text-success border border-success' : 'bg-light text-muted border'} rounded-pill fs-11 px-3 py-1.5 fw-semibold d-flex align-items-center gap-1.5`}>
+                          <span className={`d-inline-block rounded-circle ${attendanceStatus?.isCheckedIn ? 'bg-success' : 'bg-secondary'}`} style={{ width: '7px', height: '7px' }} />
+                          {attendanceStatus?.isCheckedIn ? 'Clocked In' : 'Not Clocked In'}
+                        </span>
                       </div>
-                      <div>
-                        <h6 className="fw-bold text-gray-9 mb-0" style={{ fontSize: '16px' }}>Time Progress</h6>
-                        <span className="text-muted fs-11 fw-medium">Today's Live Hours Tracking</span>
+
+                      <div className="row g-3">
+                        <div className="col-6 col-sm-6">
+                          {renderTimeProgressRing(totalHoursStr, totalMs, 9 * 3600000, "Total Working", "#6366F1", "#8B5CF6", "grad-total", "Target 9h")}
+                        </div>
+                        <div className="col-6 col-sm-6">
+                          {renderTimeProgressRing(productiveHoursStr, prodMs, 8 * 3600000, "Productive", "#10B981", "#059669", "grad-prod", "Target 8h")}
+                        </div>
+                        <div className="col-6 col-sm-6">
+                          {renderTimeProgressRing(breakHoursStr, breakMs, 1 * 3600000, "Break Hours", "#F59E0B", "#F97316", "grad-break", "Target 1h")}
+                        </div>
+                        <div className="col-6 col-sm-6">
+                          {renderTimeProgressRing(overtimeStr, overMs, 4 * 3600000, "Overtime", "#06B6D4", "#3B82F6", "grad-over", "Goal >8h")}
+                        </div>
                       </div>
                     </div>
-                    <span className={`badge ${attendanceStatus?.isCheckedIn ? 'bg-success-transparent text-success border border-success' : 'bg-light text-muted border'} rounded-pill fs-11 px-3 py-1.5 fw-semibold d-flex align-items-center gap-1.5`}>
-                      <span className={`d-inline-block rounded-circle ${attendanceStatus?.isCheckedIn ? 'bg-success' : 'bg-secondary'}`} style={{ width: '7px', height: '7px' }} />
-                      {attendanceStatus?.isCheckedIn ? 'Clocked In' : 'Not Clocked In'}
-                    </span>
                   </div>
-
-                  <div className="row g-3">
-                    <div className="col-6 col-sm-6">
-                      {renderTimeProgressRing(totalHoursStr, totalMs, 9 * 3600000, "Total Working", "#6366F1", "#8B5CF6", "grad-total", "Target 9h")}
-                    </div>
-                    <div className="col-6 col-sm-6">
-                      {renderTimeProgressRing(productiveHoursStr, prodMs, 8 * 3600000, "Productive", "#10B981", "#059669", "grad-prod", "Target 8h")}
-                    </div>
-                    <div className="col-6 col-sm-6">
-                      {renderTimeProgressRing(breakHoursStr, breakMs, 1 * 3600000, "Break Hours", "#F59E0B", "#F97316", "grad-break", "Target 1h")}
-                    </div>
-                    <div className="col-6 col-sm-6">
-                      {renderTimeProgressRing(overtimeStr, overMs, 4 * 3600000, "Overtime", "#06B6D4", "#3B82F6", "grad-over", "Goal >8h")}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
 
               <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '16px', backgroundColor: '#FFFFFF' }}>
                 <div className="card-body p-4">

@@ -186,9 +186,13 @@ async function createEmployee(req, res) {
 async function getEmployees(req, res) {
     try {
         const companyId = req.user.companyId;
-        let whereClause = {};
+        let whereClause = {
+            user: {
+                role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] }
+            }
+        };
         if (companyId) {
-            whereClause.user = { companyId };
+            whereClause.user.companyId = companyId;
         }
 
         if (req.user.role === 'MANAGER') {
@@ -499,8 +503,8 @@ async function getMe(req, res) {
             }
         });
 
-        // If the logged-in user (HR, SUPER_ADMIN, MANAGER, etc.) does not have an employee profile yet,
-        // attempt to auto-create one or return a synthesized profile.
+        // If the logged-in user does not have an employee profile yet:
+        // For COMPANY_ADMIN and SUPER_ADMIN, return a virtual profile (do NOT create DB record).
         if (!employee) {
             const user = await prisma.user.findUnique({ 
                 where: { id: userId },
@@ -512,6 +516,24 @@ async function getMe(req, res) {
                 const lastName = nameParts.slice(1).join(' ') || (user.role === 'HR' ? 'Manager' : '');
                 const companyPrefix = user.company ? getCompanyPrefix(user.company.name) : 'EMP';
                 const employeeCode = `${companyPrefix}-${user.role}-${Date.now().toString().slice(-6)}`;
+
+                // COMPANY_ADMIN & SUPER_ADMIN are system administrators, NOT employees!
+                if (user.role === 'COMPANY_ADMIN' || user.role === 'SUPER_ADMIN') {
+                    return res.json({
+                        id: 0,
+                        userId: user.id,
+                        employeeCode,
+                        firstName,
+                        lastName,
+                        phone: user.company?.phone || 'N/A',
+                        address: user.company?.address || 'N/A',
+                        user: { id: user.id, name: user.name || `${firstName} ${lastName}`, email: user.email, role: user.role, company: user.company },
+                        department: { name: 'Management' },
+                        designation: { name: user.role === 'COMPANY_ADMIN' ? 'Company Administrator' : 'Super Administrator' },
+                        reportingManager: null,
+                        dateOfJoining: user.createdAt
+                    });
+                }
 
                 try {
                     employee = await prisma.employee.create({
