@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const employeeController = require('../controllers/employeeController');
-const { verifyToken, requireRole } = require('../middleware/authMiddleware');
+const { verifyToken, requireRole, requireCompanyRole } = require('../middleware/authMiddleware');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
@@ -62,20 +62,23 @@ router.get('/dashboard/on-leave-today', employeeController.getOnLeaveToday);
 router.get('/dashboard/next-holiday', employeeController.getNextHoliday);
 
 // HR and Company Admin management routes (specific paths)
-router.get('/check-email', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.checkEmailAvailability);
-router.post('/', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), upload.single('profileImage'), employeeController.createEmployee);
+// SUPER_ADMIN has view/support access; employee CRUD is Company Admin/HR domain
+router.get('/check-email', requireCompanyRole('HR'),                                          employeeController.checkEmailAvailability);
+router.post('/',           requireCompanyRole('HR'), upload.single('profileImage'),           employeeController.createEmployee);
 router.get('/', employeeController.getEmployees);
 
 // Parametric /:id routes (MUST come after all specific endpoints)
 router.get('/:id', employeeController.getEmployeeById);
-router.put('/:id', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), upload.single('profileImage'), employeeController.updateEmployee);
-router.delete('/:id', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.deleteEmployee);
+// SUPER_ADMIN can VIEW any employee for support, but not edit or delete
+router.put('/:id',    requireCompanyRole('HR'), upload.single('profileImage'), employeeController.updateEmployee);
+router.delete('/:id', requireCompanyRole('HR'),                                employeeController.deleteEmployee);
 
 // HR & Company Admin Approves Onboarding & Document Management
-router.post('/:id/approve-onboarding', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.approveOnboarding);
-router.post('/:id/request-correction', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.requestOnboardingCorrection);
-router.post('/:id/resend-invite', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), employeeController.resendInvite);
-router.put('/:id/documents', requireRole('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR'), upload.fields([
+// SUPER_ADMIN does not perform daily onboarding tasks (company HR operations)
+router.post('/:id/approve-onboarding', requireCompanyRole('HR'), employeeController.approveOnboarding);
+router.post('/:id/request-correction', requireCompanyRole('HR'), employeeController.requestOnboardingCorrection);
+router.post('/:id/resend-invite',      requireCompanyRole('HR'), employeeController.resendInvite);
+router.put('/:id/documents', requireCompanyRole('HR'), upload.fields([
     { name: 'aadhaar', maxCount: 1 },
     { name: 'pan', maxCount: 1 },
     { name: 'resume', maxCount: 1 }

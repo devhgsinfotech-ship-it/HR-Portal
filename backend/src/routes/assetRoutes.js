@@ -2,28 +2,33 @@
 const express = require('express');
 const router = express.Router();
 const assetController = require('../controllers/assetController');
-const { verifyToken, requireRole } = require('../middleware/authMiddleware');
+const { verifyToken, requireCompanyRole } = require('../middleware/authMiddleware');
 
 router.use(verifyToken);
 
-// Asset Categories
+// ── Asset Categories ──
+// All authenticated users can view categories
 router.get('/categories', assetController.getCategories);
-router.post('/categories', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), assetController.createCategory);
-router.put('/categories/:id', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), assetController.updateCategory);
-router.delete('/categories/:id', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), assetController.deleteCategory);
+// Only COMPANY_ADMIN, HR, MANAGER can manage asset categories
+// SUPER_ADMIN cannot manage company assets (per screenshot: "Company assets managed by Company Admin/HR")
+router.post('/categories',    requireCompanyRole('HR', 'MANAGER'), assetController.createCategory);
+router.put('/categories/:id', requireCompanyRole('HR', 'MANAGER'), assetController.updateCategory);
+router.delete('/categories/:id', requireCompanyRole('HR', 'MANAGER'), assetController.deleteCategory);
 
-// Employee My Assets
+// ── Employee My Assets ──
 router.get('/my-assets', assetController.getMyAssets);
 
-// Assets Inventory
+// ── Assets Inventory ──
+// All authenticated users can view the asset list
 router.get('/', assetController.getAssets);
-router.post('/', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), assetController.createAsset);
-router.put('/:id', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), assetController.updateAsset);
-router.delete('/:id', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), assetController.deleteAsset);
+// Only COMPANY_ADMIN, HR, MANAGER can manage assets
+router.post('/',   requireCompanyRole('HR', 'MANAGER'), assetController.createAsset);
+router.put('/:id', requireCompanyRole('HR', 'MANAGER'), assetController.updateAsset);
+router.delete('/:id', requireCompanyRole('HR', 'MANAGER'), assetController.deleteAsset);
 
-// Assign & Return Asset
-router.post('/:id/assign', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), assetController.assignAsset);
-router.post('/:id/return', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER'), assetController.returnAsset);
+// ── Assign & Return Asset ──
+router.post('/:id/assign',         requireCompanyRole('HR', 'MANAGER'), assetController.assignAsset);
+router.post('/:id/return',         requireCompanyRole('HR', 'MANAGER'), assetController.returnAsset);
 router.post('/:id/request-return', assetController.requestAssetReturn);
 
 module.exports = router;
