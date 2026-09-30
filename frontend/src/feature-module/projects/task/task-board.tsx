@@ -1092,7 +1092,7 @@ const TaskBoard = () => {
                         {(() => {
                           const currentProj = projects.find(p => p.id === Number(taskProjectId || selectedProjectId));
                           if (!currentProj) return [];
-                          const members = [];
+                          const members: any[] = [];
                           if (currentProj.projectManager) members.push(currentProj.projectManager);
                             if (currentProj.manager && !members.find(emp => emp.id === currentProj.manager.id)) members.push(currentProj.manager);
                           if (currentProj.members) {

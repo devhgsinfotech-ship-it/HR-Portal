@@ -714,9 +714,9 @@ const Task = () => {
                         {(() => {
                           const currentProj = projects.find(p => p.id === Number(taskProjectId || selectedProjectId));
                           if (!currentProj) return [];
-                          const members = [];
+                          const members: any[] = [];
                           if (currentProj.projectManager) members.push(currentProj.projectManager);
-                            if (currentProj.manager && !members.find(emp => emp.id === currentProj.manager.id)) members.push(currentProj.manager);
+                            if (currentProj.manager && !members.find(emp => emp.id === currentProj.manager?.id)) members.push(currentProj.manager);
                           if (currentProj.members) {
                             currentProj.members.forEach((m: any) => {
                               if (m.employee && !members.find(emp => emp.id === m.employee.id)) {
