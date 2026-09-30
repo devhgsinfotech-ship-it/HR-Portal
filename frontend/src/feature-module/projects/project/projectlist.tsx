@@ -16,6 +16,7 @@ interface Employee {
   firstName: string;
   lastName: string;
   Name?: string;
+  userId?: number;
 }
 
 interface ProjectMember {
@@ -24,6 +25,7 @@ interface ProjectMember {
   employeeId?: number;
   employee: {
     id: number;
+    userId?: number;
     firstName: string;
     lastName: string;
     profilePhotoUrl: string | null;
@@ -44,6 +46,7 @@ interface ProjectItem {
   logoUrl?: string | null;
   client: Client | null;
   manager: Employee | null;
+  projectManager?: Employee | null;
   members: ProjectMember[];
 }
 
