@@ -36,6 +36,7 @@ interface TaskItem {
     name: string;
   };
   subTasks?: SubTask[];
+  comments?: { id: number, text: string, createdAt: string, user: { firstName: string, lastName: string } }[];
 }
 
 interface BoardData {
@@ -48,13 +49,20 @@ interface BoardData {
 
 const TaskBoard = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
-  const isCompanyAdmin = currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "HR";
+  const canWriteTasks = currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "HR" || currentUser?.role === "COMPANY_ADMIN" || currentUser?.permissions?.some((p: any) => p.module === 'TASKS' && p.canWrite);
+
+  const isUserPMOrLead = (projectId: number) => {
+    const proj = projects.find(p => p.id === projectId);
+    if (!proj || !currentUser) return false;
+    const isPM = proj.projectManager?.userId === currentUser.id;
+    const isTeamLead = proj.members?.some((m: any) => m.employee?.userId === currentUser.id && (m.role === 'Team Lead' || m.role === 'Team_Lead' || m.role?.toLowerCase() === 'team lead'));
+    return isPM || isTeamLead;
+  };
 
   const canEditTask = (task: TaskItem) => {
     if (!currentUser) return false;
-    if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR' || currentUser.role === 'MANAGER' || currentUser.role === 'EMPLOYEE') {
-      return true;
-    }
+    if (canWriteTasks) return true;
+    if (isUserPMOrLead(task.projectId)) return true;
     return task.assignedTo?.userId === currentUser.id;
   };
 
@@ -185,14 +193,15 @@ const TaskBoard = () => {
     const taskId = parseInt(taskIdStr, 10);
 
     // Find target task to check permissions before making changes
-    let targetTask: TaskItem | null = null;
-    Object.values(boardData).flat().forEach(t => {
-      if (t.id === taskId) targetTask = t;
-    });
+    const targetTask = (Object.values(boardData).flat() as TaskItem[]).find((t: TaskItem) => t.id === taskId) || null;
 
     if (targetTask && !canEditTask(targetTask)) {
       setErrorMsg("You do not have permission to update this task's status.");
       return;
+    }
+    const comment = window.prompt(`Move task "${targetTask?.title}" to ${newStatus}? \n\nAdd a comment (Optional):`);
+    if (comment === null) {
+      return; // User cancelled
     }
 
     try {
@@ -215,7 +224,7 @@ const TaskBoard = () => {
       }
 
       // Backend sync
-      await apiClient.patch(`/api/tasks/${taskId}/status`, { status: newStatus });
+      await apiClient.patch(`/api/tasks/${taskId}/status`, { status: newStatus, comment });
       fetchBoard(selectedProjectId);
     } catch (err) {
       console.error("Failed to update status on drop:", err);
@@ -517,7 +526,7 @@ const TaskBoard = () => {
             >
               <i className="ti ti-download fs-16" /> Export PDF
             </button>
-            {isCompanyAdmin && (
+            {canWriteTasks && (
               <button 
                 className="btn btn-primary d-inline-flex align-items-center gap-1 shadow-sm"
                 onClick={() => setShowBoardModal(true)}
@@ -881,7 +890,7 @@ const TaskBoard = () => {
                     </div>
 
                     {/* Footer add button */}
-                    {isCompanyAdmin && (
+                    {canWriteTasks && (
                       <div className="card-footer bg-white border-0 py-2 d-grid rounded-bottom-3">
                         <button
                           className="btn btn-outline-light border-dashed text-dark btn-sm d-flex align-items-center justify-content-center gap-1 rounded-3"
@@ -1080,9 +1089,23 @@ const TaskBoard = () => {
                         onChange={(e) => setTaskAssigneeId(e.target.value)}
                       >
                         <option value="">Select Assignee</option>
-                        {employees.map(emp => (
-                          <option value={emp.id} key={emp.id}>{emp.firstName} {emp.lastName}</option>
-                        ))}
+                        {(() => {
+                          const currentProj = projects.find(p => p.id === Number(taskProjectId || selectedProjectId));
+                          if (!currentProj) return [];
+                          const members = [];
+                          if (currentProj.projectManager) members.push(currentProj.projectManager);
+                            if (currentProj.manager && !members.find(emp => emp.id === currentProj.manager.id)) members.push(currentProj.manager);
+                          if (currentProj.members) {
+                            currentProj.members.forEach((m: any) => {
+                              if (m.employee && !members.find(emp => emp.id === m.employee.id)) {
+                                members.push(m.employee);
+                              }
+                            });
+                          }
+                          return members.map(emp => (
+                            <option value={emp.id} key={emp.id}>{emp.firstName} {emp.lastName}</option>
+                          ));
+                        })()}
                       </select>
                     </div>
 
@@ -1280,9 +1303,34 @@ const TaskBoard = () => {
                         <button type="submit" className="btn btn-primary btn-sm px-3 shadow-xs">Add</button>
                       </form>
                     </div>
-                  </div>
 
-                  {/* Right Column: Meta details & actions */}
+                      {/* Comments section */}
+                      <div className="mt-5 border-top pt-4">
+                        <h6 className="fw-bold text-muted fs-12 uppercase tracking-wide mb-3">Activity & Comments</h6>
+                        {activeTask.comments && activeTask.comments.length > 0 ? (
+                          <div className="d-flex flex-column gap-3">
+                            {activeTask.comments.map((comment: any) => (
+                              <div key={comment.id} className="d-flex gap-2 bg-light p-3 rounded">
+                                <div className="avatar avatar-sm bg-primary text-white rounded-circle flex-shrink-0 d-flex align-items-center justify-content-center fw-bold fs-12" style={{ width: "32px", height: "32px" }}>
+                                  {comment.user?.name?.charAt(0) || 'U'}
+                                </div>
+                                <div>
+                                  <div className="d-flex align-items-center gap-2 mb-1">
+                                    <span className="fw-bold fs-13 text-dark">{comment.user?.name}</span>
+                                    <span className="fs-11 text-muted">{new Date(comment.createdAt).toLocaleString()}</span>
+                                  </div>
+                                  <p className="mb-0 fs-13 text-gray-7">{comment.text}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-muted fs-13 italic">No comments yet.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right Column: Meta details & actions */}
                   <div className="col-lg-5">
                     <div className="bg-light p-3 rounded-3 mb-4">
                       <h6 className="fw-bold text-muted fs-12 uppercase tracking-wide mb-3">Task Meta</h6>
@@ -1315,7 +1363,7 @@ const TaskBoard = () => {
                     </div>
 
                     <div className="d-grid gap-2">
-                      {isCompanyAdmin && (
+                      {canWriteTasks && (
                         <button
                           type="button"
                           className="btn btn-outline-danger d-flex align-items-center justify-content-center gap-1"

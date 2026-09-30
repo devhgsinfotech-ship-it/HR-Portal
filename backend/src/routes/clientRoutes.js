@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/authMiddleware');
-const { requireProjectAdmin } = require('../middleware/projectPermission');
+const { requireProjectAdmin, checkModulePermission } = require('../middleware/projectPermission');
 const {
   getClients,
   getClientById,
@@ -13,9 +13,9 @@ const {
 
 router.get('/',    verifyToken, getClients);
 router.get('/:id', verifyToken, getClientById);
-router.post('/',   verifyToken, requireProjectAdmin, createClient);
-router.put('/:id', verifyToken, requireProjectAdmin, updateClient);
-router.delete('/:id', verifyToken, requireProjectAdmin, deleteClient);
+router.post('/',   verifyToken, checkModulePermission('CLIENTS', 'create'), createClient);
+router.put('/:id', verifyToken, checkModulePermission('CLIENTS', 'write'), updateClient);
+router.delete('/:id', verifyToken, checkModulePermission('CLIENTS', 'delete'), deleteClient);
 
 module.exports = router;
 

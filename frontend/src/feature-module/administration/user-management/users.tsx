@@ -1,22 +1,24 @@
-import { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import CommonSelect from '../../../core/common/commonSelect'
 import { all_routes } from '../../../router/all_routes'
 import { Link } from 'react-router-dom'
 import Table from "../../../core/common/dataTable/index";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
-import { usersDetails } from '../../../core/data/json/usersDetails';
+
 import PredefinedDateRanges from '../../../core/common/datePicker';
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
+import axios from 'axios';
+import { APP_CONFIG } from '../../../environment';
 
 // Define interfaces
 interface UserItem {
+    id: number;
     name: string;
     email: string;
     created_date: string;
     role: string;
-    status: string;
     image_url: string;
-    [key: string]: any; // Remove if not needed
+    [key: string]: any;
 }
 
 interface ColumnType<T> {
@@ -46,7 +48,33 @@ const Users = () => {
         { value: "Client", label: "Client" },
     ]
 
-    const data: UserItem[] = usersDetails;
+    const [users, setUsers] = useState<UserItem[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchProjectUsers = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await axios.get(`${APP_CONFIG.getBackendUrl()}/api/users/project-members`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (response.data.success) {
+                    const formattedData = response.data.data.map((u: any) => ({
+                        ...u,
+                        created_date: new Date(u.created_date).toLocaleDateString()
+                    }));
+                    setUsers(formattedData);
+                }
+            } catch (error) {
+                console.error("Failed to fetch project users", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchProjectUsers();
+    }, []);
+
+    const data: UserItem[] = users;
     const columns: ColumnType<UserItem>[] = [
         {
             title: "Name",
@@ -63,49 +91,26 @@ const Users = () => {
                     </div>
                 </div>
             ),
-            sorter: (a, b) => a.name.length - b.name.length,
+            sorter: (a, b) => (a.name || '').length - (b.name || '').length,
         },
         {
             title: "Email",
             dataIndex: "email",
-            sorter: (a, b) => a.email.length - b.email.length,
+            sorter: (a, b) => (a.email || '').length - (b.email || '').length,
         },
         {
             title: "Created Date",
             dataIndex: "created_date",
-            sorter: (a, b) => a.created_date.length - b.created_date.length,
+            sorter: (a, b) => (a.created_date || '').length - (b.created_date || '').length,
         },
         {
-            title: "Role",
+            title: "Role (in Project)",
             dataIndex: "role",
             render: (text: string) => (
-                <span className={`badge badge-md p-2 fs-10  ${text === 'Employee' ? 'badge-pink-transparent' : 'badge-soft-purple'}`}>{text}</span>
+                <span className={`badge badge-md p-2 fs-10 badge-soft-purple`}>{text}</span>
             ),
-            sorter: (a, b) => a.role.length - b.role.length,
-        },
-        {
-            title: "Status",
-            dataIndex: "status",
-            render: (_text: string, _record?: UserItem) => (
-                <div className="action-icon d-inline-flex">
-                    <Link to="#" className="me-2">
-                        <i className="ti ti-shield" />
-                    </Link>
-                    <Link
-                        to="#"
-                        className="me-2"
-                        data-bs-toggle="modal" data-inert={true}
-                        data-bs-target="#edit_role"
-                    >
-                        <i className="ti ti-edit" />
-                    </Link>
-                    <Link to="#" data-bs-toggle="modal" data-inert={true} data-bs-target="#delete_modal">
-                        <i className="ti ti-trash" />
-                    </Link>
-                </div>
-            ),
-            sorter: (a, b) => a.status.length - b.status.length,
-        },
+            sorter: (a, b) => (a.role || '').length - (b.role || '').length,
+        }
     ]
 
     return (

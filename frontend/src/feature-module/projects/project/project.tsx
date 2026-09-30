@@ -22,6 +22,8 @@ interface Employee {
 
 interface ProjectMember {
   id: number;
+  role?: string;
+  employeeId?: number;
   employee: {
     id: number;
     firstName: string;
@@ -60,8 +62,8 @@ const ProjectGrid = () => {
     currentUser?.permissions?.some(p => p.module === 'FINANCE' && p.canRead);
 
   const canWriteProjects = currentUser?.role === 'SUPER_ADMIN' ||
+    currentUser?.role === 'COMPANY_ADMIN' ||
     currentUser?.role === 'HR' ||
-    currentUser?.role === 'MANAGER' ||
     currentUser?.permissions?.some(p => p.module === 'PROJECTS' && p.canWrite);
 
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -78,6 +80,7 @@ const ProjectGrid = () => {
   const [description, setDescription] = useState("");
   const [clientId, setClientId] = useState("");
   const [managerId, setManagerId] = useState("");
+  const [companyManagerId, setCompanyManagerId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [budget, setBudget] = useState("");
@@ -91,6 +94,7 @@ const ProjectGrid = () => {
   const [editDescription, setEditDescription] = useState("");
   const [editClientId, setEditClientId] = useState("");
   const [editManagerId, setEditManagerId] = useState("");
+  const [editCompanyManagerId, setEditCompanyManagerId] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
   const [editBudget, setEditBudget] = useState("");
@@ -103,6 +107,7 @@ const ProjectGrid = () => {
   const [editActiveTab, setEditActiveTab] = useState<"basic" | "members">("basic");
   const [memberIds, setMemberIds] = useState<number[]>([]);
   const [editMemberIds, setEditMemberIds] = useState<number[]>([]);
+  const [editTeamLeadIds, setEditTeamLeadIds] = useState<number[]>([]);
 
   // Attachments & Logo State
   const [attachmentUrl, setAttachmentUrl] = useState("");
@@ -154,6 +159,15 @@ const ProjectGrid = () => {
   useEffect(() => {
     fetchProjects();
     fetchMetadata();
+
+    const handleProjectAdded = () => {
+      fetchProjects();
+    };
+    window.addEventListener('projectAdded', handleProjectAdded);
+    
+    return () => {
+      window.removeEventListener('projectAdded', handleProjectAdded);
+    };
   }, []);
 
   const getPlainDescription = (htmlStr: string | null) => {
@@ -230,6 +244,7 @@ const ProjectGrid = () => {
         name,
         description,
         clientId: parseInt(clientId, 10),
+        managerId: companyManagerId ? parseInt(companyManagerId, 10) : null,
         projectManagerId: managerId ? parseInt(managerId, 10) : null,
         startDate: startDate || new Date().toISOString().split('T')[0],
         endDate: endDate || new Date().toISOString().split('T')[0],
@@ -249,6 +264,7 @@ const ProjectGrid = () => {
         setDescription("");
         setClientId("");
         setManagerId("");
+        setCompanyManagerId("");
         setStartDate("");
         setEndDate("");
         setBudget("");
@@ -290,14 +306,16 @@ const ProjectGrid = () => {
     setEditName(proj.name);
     setEditDescription(proj.description || "");
     setEditClientId(proj.client ? String(proj.client.id) : "");
-    setEditManagerId(proj.manager ? String(proj.manager.id) : "");
+    setEditManagerId(proj.projectManager ? String(proj.projectManager.id) : "");
+      setEditCompanyManagerId(proj.manager ? String(proj.manager.id) : "");
     setEditStartDate(proj.startDate ? proj.startDate.split('T')[0] : "");
     setEditEndDate(proj.endDate ? proj.endDate.split('T')[0] : "");
     setEditBudget(proj.budget ? String(proj.budget) : "");
     setEditPriority(proj.priority);
     setEditHealth(proj.health || "GOOD");
     setEditProjectStatus(proj.status);
-    setEditMemberIds(proj.members ? proj.members.map(m => m.employee.id) : []);
+    setEditMemberIds(proj.members ? proj.members.filter(m => m.role === 'Member').map(m => m.employee.id) : []);
+    setEditTeamLeadIds(proj.members ? proj.members.filter(m => m.role === 'Team Lead').map(m => m.employee.id) : []);
     setEditActiveTab("basic");
     setEditAttachmentUrl(proj.attachmentUrl || "");
     setEditLogoUrl(proj.logoUrl || "");
@@ -312,6 +330,7 @@ const ProjectGrid = () => {
         name: editName,
         description: editDescription,
         clientId: parseInt(editClientId, 10),
+        managerId: editCompanyManagerId ? parseInt(editCompanyManagerId, 10) : null,
         projectManagerId: editManagerId ? parseInt(editManagerId, 10) : null,
         startDate: editStartDate || new Date().toISOString().split('T')[0],
         endDate: editEndDate || new Date().toISOString().split('T')[0],
@@ -320,6 +339,7 @@ const ProjectGrid = () => {
         healthStatus: editHealth,
         status: editProjectStatus,
         memberIds: editMemberIds,
+        teamLeadIds: editTeamLeadIds,
         attachmentUrl: editAttachmentUrl,
         logoUrl: editLogoUrl
       };
@@ -328,6 +348,7 @@ const ProjectGrid = () => {
       if (res.data?.success) {
         fetchProjects();
         setEditMemberIds([]);
+        setEditTeamLeadIds([]);
         setEditActiveTab("basic");
         setEditAttachmentUrl("");
         setEditLogoUrl("");
@@ -484,7 +505,7 @@ const ProjectGrid = () => {
                           <span className={`badge ${getPriorityBadgeClass(proj.priority)} badge-xs`}>
                             {getPriorityLabel(proj.priority)}
                           </span>
-                          {canWriteProjects && (
+                          {(canWriteProjects || proj.projectManager?.userId === currentUser?.id || proj.members?.some(m => m.employee?.userId === currentUser?.id && (m.role === 'Team Lead' || m.role === 'Team_Lead' || m.role?.toLowerCase() === 'team lead'))) && (
                             <div className="dropdown">
                               <Link to="#" className="text-muted" data-bs-toggle="dropdown">
                                 <i className="ti ti-dots-vertical fs-16" />
@@ -560,6 +581,12 @@ const ProjectGrid = () => {
                             <span className="text-muted">Manager:</span>
                             <span className="fw-medium text-dark">
                               {proj.manager ? `${proj.manager.firstName} ${proj.manager.lastName}` : "Unassigned"}
+                            </span>
+                          </div>
+                          <div className="d-flex justify-content-between mb-1">
+                            <span className="text-muted">Project Manager:</span>
+                            <span className="fw-medium text-dark">
+                              {proj.projectManager ? `${proj.projectManager.firstName} ${proj.projectManager.lastName}` : "Unassigned"}
                             </span>
                           </div>
                           <div className="d-flex justify-content-between mb-1">
@@ -782,7 +809,7 @@ const ProjectGrid = () => {
                           const emp = employees.find(e => e.id === id);
                           return (
                             <span key={id} className="badge bg-primary text-white p-2 d-inline-flex align-items-center gap-2">
-                              {emp ? emp.Name : `ID: ${id}`}
+                              {emp ? `${emp.firstName || ""} ${emp.lastName || ""}`.trim() : `ID: ${id}`}
                               <i
                                 className="ti ti-x cursor-pointer fs-12"
                                 style={{ cursor: "pointer" }}
@@ -808,21 +835,35 @@ const ProjectGrid = () => {
                         {employees
                           .filter(e => !memberIds.includes(e.id))
                           .map(e => (
-                            <option value={e.id} key={e.id}>{e.Name}</option>
+                            <option value={e.id} key={e.id}>{`${e.firstName || ""} ${e.lastName || ""}`.trim()}</option>
                           ))}
                       </select>
                     </div>
 
                     <div className="col-md-12 mb-3">
-                      <label className="form-label fs-13">Project Manager</label>
-                      <select
-                        className="form-select"
-                        value={managerId}
+                        <label className="form-label fs-13">Manager</label>
+                        <select
+                          className="form-select"
+                          value={companyManagerId}
+                          onChange={(e) => setCompanyManagerId(e.target.value)}
+                        >
+                          <option value="">-- Choose Manager --</option>
+                          {employees.map(e => (
+                            <option value={e.id} key={e.id}>{`${e.firstName || ""} ${e.lastName || ""}`.trim()}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="col-md-12 mb-3">
+                        <label className="form-label fs-13">Project Manager</label>
+                        <select
+                          className="form-select"
+                          value={managerId}
                         onChange={(e) => setManagerId(e.target.value)}
                       >
                         <option value="">-- Choose PM --</option>
                         {employees.map(e => (
-                          <option value={e.id} key={e.id}>{e.Name}</option>
+                          <option value={e.id} key={e.id}>{`${e.firstName || ""} ${e.lastName || ""}`.trim()}</option>
                         ))}
                       </select>
                     </div>
@@ -1057,15 +1098,54 @@ const ProjectGrid = () => {
                 {editActiveTab === "members" && (
                   <div className="row animate__animated animate__fadeIn">
                     <div className="col-md-12 mb-3">
+                      <label className="form-label fs-13 me-2">Allocate Team Leads</label>
+
+                      <div className="d-flex flex-wrap gap-2 mb-2">
+                        {editTeamLeadIds.map(id => {
+                          const emp = employees.find(e => e.id === id);
+                          return (
+                            <span key={id} className="badge bg-info text-white p-2 d-inline-flex align-items-center gap-2">
+                              {emp ? `${emp.firstName || ""} ${emp.lastName || ""}`.trim() : `ID: ${id}`}
+                              <i
+                                className="ti ti-x cursor-pointer fs-12"
+                                style={{ cursor: "pointer" }}
+                                onClick={() => setEditTeamLeadIds(editTeamLeadIds.filter(tId => tId !== id))}
+                              />
+                            </span>
+                          );
+                        })}
+                      </div>
+
+                      <select
+                        className="form-select"
+                        onChange={(e) => {
+                          const idVal = parseInt(e.target.value, 10);
+                          if (idVal && !editTeamLeadIds.includes(idVal)) {
+                            setEditTeamLeadIds([...editTeamLeadIds, idVal]);
+                            // Also remove from members if they were there
+                            setEditMemberIds(editMemberIds.filter(mId => mId !== idVal));
+                          }
+                          e.target.value = ""; // Reset select
+                        }}
+                      >
+                        <option value="">-- Click to allocate team lead --</option>
+                        {employees
+                          .filter(e => !editTeamLeadIds.includes(e.id))
+                          .map(e => (
+                            <option value={e.id} key={e.id}>{`${e.firstName || ""} ${e.lastName || ""}`.trim()}</option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div className="col-md-12 mb-3">
                       <label className="form-label fs-13 me-2">Allocate Team Members</label>
 
-                      {/* Tags display */}
                       <div className="d-flex flex-wrap gap-2 mb-2">
                         {editMemberIds.map(id => {
                           const emp = employees.find(e => e.id === id);
                           return (
                             <span key={id} className="badge bg-primary text-white p-2 d-inline-flex align-items-center gap-2">
-                              {emp ? emp.Name : `ID: ${id}`}
+                              {emp ? `${emp.firstName || ""} ${emp.lastName || ""}`.trim() : `ID: ${id}`}
                               <i
                                 className="ti ti-x cursor-pointer fs-12"
                                 style={{ cursor: "pointer" }}
@@ -1076,36 +1156,51 @@ const ProjectGrid = () => {
                         })}
                       </div>
 
-                      {/* Select to allocate */}
                       <select
                         className="form-select"
                         onChange={(e) => {
                           const idVal = parseInt(e.target.value, 10);
                           if (idVal && !editMemberIds.includes(idVal)) {
                             setEditMemberIds([...editMemberIds, idVal]);
+                            // Also remove from team leads if they were there
+                            setEditTeamLeadIds(editTeamLeadIds.filter(tId => tId !== idVal));
                           }
                           e.target.value = ""; // Reset select
                         }}
                       >
                         <option value="">-- Click to allocate member --</option>
                         {employees
-                          .filter(e => !editMemberIds.includes(e.id))
+                          .filter(e => !editMemberIds.includes(e.id) && !editTeamLeadIds.includes(e.id))
                           .map(e => (
-                            <option value={e.id} key={e.id}>{e.Name}</option>
+                            <option value={e.id} key={e.id}>{`${e.firstName || ""} ${e.lastName || ""}`.trim()}</option>
                           ))}
                       </select>
                     </div>
 
                     <div className="col-md-12 mb-3">
-                      <label className="form-label fs-13">Project Manager</label>
-                      <select
-                        className="form-select"
-                        value={editManagerId}
+                        <label className="form-label fs-13">Manager</label>
+                        <select
+                          className="form-select"
+                          value={editCompanyManagerId}
+                          onChange={(e) => setEditCompanyManagerId(e.target.value)}
+                        >
+                          <option value="">-- Choose Manager --</option>
+                          {employees.map(e => (
+                            <option value={e.id} key={e.id}>{`${e.firstName || ""} ${e.lastName || ""}`.trim()}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="col-md-12 mb-3">
+                        <label className="form-label fs-13">Project Manager</label>
+                        <select
+                          className="form-select"
+                          value={editManagerId}
                         onChange={(e) => setEditManagerId(e.target.value)}
                       >
                         <option value="">-- Choose PM --</option>
                         {employees.map(e => (
-                          <option value={e.id} key={e.id}>{e.Name}</option>
+                          <option value={e.id} key={e.id}>{`${e.firstName || ""} ${e.lastName || ""}`.trim()}</option>
                         ))}
                       </select>
                     </div>

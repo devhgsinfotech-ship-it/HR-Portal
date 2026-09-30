@@ -99,7 +99,7 @@ const EmployeeList = () => {
     const headers = ["Emp ID", "Name", "Email", "Phone", "Designation", "Joining Date", "Status"];
     const rows = filteredEmployees.map(emp => [
       emp.EmpId,
-      emp.Name,
+      `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
       emp.Email,
       emp.Phone,
       emp.Designation,
@@ -154,7 +154,7 @@ const EmployeeList = () => {
               ${filteredEmployees.map(emp => `
                 <tr>
                   <td>${emp.EmpId}</td>
-                  <td>${emp.Name}</td>
+                  <td>${`${emp.firstName || ""} ${emp.lastName || ""}`.trim()}</td>
                   <td>${emp.Email}</td>
                   <td>${emp.Phone}</td>
                   <td>${emp.Designation}</td>
@@ -1289,7 +1289,7 @@ const EmployeeList = () => {
                           <label className="form-label">Reporting Manager</label>
                           <CommonSelect
                             className="select"
-                            options={[{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: emp.Name }))]}
+                            options={[{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed' }))]}
                             onChange={(opt) => setNewEmp({...newEmp, reportingManagerId: opt?.value || ''})}
                           />
                           <small className="text-muted">HR assigns who manages this employee</small>
@@ -2450,9 +2450,12 @@ const EmployeeList = () => {
                           <label className="form-label">Department</label>
                           <CommonSelect
                             className="select"
-                            options={dbDepartments}
+                            options={[{ value: '', label: '-- None --' }, ...dbDepartments]}
                             onChange={(opt) => setEditEmp({...editEmp, departmentId: opt?.value || ''})}
-                            defaultValue={dbDepartments.find(d => d.value === editEmp.departmentId) || dbDepartments[0]}
+                            defaultValue={(() => {
+                              const allOptions = [{ value: '', label: '-- None --' }, ...dbDepartments];
+                              return allOptions.find(d => d.value === String(editEmp.departmentId)) || allOptions[0];
+                            })()}
                           />
                         </div>
                       </div>
@@ -2461,9 +2464,12 @@ const EmployeeList = () => {
                           <label className="form-label">Designation</label>
                           <CommonSelect
                             className="select"
-                            options={dbDesignations}
+                            options={[{ value: '', label: '-- None --' }, ...dbDesignations]}
                             onChange={(opt) => setEditEmp({...editEmp, designationId: opt?.value || ''})}
-                            defaultValue={dbDesignations.find(d => d.value === editEmp.designationId) || dbDesignations[0]}
+                            defaultValue={(() => {
+                              const allOptions = [{ value: '', label: '-- None --' }, ...dbDesignations];
+                              return allOptions.find(d => d.value === String(editEmp.designationId)) || allOptions[0];
+                            })()}
                           />
                         </div>
                       </div>
@@ -2500,7 +2506,7 @@ const EmployeeList = () => {
                             onChange={(opt) => setEditEmp({...editEmp, companyRoleId: opt?.value || ''})}
                             defaultValue={(() => {
                               const allOptions = [{ value: '', label: '-- None --' }, ...dbRoles];
-                              return allOptions.find(r => r.value === editEmp.companyRoleId) || allOptions[0];
+                              return allOptions.find(r => r.value === String(editEmp.companyRoleId)) || allOptions[0];
                             })()}
                           />
                         </div>
@@ -2510,10 +2516,10 @@ const EmployeeList = () => {
                           <label className="form-label">Reporting Manager</label>
                           <CommonSelect
                             className="select"
-                            options={[{ value: '', label: '-- None --' }, ...dbEmployees.filter((emp: any) => emp.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: emp.Name }))]}
+                            options={[{ value: '', label: '-- None --' }, ...dbEmployees.filter((emp: any) => emp.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed' }))]}
                             onChange={(opt) => setEditEmp({...editEmp, reportingManagerId: opt?.value || ''})}
                             defaultValue={(() => {
-                              const allOptions = [{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: emp.Name }))];
+                              const allOptions = [{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed' }))];
                               return allOptions.find(m => m.value === String(editEmp.reportingManagerId)) || allOptions[0];
                             })()}
                           />
