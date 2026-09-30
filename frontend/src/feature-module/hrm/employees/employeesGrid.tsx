@@ -1076,7 +1076,7 @@ const EmployeesGrid = () => {
                                                     <label className="form-label">Reporting Manager</label>
                                                     <CommonSelect
                                                         className="select"
-                                                        options={[{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() }))]}
+                                                        options={[{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed' }))]}
                                                         onChange={(opt) => setNewEmp({...newEmp, reportingManagerId: opt?.value || ''})}
                                                     />
                                                 </div>
@@ -1523,8 +1523,11 @@ const EmployeesGrid = () => {
                                                     <label className="form-label">Department</label>
                                                     <CommonSelect
                                                         className="select"
-                                                        options={dbDepartments}
-                                                        defaultValue={dbDepartments.find(d => d.value === editEmp.departmentId)}
+                                                        options={[{ value: '', label: '-- None --' }, ...dbDepartments]}
+                                                        defaultValue={(() => {
+                                                            const allOptions = [{ value: '', label: '-- None --' }, ...dbDepartments];
+                                                            return allOptions.find(d => d.value === String(editEmp.departmentId)) || allOptions[0];
+                                                        })()}
                                                         onChange={(opt) => setEditEmp({...editEmp, departmentId: opt?.value || ''})}
                                                     />
                                                 </div>
@@ -1534,8 +1537,11 @@ const EmployeesGrid = () => {
                                                     <label className="form-label">Designation</label>
                                                     <CommonSelect
                                                         className="select"
-                                                        options={dbDesignations}
-                                                        defaultValue={dbDesignations.find(d => d.value === editEmp.designationId)}
+                                                        options={[{ value: '', label: '-- None --' }, ...dbDesignations]}
+                                                        defaultValue={(() => {
+                                                            const allOptions = [{ value: '', label: '-- None --' }, ...dbDesignations];
+                                                            return allOptions.find(d => d.value === String(editEmp.designationId)) || allOptions[0];
+                                                        })()}
                                                         onChange={(opt) => setEditEmp({...editEmp, designationId: opt?.value || ''})}
                                                     />
                                                 </div>
@@ -1561,8 +1567,8 @@ const EmployeesGrid = () => {
                                                     <label className="form-label">Reporting Manager</label>
                                                     <CommonSelect
                                                         className="select"
-                                                        options={[{ value: '', label: '-- None --' }, ...dbEmployees.filter(e => e.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() }))]}
-                                                        defaultValue={{ value: String(editEmp.reportingManagerId || ''), label: editEmp.reportingManagerId ? (dbEmployees.find(e => e.id === editEmp.reportingManagerId)?.Name || 'Selected Manager') : '-- None --' }}
+                                                        options={[{ value: '', label: '-- None --' }, ...dbEmployees.filter(e => e.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed' }))]}
+                                                        defaultValue={{ value: String(editEmp.reportingManagerId || ''), label: editEmp.reportingManagerId ? (dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.firstName ? `${dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.firstName} ${dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.lastName}`.trim() : 'Selected Manager') : '-- None --' }}
                                                         onChange={(opt) => setEditEmp({...editEmp, reportingManagerId: opt?.value || ''})}
                                                     />
                                                 </div>

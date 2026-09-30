@@ -23,9 +23,9 @@ const ClienttGrid = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
   
   const canWriteClients = currentUser?.role === 'SUPER_ADMIN' || 
+                          currentUser?.role === 'COMPANY_ADMIN' ||
                           currentUser?.role === 'HR' || 
-                          currentUser?.role === 'MANAGER' ||
-                          currentUser?.permissions?.some(p => p.module === 'PROJECTS' && p.canWrite);
+                          currentUser?.permissions?.some((p: any) => p.module === 'CLIENTS' && p.canWrite);
 
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);

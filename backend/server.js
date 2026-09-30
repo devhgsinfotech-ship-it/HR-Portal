@@ -95,6 +95,7 @@ const taskRoutes = require('./src/routes/taskRoutes');
 const timesheetRoutes = require('./src/routes/timesheetRoutes');
 const roleRoutes = require('./src/routes/roleRoutes');
 const payrollRoutes = require('./src/routes/payrollRoutes');
+const userRoutes = require('./src/routes/userRoutes');
 
 // SaaS Subscription Billing Routes & Seeder
 const subscriptionRoutes = require('./src/routes/subscriptionRoutes');
@@ -140,6 +141,7 @@ app.use('/roles', roleRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/payroll', payrollRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/users', userRoutes);
 
 // SaaS Subscriptions & Plans
 app.use('/super-admin', subscriptionRoutes);

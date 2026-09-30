@@ -20,10 +20,22 @@ const getTasks = async (req, res) => {
     if (priority) where.priority = priority;
     if (assignedToId) where.assignedToId = Number(assignedToId);
 
-    // Employees only see tasks assigned to them
-    if (req.user.role === 'EMPLOYEE') {
-      const employee = await prisma.employee.findUnique({ where: { userId: req.user.id } });
-      if (employee) where.assignedToId = employee.id;
+    // Employees only see tasks assigned to them, UNLESS they have TASKS canRead permission
+    if (req.user.role === 'EMPLOYEE' || req.user.role === 'MANAGER') {
+      const employee = await prisma.employee.findUnique({ 
+        where: { userId: req.user.id },
+        include: { companyRole: { include: { permissions: { where: { module: 'TASKS' } } } } }
+      });
+      const canReadTasks = employee?.companyRole?.permissions?.[0]?.canRead || employee?.companyRole?.permissions?.[0]?.canWrite;
+      
+      if (employee && !canReadTasks) {
+          where.OR = [
+            { assignedToId: employee.id },
+            { project: { projectManagerId: employee.id } },
+            { project: { managerId: employee.id } },
+            { project: { members: { some: { employeeId: employee.id } } } }
+          ];
+        }
     }
 
     const tasks = await prisma.task.findMany({
@@ -33,6 +45,7 @@ const getTasks = async (req, res) => {
         project: { select: { id: true, name: true, projectCode: true } },
         milestone: { select: { id: true, name: true } },
         subTasks: true,
+        comments: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } },
         _count: { select: { timeLogs: true } },
       },
       orderBy: [{ status: 'asc' }, { sortOrder: 'asc' }, { dueDate: 'asc' }],
@@ -57,9 +70,21 @@ const getTaskBoard = async (req, res) => {
     if (projectId) where.projectId = Number(projectId);
 
     // Employee scoping
-    if (req.user.role === 'EMPLOYEE') {
-      const employee = await prisma.employee.findUnique({ where: { userId: req.user.id } });
-      if (employee) where.assignedToId = employee.id;
+    if (req.user.role === 'EMPLOYEE' || req.user.role === 'MANAGER') {
+      const employee = await prisma.employee.findUnique({ 
+        where: { userId: req.user.id },
+        include: { companyRole: { include: { permissions: { where: { module: 'TASKS' } } } } }
+      });
+      const canReadTasks = employee?.companyRole?.permissions?.[0]?.canRead || employee?.companyRole?.permissions?.[0]?.canWrite;
+      
+      if (employee && !canReadTasks) {
+          where.OR = [
+            { assignedToId: employee.id },
+            { project: { projectManagerId: employee.id } },
+            { project: { managerId: employee.id } },
+            { project: { members: { some: { employeeId: employee.id } } } }
+          ];
+        }
     }
 
     const tasks = await prisma.task.findMany({
@@ -68,6 +93,7 @@ const getTaskBoard = async (req, res) => {
         assignedTo: { select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true } },
         project: { select: { id: true, name: true } },
         subTasks: true,
+        comments: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } },
       },
       orderBy: { sortOrder: 'asc' },
     });
@@ -125,8 +151,9 @@ const createTask = async (req, res) => {
           : undefined,
       },
       include: {
-        assignedTo: { select: { id: true, firstName: true, lastName: true } },
+        assignedTo: { select: { id: true, userId: true, firstName: true, lastName: true } },
         subTasks: true,
+        comments: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } },
       },
     });
 
@@ -175,23 +202,51 @@ const updateTask = async (req, res) => {
 const updateTaskStatus = async (req, res) => {
   try {
     const taskId = Number(req.params.id);
-    const { status, actualHours } = req.body;
+    const { status, actualHours, comment } = req.body;
 
-    // Employee: verify they are the assignee
-    if (req.user.role === 'EMPLOYEE') {
-      const employee = await prisma.employee.findUnique({ where: { userId: req.user.id } });
-      const task = await prisma.task.findUnique({ where: { id: taskId } });
-      if (!task || task.assignedToId !== employee?.id) {
-        return res.status(403).json({ message: 'You can only update your own tasks.' });
+    // Employee: verify they are the assignee, UNLESS they have TASKS canWrite permission
+    if (req.user.role === 'EMPLOYEE' || req.user.role === 'MANAGER') {
+      const employee = await prisma.employee.findUnique({ 
+        where: { userId: req.user.id },
+        include: { companyRole: { include: { permissions: { where: { module: 'TASKS' } } } } }
+      });
+      const canWriteTasks = employee?.companyRole?.permissions?.[0]?.canWrite;
+      
+      if (!canWriteTasks) {
+        const task = await prisma.task.findUnique({ 
+          where: { id: taskId },
+          include: { project: { include: { members: true } } }
+        });
+        if (!task) return res.status(404).json({ message: 'Task not found.' });
+
+        const isAssignee = task.assignedToId === employee?.id;
+        const isPM = task.project?.projectManagerId === employee?.id || task.project?.managerId === employee?.id;
+        const isTeamLead = task.project?.members?.some(m => m.employeeId === employee?.id && (m.role === 'Team Lead' || m.role === 'Team_Lead' || m.role?.toLowerCase() === 'team lead'));
+
+        if (!isAssignee && !isPM && !isTeamLead) {
+          return res.status(403).json({ message: 'You can only update your own tasks or tasks in your projects.' });
+        }
       }
+    }
+
+    const updateData = {
+      status,
+      actualHours: actualHours !== undefined ? Number(actualHours) : undefined,
+    };
+
+    if (comment && comment.trim() !== '') {
+      updateData.comments = {
+        create: {
+          text: comment,
+          userId: req.user.id,
+        }
+      };
     }
 
     const task = await prisma.task.update({
       where: { id: taskId },
-      data: {
-        status,
-        actualHours: actualHours !== undefined ? Number(actualHours) : undefined,
-      },
+      data: updateData,
+      include: { comments: { include: { user: { select: { id: true, name: true } } } } }
     });
 
     res.json({ success: true, message: 'Task status updated.', data: task });

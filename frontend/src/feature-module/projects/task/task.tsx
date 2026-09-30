@@ -23,7 +23,9 @@ interface ProjectItem {
   priority: string;
   status: string;
   logoUrl?: string;
-  projectManager?: Employee;
+  manager?: Employee;
+    projectManager?: Employee;
+  members?: { employeeId: number, role: string, employee?: { firstName: string, lastName: string } }[];
 }
 
 interface SubTask {
@@ -54,13 +56,21 @@ interface TaskItem {
 
 const Task = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
-  const isCompanyAdmin = currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "HR";
+  const canWriteTasks = currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "HR" || currentUser?.role === "COMPANY_ADMIN" || currentUser?.permissions?.some((p: any) => p.module === 'TASKS' && p.canWrite);
+  const canDeleteTasks = currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "HR" || currentUser?.role === "COMPANY_ADMIN" || currentUser?.permissions?.some((p: any) => p.module === 'TASKS' && p.canDelete);
+
+  const isUserPMOrLead = (projectId: number) => {
+    const proj = projects.find(p => p.id === projectId);
+    if (!proj || !currentUser) return false;
+    const isPM = proj.projectManager?.id === currentUser.id;
+    const isTeamLead = proj.members?.some(m => m.employeeId === currentUser.id && (m.role === 'Team Lead' || m.role === 'Team_Lead' || m.role?.toLowerCase() === 'team lead'));
+    return isPM || isTeamLead;
+  };
 
   const canEditTask = (task: TaskItem) => {
     if (!currentUser) return false;
-    if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR' || currentUser.role === 'MANAGER' || currentUser.role === 'EMPLOYEE') {
-      return true;
-    }
+    if (canWriteTasks) return true;
+    if (isUserPMOrLead(task.projectId)) return true;
     return task.assignedTo?.userId === currentUser.id;
   };
 
@@ -356,7 +366,7 @@ const Task = () => {
             </nav>
           </div>
           <div className="d-flex align-items-center flex-wrap gap-2">
-            {isCompanyAdmin && (
+            {canWriteTasks && (
               <button 
                 className="btn btn-primary d-inline-flex align-items-center gap-1 shadow-xs"
                 onClick={() => {
@@ -419,22 +429,28 @@ const Task = () => {
                       </div>
 
                       <div className="row g-2 pt-2 border-top border-light mb-3">
-                        <div className="col-4">
+                        <div className="col-3">
                           <span className="fs-10 text-muted d-block uppercase fw-semibold tracking-wide">Deadline</span>
                           <span className="fs-12 fw-bold text-dark">
                             {new Date(proj.endDate).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
                           </span>
                         </div>
-                        <div className="col-4">
+                        <div className="col-3">
                           <span className="fs-10 text-muted d-block uppercase fw-semibold tracking-wide">Value</span>
                           <span className="fs-12 fw-bold text-dark">
                             {proj.budget ? `₹${proj.budget.toLocaleString()}` : "—"}
                           </span>
                         </div>
-                        <div className="col-4">
-                          <span className="fs-10 text-muted d-block uppercase fw-semibold tracking-wide">Project Lead</span>
+                        <div className="col-3">
+                          <span className="fs-10 text-muted d-block uppercase fw-semibold tracking-wide">Manager</span>
+                          <span className="fs-12 fw-bold text-dark truncate d-block" title={proj.manager ? `${proj.manager.firstName} ${proj.manager.lastName}` : "Unassigned"}>
+                            {proj.manager ? `${proj.manager.firstName} ${proj.manager.lastName}` : "Unassigned"}
+                          </span>
+                        </div>
+                        <div className="col-3">
+                          <span className="fs-10 text-muted d-block uppercase fw-semibold tracking-wide">Project Manager</span>
                           <span className="fs-12 fw-bold text-dark truncate d-block" title={proj.projectManager ? `${proj.projectManager.firstName} ${proj.projectManager.lastName}` : "Unassigned"}>
-                            {proj.projectManager ? proj.projectManager.firstName : "Unassigned"}
+                            {proj.projectManager ? `${proj.projectManager.firstName} ${proj.projectManager.lastName}` : "Unassigned"}
                           </span>
                         </div>
                       </div>
@@ -609,7 +625,7 @@ const Task = () => {
                           )}
 
                           {/* Delete action */}
-                          {isCompanyAdmin && (
+                          {canWriteTasks && (
                             <button
                               type="button"
                               className="btn btn-icon btn-sm btn-ghost text-danger border-0 ms-2"
@@ -695,9 +711,23 @@ const Task = () => {
                         onChange={(e) => setTaskAssigneeId(e.target.value)}
                       >
                         <option value="">Select Assignee</option>
-                        {employees.map(emp => (
-                          <option value={emp.id} key={emp.id}>{emp.firstName} {emp.lastName}</option>
-                        ))}
+                        {(() => {
+                          const currentProj = projects.find(p => p.id === Number(taskProjectId || selectedProjectId));
+                          if (!currentProj) return [];
+                          const members = [];
+                          if (currentProj.projectManager) members.push(currentProj.projectManager);
+                            if (currentProj.manager && !members.find(emp => emp.id === currentProj.manager.id)) members.push(currentProj.manager);
+                          if (currentProj.members) {
+                            currentProj.members.forEach((m: any) => {
+                              if (m.employee && !members.find(emp => emp.id === m.employee.id)) {
+                                members.push(m.employee);
+                              }
+                            });
+                          }
+                          return members.map(emp => (
+                            <option value={emp.id} key={emp.id}>{emp.firstName} {emp.lastName}</option>
+                          ));
+                        })()}
                       </select>
                     </div>
 
@@ -903,7 +933,7 @@ const Task = () => {
                     </div>
 
                     <div className="d-grid gap-2">
-                      {isCompanyAdmin && (
+                      {canWriteTasks && (
                         <button
                           type="button"
                           className="btn btn-outline-danger d-flex align-items-center justify-content-center gap-1"

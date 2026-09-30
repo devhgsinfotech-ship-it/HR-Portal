@@ -27,7 +27,7 @@ const sanitizeProject = (project, userRole, companyRoleName) => {
 
   const mapped = {
     ...rest,
-    manager: projectManager || null,
+    projectManager: projectManager || null,
     milestones: mappedMilestones,
   };
 
@@ -54,11 +54,18 @@ const getProjects = async (req, res) => {
     if (priority) where.priority = priority;
     if (search) where.name = { contains: search };
 
-    // Employees can only see projects they are assigned to
-    if (req.user.role === 'EMPLOYEE') {
-      const employee = await prisma.employee.findUnique({ where: { userId: req.user.id } });
-      if (employee) {
-        where.members = { some: { employeeId: employee.id } };
+    // Non-admins can only see projects they are assigned to, UNLESS they have PROJECTS canRead permission
+    if (req.user.role === 'EMPLOYEE' || req.user.role === 'MANAGER') {
+      const employee = await prisma.employee.findUnique({ 
+        where: { userId: req.user.id },
+        include: { companyRole: { include: { permissions: { where: { module: 'PROJECTS' } } } } }
+      });
+      const canReadProjects = employee?.companyRole?.permissions?.[0]?.canRead || employee?.companyRole?.permissions?.[0]?.canWrite;
+      
+      if (employee && !canReadProjects) {
+        where.OR = [
+          { managerId: employee.id }, { projectManagerId: employee.id }, { members: { some: { employeeId: employee.id } } }, { tasks: { some: { assignedToId: employee.id } } }
+        ];
       }
     }
 
@@ -67,11 +74,12 @@ const getProjects = async (req, res) => {
         where,
         include: {
           client: { select: { id: true, companyName: true } },
-          projectManager: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true } },
+          manager: { select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true } },
+            projectManager: { select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true } },
           members: {
             include: {
               employee: {
-                select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true },
+                select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true },
               },
             },
           },
@@ -114,12 +122,12 @@ const getProjectById = async (req, res) => {
       include: {
         client: true,
         projectManager: {
-          select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true },
+          select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true },
         },
         members: {
           include: {
             employee: {
-              select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true },
+              select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true },
             },
           },
         },
@@ -127,7 +135,7 @@ const getProjectById = async (req, res) => {
         tasks: {
           include: {
             assignedTo: {
-              select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true },
+              select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true },
             },
             subTasks: true,
             _count: { select: { timeLogs: true } },
@@ -160,7 +168,8 @@ const createProject = async (req, res) => {
     const companyId = req.user.companyId;
     const {
       name, description, clientId, projectManagerId,
-      startDate, endDate, priority, status, memberIds, attachmentUrl, logoUrl, budget
+      managerId,
+      startDate, endDate, priority, status, memberIds, teamLeadIds, attachmentUrl, logoUrl, budget
     } = req.body;
 
     if (!name || !startDate || !endDate) {
@@ -176,6 +185,7 @@ const createProject = async (req, res) => {
         name,
         description,
         clientId: clientId ? Number(clientId) : null,
+        managerId: managerId ? Number(managerId) : null,
         projectManagerId: projectManagerId ? Number(projectManagerId) : null,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
@@ -185,14 +195,20 @@ const createProject = async (req, res) => {
         logoUrl,
         budget: budget ? Number(budget) : null,
         // Add members if provided
-        members: memberIds?.length
-          ? { create: memberIds.map((empId) => ({ employeeId: Number(empId) })) }
+        members: (memberIds?.length || teamLeadIds?.length)
+          ? {
+              create: [
+                ...(memberIds || []).map((empId) => ({ employeeId: Number(empId), role: 'Member' })),
+                ...(teamLeadIds || []).map((empId) => ({ employeeId: Number(empId), role: 'Team Lead' }))
+              ]
+            }
           : undefined,
       },
       include: {
         client: { select: { id: true, companyName: true } },
-        projectManager: { select: { id: true, firstName: true, lastName: true } },
-        members: { include: { employee: { select: { id: true, firstName: true, lastName: true } } } },
+        manager: { select: { id: true, userId: true, firstName: true, lastName: true } },
+          projectManager: { select: { id: true, userId: true, firstName: true, lastName: true } },
+        members: { include: { employee: { select: { id: true, userId: true, firstName: true, lastName: true } } } },
       },
     });
 
@@ -217,7 +233,8 @@ const updateProject = async (req, res) => {
     const projectId = Number(req.params.id);
     const {
       name, description, clientId, projectManagerId,
-      startDate, endDate, priority, status, healthStatus, memberIds, attachmentUrl, logoUrl, budget
+      managerId,
+      startDate, endDate, priority, status, healthStatus, memberIds, teamLeadIds, attachmentUrl, logoUrl, budget
     } = req.body;
 
     const existing = await prisma.project.findFirst({ where: { id: projectId, companyId } });
@@ -232,6 +249,7 @@ const updateProject = async (req, res) => {
           name,
           description,
           clientId: clientId !== undefined ? (clientId ? Number(clientId) : null) : undefined,
+          managerId: managerId !== undefined ? (managerId ? Number(managerId) : null) : undefined,
           projectManagerId: projectManagerId !== undefined ? (projectManagerId ? Number(projectManagerId) : null) : undefined,
           startDate: startDate ? new Date(startDate) : undefined,
           endDate: endDate ? new Date(endDate) : undefined,
@@ -245,18 +263,22 @@ const updateProject = async (req, res) => {
       });
 
       // 2. Sync members if provided
-      if (memberIds !== undefined) {
+      if (memberIds !== undefined || teamLeadIds !== undefined) {
         // Delete existing allocations
         await tx.projectMember.deleteMany({ where: { projectId } });
 
+        const membersToCreate = [];
+        if (memberIds && memberIds.length > 0) {
+          memberIds.forEach((empId) => membersToCreate.push({ projectId, employeeId: Number(empId), role: 'Member' }));
+        }
+        if (teamLeadIds && teamLeadIds.length > 0) {
+          teamLeadIds.forEach((empId) => membersToCreate.push({ projectId, employeeId: Number(empId), role: 'Team Lead' }));
+        }
+
         // Insert new allocations
-        if (memberIds.length > 0) {
+        if (membersToCreate.length > 0) {
           await tx.projectMember.createMany({
-            data: memberIds.map((empId) => ({
-              projectId,
-              employeeId: Number(empId),
-              role: 'Developer' // Default fallback role
-            })),
+            data: membersToCreate,
             skipDuplicates: true,
           });
         }
@@ -269,11 +291,12 @@ const updateProject = async (req, res) => {
       where: { id: projectId, companyId },
       include: {
         client: { select: { id: true, companyName: true } },
-        projectManager: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true } },
+        manager: { select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true } },
+            projectManager: { select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true } },
         members: {
           include: {
             employee: {
-              select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true },
+              select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true },
             },
           },
         },
@@ -495,7 +518,7 @@ const getGanttData = async (req, res) => {
           include: {
             tasks: {
               include: {
-                assignedTo: { select: { id: true, firstName: true, lastName: true } },
+                assignedTo: { select: { id: true, userId: true, firstName: true, lastName: true } },
               },
               orderBy: { sortOrder: 'asc' },
             },
@@ -505,7 +528,7 @@ const getGanttData = async (req, res) => {
         tasks: {
           where: { milestoneId: null }, // Unassigned tasks
           include: {
-            assignedTo: { select: { id: true, firstName: true, lastName: true } },
+            assignedTo: { select: { id: true, userId: true, firstName: true, lastName: true } },
           },
           orderBy: { sortOrder: 'asc' },
         },
@@ -532,7 +555,7 @@ const getNotes = async (req, res) => {
     const notes = await prisma.projectNote.findMany({
       where: { projectId },
       include: {
-        createdBy: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true } },
+        createdBy: { select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -556,7 +579,7 @@ const addNote = async (req, res) => {
     const note = await prisma.projectNote.create({
       data: { projectId, title, content, createdById: employee?.id || null },
       include: {
-        createdBy: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true } },
+        createdBy: { select: { id: true, userId: true, firstName: true, lastName: true, profilePhotoUrl: true } },
       },
     });
     res.json({ success: true, data: note });
@@ -594,7 +617,7 @@ const getFiles = async (req, res) => {
     const files = await prisma.projectFile.findMany({
       where,
       include: {
-        uploadedBy: { select: { id: true, firstName: true, lastName: true } },
+        uploadedBy: { select: { id: true, userId: true, firstName: true, lastName: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
