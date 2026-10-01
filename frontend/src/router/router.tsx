@@ -102,7 +102,7 @@ const ALLRoutes: React.FC = () => {
         </Route>
 
         {/* ── STANDALONE PROTECTED ROUTES (no sidebar/header) ── */}
-        <Route element={<PrivateRoute allowedRoles={["EMPLOYEE"]} />}>
+        <Route element={<PrivateRoute allowedRoles={["EMPLOYEE", "HR", "MANAGER"]} />}>
           <Route
             path="/onboarding"
             element={
