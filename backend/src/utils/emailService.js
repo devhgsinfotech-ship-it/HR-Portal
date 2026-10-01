@@ -407,12 +407,56 @@ async function sendOfferLetterEmail({ toEmail, candidateName, jobTitle, annualCt
     }
 }
 
+async function sendCorrectionRequestEmail(toEmail, employeeName, companyName, workspaceUrl, reason) {
+    try {
+        const transporter = await getTransporter();
+        const mailOptions = {
+            from: `"HR Portal" <no-reply@hgs-hrms.local>`,
+            to: toEmail,
+            subject: 'Action Required: Update Your Profile / Documents',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+                    <h2 style="color: #ea580c; border-bottom: 2px solid #ea580c; padding-bottom: 10px;">Action Required</h2>
+                    <p style="color: #333; font-size: 16px;">Dear ${employeeName},</p>
+                    <p style="color: #555; font-size: 14px; line-height: 1.5;">
+                        During the review of your onboarding profile and documents for <strong>${companyName}</strong>, our HR team has requested some corrections.
+                    </p>
+                    <div style="background-color: #fff7ed; border-left: 4px solid #ea580c; padding: 15px; margin: 20px 0;">
+                        <h4 style="margin-top: 0; color: #9a3412;">Reason / Comments from HR:</h4>
+                        <p style="color: #444; font-size: 14px; margin-bottom: 0;">${reason}</p>
+                    </div>
+                    <p style="color: #555; font-size: 14px; line-height: 1.5;">
+                        Please log in to your employee portal and update your details or re-upload the requested documents as soon as possible to complete your onboarding process.
+                    </p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${workspaceUrl}/login" style="background-color: #ea580c; color: white; text-decoration: none; padding: 12px 25px; border-radius: 5px; font-weight: bold; display: inline-block;">Login to Portal</a>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                    <p style="color: #999; font-size: 12px; text-align: center;">
+                        Best regards,<br/>
+                        <strong>${companyName} HR Team</strong>
+                    </p>
+                </div>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('--------------------------------------------------');
+        console.log('[Correction Request Email] Sent to: %s (Message ID: %s)', toEmail, info.messageId);
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('--------------------------------------------------');
+        return info;
+    } catch (error) {
+        console.error('Error sending correction request email:', error);
+    }
+}
+
 module.exports = {
     sendVerificationEmail,
     sendEmployeeInviteEmail,
     sendPasswordResetEmail,
     sendJobApplicationNotificationEmail,
     sendInterviewScheduleEmail,
-    sendOfferLetterEmail
+    sendOfferLetterEmail,
+    sendCorrectionRequestEmail
 };
-
