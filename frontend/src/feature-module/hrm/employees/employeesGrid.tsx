@@ -694,7 +694,7 @@ const EmployeesGrid = () => {
                                                                 </Link>
                                                             </li>
                                                         )}
-                                                        {emp.onboardingStatus === 'INVITED' && (
+                                                        {emp.onboardingStatus === 'INVITED' && (!(emp.user?.role === 'HR') || ['SUPER_ADMIN', 'COMPANY_ADMIN'].includes(currentUser?.role)) && (
                                                             <li>
                                                                 <Link
                                                                     className="dropdown-item rounded-1 text-info"

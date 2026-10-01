@@ -88,7 +88,7 @@ async function login(req, res) {
                 subdomain: user.company?.subdomain || null,
                 companyLogoUrl: user.company?.logoUrl || null,
                 profilePhotoUrl: user.employee?.profilePhotoUrl || null,
-                onboardingStatus: user.role === 'EMPLOYEE' ? (user.employee?.onboardingStatus || 'INVITED') : 'COMPLETED',
+                onboardingStatus: (user.role === 'SUPER_ADMIN' || user.role === 'COMPANY_ADMIN') ? 'COMPLETED' : (user.employee?.onboardingStatus || 'INVITED'),
                 companyRoleName: user.employee?.companyRole?.name || null,
                 permissions: permissions
             },
@@ -523,7 +523,7 @@ async function acceptInvite(req, res) {
                 subdomain: companySubdomain || null,
                 companyLogoUrl: updatedUser.company?.logoUrl || null,
                 profilePhotoUrl: updatedUser.employee?.profilePhotoUrl || null,
-                onboardingStatus: updatedUser.role === 'EMPLOYEE' ? (updatedUser.employee?.onboardingStatus || 'INVITED') : 'COMPLETED',
+                onboardingStatus: (updatedUser.role === 'SUPER_ADMIN' || updatedUser.role === 'COMPANY_ADMIN') ? 'COMPLETED' : (updatedUser.employee?.onboardingStatus || 'INVITED'),
             },
             redirectUrl
         });

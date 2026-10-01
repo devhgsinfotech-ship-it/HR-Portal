@@ -597,7 +597,7 @@ const EmployeeList = () => {
               <i className="ti ti-check" />
             </Link>
           )}
-          {record.onboardingStatus === 'INVITED' && (
+          {record.onboardingStatus === 'INVITED' && (!(record.raw?.user?.role === 'HR') || ['SUPER_ADMIN', 'COMPANY_ADMIN'].includes(currentUser?.role)) && (
             <Link
               to="#"
               className="ms-2 text-info"
