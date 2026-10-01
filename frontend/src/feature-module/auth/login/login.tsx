@@ -86,15 +86,17 @@ const Login = () => {
       // With this:
       dispatch(setCredentials({ token, user }));
 
-      // Redirect based on role
-      if (user.role === "SUPER_ADMIN") {
-        navigation(routes.superAdminDashboard);
-      } else if (user.role === "COMPANY_ADMIN" || user.role === "HR") {
-        navigation(routes.adminDashboard || routes.hrDashboard);
+      // Check onboarding status first
+      const onboardingStatus = user.onboardingStatus || 'INVITED';
+      
+      if (user.role !== 'SUPER_ADMIN' && user.role !== 'COMPANY_ADMIN' && onboardingStatus !== 'COMPLETED') {
+        navigation('/onboarding');
       } else {
-        const onboardingStatus = user.onboardingStatus || 'INVITED';
-        if (onboardingStatus !== 'COMPLETED') {
-          navigation('/onboarding');
+        // Redirect based on role if onboarding is completed or user is SUPER_ADMIN
+        if (user.role === "SUPER_ADMIN") {
+          navigation(routes.superAdminDashboard);
+        } else if (user.role === "COMPANY_ADMIN" || user.role === "HR") {
+          navigation(routes.adminDashboard || routes.hrDashboard);
         } else {
           navigation(routes.employeeDashboard);
         }

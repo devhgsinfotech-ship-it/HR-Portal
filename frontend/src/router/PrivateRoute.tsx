@@ -29,7 +29,7 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ allowedRoles }) => {
     // Authorized — check onboarding status for Employees
     const currentPath = window.location.pathname;
     
-    if (user.role === 'EMPLOYEE') {
+    if (user.role !== 'SUPER_ADMIN' && user.role !== 'COMPANY_ADMIN') {
         const onboardingStatus = (user as any).onboardingStatus || 'INVITED';
         const isOnboardingRoute = currentPath === '/onboarding';
 
@@ -40,6 +40,7 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ allowedRoles }) => {
 
         // If they are fully onboarded and trying to access onboarding, force them to dashboard
         if (onboardingStatus === 'COMPLETED' && isOnboardingRoute) {
+            if (roleStr === "COMPANY_ADMIN" || roleStr === "HR") return <Navigate to={all_routes.adminDashboard || all_routes.hrDashboard} replace />;
             return <Navigate to={all_routes.employeeDashboard} replace />;
         }
     }

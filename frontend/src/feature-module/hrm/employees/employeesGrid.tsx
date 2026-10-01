@@ -13,6 +13,18 @@ import VerifyEmployeeModal from './VerifyEmployeeModal';
 type PasswordField = "password" | "confirmPassword";
 
 const EmployeesGrid = () => {
+    const currentUser = (() => { try { return JSON.parse(localStorage.getItem('authUser') || '{}'); } catch { return {}; } })();
+    const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'COMPANY_ADMIN';
+    const employeePermissions = currentUser?.permissions?.find((p: any) => p.module === 'EMPLOYEES') || {
+      canRead: false,
+      canWrite: false,
+      canCreate: false,
+      canDelete: false
+    };
+    const canAdd = isSuperAdmin || employeePermissions.canCreate;
+    const canEdit = isSuperAdmin || employeePermissions.canWrite;
+    const canDelete = isSuperAdmin || employeePermissions.canDelete;
+
     const [dbEmployees, setDbEmployees] = useState<any[]>([]);
     const [verifyEmp, setVerifyEmp] = useState<any>(null);
     const [dbDepartments, setDbDepartments] = useState<any[]>([]);
@@ -374,17 +386,19 @@ const EmployeesGrid = () => {
                                     </ul>
                                 </div>
                             </div>
-                            <div className="mb-2">
-                                <Link
-                                    to="#"
-                                    data-bs-toggle="modal" data-inert={true}
-                                    data-bs-target="#add_employee"
-                                    className="btn btn-primary d-flex align-items-center"
-                                >
-                                    <i className="ti ti-circle-plus me-2" />
-                                    Add Employee
-                                </Link>
-                            </div>
+                            {canAdd && (
+                                <div className="mb-2">
+                                    <Link
+                                        to="#"
+                                        data-bs-toggle="modal" data-inert={true}
+                                        data-bs-target="#add_employee"
+                                        className="btn btn-primary d-flex align-items-center"
+                                    >
+                                        <i className="ti ti-circle-plus me-2" />
+                                        Add Employee
+                                    </Link>
+                                </div>
+                            )}
                             <div className="head-icons ms-2">
                                 <CollapseHeader />
                             </div>
@@ -606,11 +620,12 @@ const EmployeesGrid = () => {
                                                         <i className="ti ti-dots-vertical" />
                                                     </button>
                                                     <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                        <li>
-                                                            <Link
-                                                                className="dropdown-item rounded-1"
-                                                                to="#"
-                                                                data-bs-toggle="modal" data-inert={true}
+                                                        {canEdit && (
+                                                            <li>
+                                                                <Link
+                                                                    className="dropdown-item rounded-1"
+                                                                    to="#"
+                                                                    data-bs-toggle="modal" data-inert={true}
                                                                 data-bs-target="#edit_employee"
                                                                 onClick={() => {
                                                                     setEditEmp({
@@ -628,7 +643,7 @@ const EmployeesGrid = () => {
                                                                         company: emp.user?.company?.name || '',
                                                                         role: emp.user?.role || 'EMPLOYEE',
                                                                         companyRoleId: emp.companyRoleId || '',
-                                                                        reportingManagerId: emp.reportingManagerId || '',
+                                                                        reportingManagerId: emp.reportingManagerId || (emp.companyRole?.name === 'HR Manager' ? String(dbEmployees.find((e: any) => e.user?.role === 'COMPANY_ADMIN')?.id || '') : ''),
                                                                         password: '',
                                                                         confirmPassword: '',
                                                                         basic: emp.salaryStructure?.basic || 0,
@@ -650,7 +665,9 @@ const EmployeesGrid = () => {
                                                                 Edit
                                                             </Link>
                                                         </li>
-                                                        {['DOCS_SUBMITTED', 'CORRECTION_REQUESTED'].includes(emp.onboardingStatus || '') && (
+                                                        )}
+                                                        {['DOCS_SUBMITTED', 'CORRECTION_REQUESTED', 'PROFILE_SUBMITTED'].includes(emp.onboardingStatus || '') &&
+                                                         (!(emp.user?.role === 'HR') || ['SUPER_ADMIN', 'COMPANY_ADMIN'].includes(currentUser?.role)) && (
                                                             <li>
                                                                 <Link
                                                                     className="dropdown-item rounded-1 text-warning"
@@ -697,18 +714,20 @@ const EmployeesGrid = () => {
                                                                 </Link>
                                                             </li>
                                                         )}
-                                                        <li>
-                                                            <Link
-                                                                className="dropdown-item rounded-1 text-danger"
-                                                                to="#"
-                                                                data-bs-toggle="modal" data-inert={true}
-                                                                data-bs-target="#delete_modal"
-                                                                onClick={() => setDeleteEmpId(emp.id)}
-                                                            >
-                                                                <i className="ti ti-trash me-1" />
-                                                                Delete
-                                                            </Link>
-                                                        </li>
+                                                        {canDelete && (
+                                                            <li>
+                                                                <Link
+                                                                    className="dropdown-item rounded-1 text-danger"
+                                                                    to="#"
+                                                                    data-bs-toggle="modal" data-inert={true}
+                                                                    data-bs-target="#delete_modal"
+                                                                    onClick={() => setDeleteEmpId(emp.id)}
+                                                                >
+                                                                    <i className="ti ti-trash me-1" />
+                                                                    Delete
+                                                                </Link>
+                                                            </li>
+                                                        )}
                                                     </ul>
                                                 </div>
                                             </div>
@@ -1071,7 +1090,15 @@ const EmployeesGrid = () => {
                                                             { value: 'HR', label: 'HR' },
                                                             { value: 'SUPER_ADMIN', label: 'Super Admin' }
                                                         ]}
-                                                        onChange={(opt) => setNewEmp({...newEmp, role: opt?.value || 'EMPLOYEE'})}
+                                                        onChange={(opt) => {
+                                                            const selectedRole = opt?.value || 'EMPLOYEE';
+                                                            const updates: any = { role: selectedRole };
+                                                            if (selectedRole === 'HR') {
+                                                                const adminEmp = dbEmployees.find((e: any) => e.user?.role === 'COMPANY_ADMIN');
+                                                                if (adminEmp) updates.reportingManagerId = String(adminEmp.id);
+                                                            }
+                                                            setNewEmp({...newEmp, ...updates});
+                                                        }}
                                                     />
                                                 </div>
                                             </div>

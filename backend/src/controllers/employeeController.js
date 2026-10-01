@@ -44,7 +44,7 @@ async function checkEmailAvailability(req, res) {
 
 async function createEmployee(req, res) {
     try {
-        const { 
+        const {
             firstName, lastName, email, password, phone, departmentId, designationId, dateOfJoining, role, reportingManagerId, companyRoleId,
             basic, hra, conveyance, medicalAllowance, specialAllowance, pfDeduction, professionalTax, otherDeductions, grossSalary, netSalary
         } = req.body;
@@ -82,10 +82,31 @@ async function createEmployee(req, res) {
 
         // Default password for new employees (they can change it later)
         const hashedPassword = await bcrypt.hash('Password@123', 10);
-        
+
         // Generate invite token
         const inviteToken = crypto.randomBytes(32).toString('hex');
         const tokenExpiry = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+
+        // Auto-assign Company Admin as reporting manager if role is 'HR Manager'
+        let finalReportingManagerId = (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null') ? parseInt(reportingManagerId, 10) : null;
+
+        let isHrManagerRole = false;
+        if (companyRoleId && companyRoleId !== 'undefined' && companyRoleId !== 'null') {
+            const cRole = await prisma.companyRole.findUnique({ where: { id: parseInt(companyRoleId, 10) } });
+            if (cRole && cRole.name === 'HR Manager') {
+                isHrManagerRole = true;
+            }
+        }
+
+        if (isHrManagerRole) {
+            const companyAdmin = await prisma.user.findFirst({
+                where: { companyId, role: 'COMPANY_ADMIN' },
+                include: { employee: true }
+            });
+            if (companyAdmin && companyAdmin.employee) {
+                finalReportingManagerId = companyAdmin.employee.id;
+            }
+        }
 
         // Use a transaction to create User and Employee
         const newEmployee = await prisma.$transaction(async (tx) => {
@@ -113,7 +134,7 @@ async function createEmployee(req, res) {
                     designationId: designationId && designationId !== 'undefined' ? parseInt(designationId, 10) : null,
                     companyRoleId: companyRoleId && companyRoleId !== 'undefined' && companyRoleId !== 'null' ? parseInt(companyRoleId, 10) : null,
                     dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : new Date(),
-                    reportingManagerId: (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null') ? parseInt(reportingManagerId, 10) : null,
+                    reportingManagerId: finalReportingManagerId,
                     profilePhotoUrl,
                     onboardingStatus: 'INVITED'
                 },
@@ -162,16 +183,13 @@ async function createEmployee(req, res) {
         });
 
         // 4. Send Email (non-blocking)
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
-        const baseDomain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
-        const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
-        const workspaceUrl = company.subdomain ? `${protocol}://${company.subdomain}.${baseDomain}` : `${protocol}://${baseDomain}`;
+        const workspaceUrl = req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:5173';
         const logoUrl = company.logoUrl ? (company.logoUrl.startsWith('http') ? company.logoUrl : `https://api.aaups.com${company.logoUrl}`) : null;
         emailService.sendEmployeeInviteEmail(
-            email, 
-            inviteToken, 
-            company.name, 
-            firstName, 
+            email,
+            inviteToken,
+            company.name,
+            firstName,
             workspaceUrl,
             logoUrl
         ).catch(err => console.error("Failed to send invite email:", err));
@@ -265,7 +283,7 @@ async function updateEmployee(req, res) {
     try {
         const { id } = req.params;
         const companyId = req.user.companyId;
-        const { 
+        const {
             firstName, lastName, phone, departmentId, designationId, dateOfJoining, email, password, role, reportingManagerId, companyRoleId,
             basic, hra, conveyance, medicalAllowance, specialAllowance, bonus, pfDeduction, pfEmployer, professionalTax, tdsDeduction, otherDeductions, grossSalary, netSalary,
             // Profile & Bio
@@ -320,7 +338,27 @@ async function updateEmployee(req, res) {
         if (dateOfJoining) {
             dataToUpdate.dateOfJoining = new Date(dateOfJoining);
         }
-        if (reportingManagerId !== undefined) {
+        let isHrManagerRole = false;
+        const finalCompanyRoleId = companyRoleId !== undefined ?
+            ((companyRoleId && companyRoleId !== 'undefined' && companyRoleId !== 'null') ? parseInt(companyRoleId, 10) : null)
+            : existing.companyRoleId;
+
+        if (finalCompanyRoleId) {
+            const cRole = await prisma.companyRole.findUnique({ where: { id: finalCompanyRoleId } });
+            if (cRole && cRole.name === 'HR Manager') {
+                isHrManagerRole = true;
+            }
+        }
+
+        if (isHrManagerRole) {
+            const companyAdmin = await prisma.user.findFirst({
+                where: { companyId, role: 'COMPANY_ADMIN' },
+                include: { employee: true }
+            });
+            if (companyAdmin && companyAdmin.employee) {
+                dataToUpdate.reportingManagerId = companyAdmin.employee.id;
+            }
+        } else if (reportingManagerId !== undefined) {
             dataToUpdate.reportingManagerId = (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null') ? parseInt(reportingManagerId, 10) : null;
         }
         if (companyRoleId !== undefined) {
@@ -506,7 +544,7 @@ async function getMe(req, res) {
         // If the logged-in user does not have an employee profile yet:
         // For COMPANY_ADMIN and SUPER_ADMIN, return a virtual profile (do NOT create DB record).
         if (!employee) {
-            const user = await prisma.user.findUnique({ 
+            const user = await prisma.user.findUnique({
                 where: { id: userId },
                 include: { company: true }
             });
@@ -609,7 +647,7 @@ async function updateMe(req, res) {
     try {
         const userId = req.user.id;
         const { firstName, lastName, phone, password, address, country, state, city, postalCode } = req.body;
-        
+
         let existing = await prisma.employee.findUnique({
             where: { userId },
             include: { user: { include: { company: true } } }
@@ -666,7 +704,7 @@ async function updateMe(req, res) {
         if (firstName || lastName) {
             userUpdateData.name = `${firstName || existing.firstName} ${lastName || existing.lastName}`.trim();
         }
-        
+
         if (password && password.trim() !== '') {
             if (password.length < 6) {
                 return res.status(400).json({ message: 'Password must be at least 6 characters long' });
@@ -706,7 +744,7 @@ async function onboardingPersonal(req, res) {
     try {
         const userId = req.user.id;
         const { dateOfBirth, gender, address, emergencyContactName, emergencyContactPhone } = req.body;
-        
+
         const employee = await prisma.employee.findUnique({ where: { userId } });
         if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
 
@@ -733,7 +771,7 @@ async function onboardingBank(req, res) {
     try {
         const userId = req.user.id;
         const { bankName, accountName, accountNumber, ifscCode, branchName } = req.body;
-        
+
         const employee = await prisma.employee.findUnique({ where: { userId } });
         if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
 
@@ -780,7 +818,7 @@ async function onboardingDocuments(req, res) {
 async function approveOnboarding(req, res) {
     try {
         const { id } = req.params; // Employee ID
-        
+
         const employee = await prisma.employee.findUnique({ where: { id: parseInt(id) } });
         if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
@@ -839,13 +877,10 @@ async function resendInvite(req, res) {
         });
 
         // Send email
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
-        const baseDomain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
-        const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
         const company = employee.user.company;
-        const workspaceUrl = company.subdomain ? `${protocol}://${company.subdomain}.${baseDomain}` : `${protocol}://${baseDomain}`;
+        const workspaceUrl = req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:5173';
         const logoUrl = company.logoUrl ? (company.logoUrl.startsWith('http') ? company.logoUrl : `https://api.aaups.com${company.logoUrl}`) : null;
-        
+
         emailService.sendEmployeeInviteEmail(
             employee.user.email,
             inviteToken,
@@ -911,7 +946,12 @@ async function requestOnboardingCorrection(req, res) {
         }
 
         const employee = await prisma.employee.findUnique({
-            where: { id: parseInt(id, 10) }
+            where: { id: parseInt(id, 10) },
+            include: {
+                user: {
+                    include: { company: true }
+                }
+            }
         });
 
         if (!employee) {
@@ -925,6 +965,23 @@ async function requestOnboardingCorrection(req, res) {
                 rejectionReason: reason
             }
         });
+
+        // Send correction request email
+        console.log('Preparing to send correction email to:', employee.user?.email);
+        if (employee.user && employee.user.email) {
+            const company = employee.user.company;
+            const workspaceUrl = req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:3000';
+
+            await emailService.sendCorrectionRequestEmail(
+                employee.user.email,
+                employee.firstName || employee.user.name,
+                company?.name || 'HGS-HRMS',
+                workspaceUrl,
+                reason
+            );
+        } else {
+            console.log('Skipping email: No user or email found for employee ID', id);
+        }
 
         res.json({ message: 'Correction request sent successfully!', employee: updated });
     } catch (error) {
@@ -958,21 +1015,21 @@ async function getCompanyEvents(req, res) {
         for (const emp of employees) {
             if (emp.dateOfBirth) {
                 const dob = new Date(emp.dateOfBirth);
-                
+
                 // Get birthday in current year
                 const bdayThisYear = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
                 bdayThisYear.setHours(0, 0, 0, 0);
-                
+
                 let nextBday = bdayThisYear;
                 if (bdayThisYear.getTime() < today.getTime()) {
                     nextBday = new Date(today.getFullYear() + 1, dob.getMonth(), dob.getDate());
                 }
-                
+
                 const diffTime = nextBday.getTime() - today.getTime();
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                
+
                 const formattedBday = nextBday.toLocaleDateString('en-GB', { day: '2-digit', month: 'long' });
-                
+
                 const empBdayInfo = {
                     id: emp.id,
                     name: `${emp.firstName} ${emp.lastName || ''}`.trim(),
@@ -1041,13 +1098,13 @@ async function getCompanyEvents(req, res) {
         // Sort upcoming birthdays chronologically
         upcomingBirthdays.sort((a, b) => a.diffDays - b.diffDays);
 
-        res.json({ 
+        res.json({
             birthdays: {
                 today: birthdaysToday,
                 upcoming: upcomingBirthdays
-            }, 
-            anniversaries, 
-            joinees 
+            },
+            anniversaries,
+            joinees
         });
     } catch (error) {
         console.error('Get Company Events Error:', error);
@@ -1074,7 +1131,7 @@ function formatPostsList(posts, currentEmployeeId) {
         const likedByMe = currentEmployeeId && post.likes
             ? post.likes.some(like => like.employeeId === currentEmployeeId)
             : false;
-        
+
         const allComments = (post.comments || []).map(c => {
             const commentLikedByMe = currentEmployeeId && c.likes
                 ? c.likes.some(like => like.employeeId === currentEmployeeId)
@@ -1744,9 +1801,9 @@ async function getDashboardSummary(req, res) {
         const statusPromise = prisma.attendanceRecord.findFirst({
             where: { employee: { userId }, date: { gte: todayStart, lte: todayEnd } },
             orderBy: { createdAt: 'desc' }
-        }).then(log => ({ 
-            isCheckedIn: log ? !log.checkOut : false, 
-            checkInTime: log?.checkIn, 
+        }).then(log => ({
+            isCheckedIn: log ? !log.checkOut : false,
+            checkInTime: log?.checkIn,
             checkOutTime: log?.checkOut,
             breakInTime: log?.breakIn,
             breakOutTime: log?.breakOut,

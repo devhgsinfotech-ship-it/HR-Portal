@@ -39,6 +39,18 @@ interface Employee {
 const PAGE_SIZE = 50; // Number of employees to load per page
 
 const EmployeeList = () => {
+  const currentUser = (() => { try { return JSON.parse(localStorage.getItem('authUser') || '{}'); } catch { return {}; } })();
+  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'COMPANY_ADMIN';
+  const employeePermissions = currentUser?.permissions?.find((p: any) => p.module === 'EMPLOYEES') || {
+    canRead: false,
+    canWrite: false,
+    canCreate: false,
+    canDelete: false
+  };
+  const canAdd = isSuperAdmin || employeePermissions.canCreate;
+  const canEdit = isSuperAdmin || employeePermissions.canWrite;
+  const canDelete = isSuperAdmin || employeePermissions.canDelete;
+
   const [allData] = useState<Employee[]>(employee_list_details);
   const [visibleData, setVisibleData] = useState<Employee[]>(
     allData.slice(0, PAGE_SIZE)
@@ -524,45 +536,48 @@ const EmployeeList = () => {
       dataIndex: "actions",
       render: (_text: any, record: Employee) => (
         <div className="action-icon d-inline-flex">
-          <Link
-            to="#"
-            className="me-2"
-            data-bs-toggle="modal"
-            data-inert={true}
-            data-bs-target="#edit_employee"
-            onClick={() => setEditEmp({
-              id: record.id,
-              firstName: record.raw?.firstName || '',
-              lastName: record.raw?.lastName || '',
-              email: record.raw?.user?.email || record.raw?.email || '',
-              phone: record.raw?.phone || '',
-              departmentId: record.raw?.departmentId || '',
-              designationId: record.raw?.designationId || '',
-              dateOfJoining: record.raw?.dateOfJoining ? new Date(record.raw.dateOfJoining).toISOString().split('T')[0] : '',
-              profilePhotoUrl: record.raw?.profilePhotoUrl || '',
-              employeeCode: record.raw?.employeeCode || '',
-              username: record.raw?.user?.name || '',
-              company: record.raw?.user?.company?.name || '',
-              role: record.raw?.user?.role || 'EMPLOYEE',
-              companyRoleId: record.raw?.companyRoleId || '',
-              reportingManagerId: record.raw?.reportingManagerId || '',
-              password: '',
-              confirmPassword: '',
-              basic: record.raw?.salaryStructure?.basic || 0,
-              hra: record.raw?.salaryStructure?.hra || 0,
-              conveyance: record.raw?.salaryStructure?.conveyance || 0,
-              medicalAllowance: record.raw?.salaryStructure?.medicalAllowance || 0,
-              specialAllowance: record.raw?.salaryStructure?.specialAllowance || 0,
-              pfDeduction: record.raw?.salaryStructure?.pfDeduction || 0,
-              professionalTax: record.raw?.salaryStructure?.professionalTax || 0,
-              otherDeductions: record.raw?.salaryStructure?.otherDeductions || 0,
-              grossSalary: record.raw?.salaryStructure?.grossSalary || 0,
-              netSalary: record.raw?.salaryStructure?.netSalary || 0
-            })}
-          >
-            <i className="ti ti-edit" />
-          </Link>
-          {['DOCS_SUBMITTED', 'CORRECTION_REQUESTED'].includes(record.onboardingStatus || '') && (
+          {canEdit && (
+            <Link
+              to="#"
+              className="me-2"
+              data-bs-toggle="modal"
+              data-inert={true}
+              data-bs-target="#edit_employee"
+              onClick={() => setEditEmp({
+                id: record.id,
+                firstName: record.raw?.firstName || '',
+                lastName: record.raw?.lastName || '',
+                email: record.raw?.user?.email || record.raw?.email || '',
+                phone: record.raw?.phone || '',
+                departmentId: record.raw?.departmentId || '',
+                designationId: record.raw?.designationId || '',
+                dateOfJoining: record.raw?.dateOfJoining ? new Date(record.raw.dateOfJoining).toISOString().split('T')[0] : '',
+                profilePhotoUrl: record.raw?.profilePhotoUrl || '',
+                employeeCode: record.raw?.employeeCode || '',
+                username: record.raw?.user?.name || '',
+                company: record.raw?.user?.company?.name || '',
+                role: record.raw?.user?.role || 'EMPLOYEE',
+                companyRoleId: record.raw?.companyRoleId || '',
+                reportingManagerId: record.raw?.reportingManagerId || (record.raw?.companyRole?.name === 'HR Manager' ? String(dbEmployees.find((e: any) => e.raw?.user?.role === 'COMPANY_ADMIN')?.id || '') : ''),
+                password: '',
+                confirmPassword: '',
+                basic: record.raw?.salaryStructure?.basic || 0,
+                hra: record.raw?.salaryStructure?.hra || 0,
+                conveyance: record.raw?.salaryStructure?.conveyance || 0,
+                medicalAllowance: record.raw?.salaryStructure?.medicalAllowance || 0,
+                specialAllowance: record.raw?.salaryStructure?.specialAllowance || 0,
+                pfDeduction: record.raw?.salaryStructure?.pfDeduction || 0,
+                professionalTax: record.raw?.salaryStructure?.professionalTax || 0,
+                otherDeductions: record.raw?.salaryStructure?.otherDeductions || 0,
+                grossSalary: record.raw?.salaryStructure?.grossSalary || 0,
+                netSalary: record.raw?.salaryStructure?.netSalary || 0
+              })}
+            >
+              <i className="ti ti-edit" />
+            </Link>
+          )}
+          {['DOCS_SUBMITTED', 'CORRECTION_REQUESTED', 'PROFILE_SUBMITTED'].includes(record.onboardingStatus || '') &&
+           (!(record.raw?.user?.role === 'HR') || ['SUPER_ADMIN', 'COMPANY_ADMIN'].includes(currentUser?.role)) && (
             <Link
               to="#"
               className="ms-2 text-warning"
@@ -600,15 +615,17 @@ const EmployeeList = () => {
               <i className="ti ti-mail-forward" />
             </Link>
           )}
-          <Link
-            to="#"
-            data-bs-toggle="modal"
-            data-inert={true}
-            data-bs-target="#delete_employee_modal"
-            onClick={() => setDeleteEmpId(record.id || null)}
-          >
-            <i className="ti ti-trash" />
-          </Link>
+          {canDelete && (
+            <Link
+              to="#"
+              data-bs-toggle="modal"
+              data-inert={true}
+              data-bs-target="#delete_employee_modal"
+              onClick={() => setDeleteEmpId(record.id || null)}
+            >
+              <i className="ti ti-trash" />
+            </Link>
+          )}
         </div>
       ),
     },
@@ -726,18 +743,20 @@ const EmployeeList = () => {
                   </ul>
                 </div>
               </div>
-              <div className="mb-2">
-                <Link
-                  to="#"
-                  data-bs-toggle="modal"
-                  data-inert={true}
-                  data-bs-target="#add_employee"
-                  className="btn btn-primary d-flex align-items-center"
-                >
-                  <i className="ti ti-circle-plus me-2" />
-                  Add Employee
-                </Link>
-              </div>
+              {canAdd && (
+                <div className="mb-2">
+                  <Link
+                    to="#"
+                    data-bs-toggle="modal"
+                    data-inert={true}
+                    data-bs-target="#add_employee"
+                    className="btn btn-primary d-flex align-items-center"
+                  >
+                    <i className="ti ti-circle-plus me-2" />
+                    Add Employee
+                  </Link>
+                </div>
+              )}
               <div className="head-icons ms-2">
                 <CollapseHeader />
               </div>
@@ -1292,7 +1311,15 @@ const EmployeeList = () => {
                           <CommonSelect
                             className="select"
                             options={[{ value: '', label: '-- None --' }, ...dbRoles]}
-                            onChange={(opt) => setNewEmp({...newEmp, companyRoleId: opt?.value || ''})}
+                            onChange={(opt) => {
+                              const updates: any = { companyRoleId: opt?.value || '' };
+                              const selectedRoleName = opt?.label || '';
+                              if (selectedRoleName === 'HR Manager') {
+                                const adminEmp = dbEmployees.find((e: any) => e.raw?.user?.role === 'COMPANY_ADMIN');
+                                if (adminEmp) updates.reportingManagerId = String(adminEmp.id);
+                              }
+                              setNewEmp({...newEmp, ...updates});
+                            }}
                           />
                         </div>
                       </div>
@@ -1300,6 +1327,7 @@ const EmployeeList = () => {
                         <div className="mb-3">
                           <label className="form-label">Reporting Manager</label>
                           <CommonSelect
+                            key={`rm-new-${newEmp.reportingManagerId}`}
                             className="select"
                             options={[{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed' }))]}
                             onChange={(opt) => setNewEmp({...newEmp, reportingManagerId: opt?.value || ''})}
@@ -2516,7 +2544,15 @@ const EmployeeList = () => {
                           <CommonSelect
                             className="select"
                             options={[{ value: '', label: '-- None --' }, ...dbRoles]}
-                            onChange={(opt) => setEditEmp({...editEmp, companyRoleId: opt?.value || ''})}
+                            onChange={(opt) => {
+                              const updates: any = { companyRoleId: opt?.value || '' };
+                              const selectedRoleName = opt?.label || '';
+                              if (selectedRoleName === 'HR Manager') {
+                                const adminEmp = dbEmployees.find((e: any) => e.raw?.user?.role === 'COMPANY_ADMIN');
+                                if (adminEmp) updates.reportingManagerId = String(adminEmp.id);
+                              }
+                              setEditEmp({...editEmp, ...updates});
+                            }}
                             defaultValue={(() => {
                               const allOptions = [{ value: '', label: '-- None --' }, ...dbRoles];
                               return allOptions.find(r => r.value === String(editEmp.companyRoleId)) || allOptions[0];
@@ -2528,6 +2564,7 @@ const EmployeeList = () => {
                         <div className="mb-3">
                           <label className="form-label">Reporting Manager</label>
                           <CommonSelect
+                            key={`rm-${editEmp.id}-${editEmp.reportingManagerId}`}
                             className="select"
                             options={[{ value: '', label: '-- None --' }, ...dbEmployees.filter((emp: any) => emp.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed' }))]}
                             onChange={(opt) => setEditEmp({...editEmp, reportingManagerId: opt?.value || ''})}

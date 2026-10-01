@@ -856,8 +856,8 @@ async function getAdminDashboardSummary(req, res) {
                     const checkInTime = att.checkIn ? new Date(att.checkIn) : null;
                     const checkOutTime = att.checkOut ? new Date(att.checkOut) : null;
 
-                    const formattedCheckIn = checkInTime ? checkInTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
-                    const formattedCheckOut = checkOutTime ? checkOutTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+                    const formattedCheckIn = checkInTime ? checkInTime.toISOString() : '—';
+                    const formattedCheckOut = checkOutTime ? checkOutTime.toISOString() : '—';
 
                     let production = '—';
                     if (checkInTime && checkOutTime) {
@@ -924,10 +924,10 @@ async function getAdminDashboardSummary(req, res) {
             });
 
             if (minCheckIn) {
-                firstCheckIn = minCheckIn.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                firstCheckIn = minCheckIn.toISOString();
             }
             if (maxCheckOut) {
-                lastCheckOut = maxCheckOut.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                lastCheckOut = maxCheckOut.toISOString();
             }
             if (sumMs > 0) {
                 const diffHrs = Math.floor(sumMs / 3600000);
