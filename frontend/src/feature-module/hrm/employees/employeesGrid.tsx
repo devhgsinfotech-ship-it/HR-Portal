@@ -50,7 +50,7 @@ const EmployeesGrid = () => {
     };
 
     const [newEmp, setNewEmp] = useState({ 
-        firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '', 
+        firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', companyRoleId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '', 
         basic: 0, hra: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0, bonus: 0, pfDeduction: 0, pfEmployer: 0, professionalTax: 0, tdsDeduction: 0, otherDeductions: 0, grossSalary: 0, netSalary: 0
     });
     const [editEmp, setEditEmp] = useState<any>({ 
@@ -177,7 +177,7 @@ const EmployeesGrid = () => {
             }
             fetchData();
             setNewEmp({ 
-                firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '',
+                firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', companyRoleId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '',
                 basic: 0, hra: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0, bonus: 0, pfDeduction: 0, pfEmployer: 0, professionalTax: 0, tdsDeduction: 0, otherDeductions: 0, grossSalary: 0, netSalary: 0
             });
             setNewEmpFile(null);
