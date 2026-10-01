@@ -7,6 +7,7 @@ import Table from "../../../core/common/dataTable/index";
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
 import CommonSelect from '../../../core/common/commonSelect';
 import apiClient from '../../../core/utils/apiClient';
+import { useAppSelector } from '../../../core/data/redux/store';
 import { joblistdetails } from './joblistdetails';
 
 interface Job {
@@ -38,6 +39,7 @@ const JobList = () => {
   const [newTitle, setNewTitle] = useState('');
   const [newJobCode, setNewJobCode] = useState('');
   const [newLocation, setNewLocation] = useState('Onsite');
+  const [newEmploymentType, setNewEmploymentType] = useState('FULL_TIME');
   const [newVacancies, setNewVacancies] = useState('1');
   const [newMinSalary, setNewMinSalary] = useState('');
   const [newMaxSalary, setNewMaxSalary] = useState('');
@@ -52,6 +54,7 @@ const JobList = () => {
   const [editTitle, setEditTitle] = useState('');
   const [editJobCode, setEditJobCode] = useState('');
   const [editLocation, setEditLocation] = useState('Onsite');
+  const [editEmploymentType, setEditEmploymentType] = useState('FULL_TIME');
   const [editVacancies, setEditVacancies] = useState('1');
   const [editMinSalary, setEditMinSalary] = useState('');
   const [editMaxSalary, setEditMaxSalary] = useState('');
@@ -163,6 +166,7 @@ const JobList = () => {
       formData.append('title', newTitle.trim());
       if (newJobCode.trim()) formData.append('jobCode', newJobCode.trim());
       formData.append('location', newLocation);
+      formData.append('employmentType', newEmploymentType);
       formData.append('vacancies', newVacancies);
       if (newMinSalary) formData.append('minSalary', newMinSalary);
       if (newMaxSalary) formData.append('maxSalary', newMaxSalary);
@@ -181,6 +185,7 @@ const JobList = () => {
       // Reset form
       setNewTitle('');
       setNewJobCode('');
+      setNewEmploymentType('FULL_TIME');
       setNewMinSalary('');
       setNewMaxSalary('');
       setNewDescription('');
@@ -205,6 +210,7 @@ const JobList = () => {
     setEditTitle(record.Job_Title || '');
     setEditJobCode(record.Job_ID || '');
     setEditLocation(record.Location || 'Onsite');
+    setEditEmploymentType(record.employmentType || 'FULL_TIME');
     setEditVacancies(record.vacancies ? String(record.vacancies) : '1');
     setEditMinSalary(record.minSalary ? String(record.minSalary) : '');
     setEditMaxSalary(record.maxSalary ? String(record.maxSalary) : '');
@@ -228,6 +234,7 @@ const JobList = () => {
       const formData = new FormData();
       formData.append('title', editTitle.trim());
       formData.append('location', editLocation);
+      formData.append('employmentType', editEmploymentType);
       formData.append('vacancies', editVacancies);
       if (editMinSalary) formData.append('minSalary', editMinSalary);
       if (editMaxSalary) formData.append('maxSalary', editMaxSalary);
@@ -276,15 +283,10 @@ const JobList = () => {
     });
   };
 
-  const userObj = (() => {
-    try {
-      return JSON.parse(localStorage.getItem('user') || '{}');
-    } catch {
-      return {};
-    }
-  })();
-  const userRole = userObj?.role || '';
-  const canManageJobs = ['COMPANY_ADMIN', 'HR', 'MANAGER'].includes(userRole);
+  const currentUser = useAppSelector((state: any) => state.auth.user);
+  const userRole = currentUser?.role || '';
+  const canManageJobs = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR', 'MANAGER'].includes(userRole) ||
+    currentUser?.permissions?.some((p: any) => p.module === 'RECRUITMENT' && (p.canWrite || p.canCreate));
 
   const data: Job[] = jobsList;
   const columns = [
@@ -569,7 +571,7 @@ const JobList = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-6">
+                  <div className="col-md-4">
                     <div className="mb-3">
                       <label className="form-label">
                         Vacancies <span className="text-danger"> *</span>
@@ -584,7 +586,7 @@ const JobList = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-6">
+                  <div className="col-md-4">
                     <div className="mb-3">
                       <label className="form-label">
                         Location <span className="text-danger"> *</span>
@@ -596,6 +598,24 @@ const JobList = () => {
                         onChange={(e) => setNewLocation(e.target.value)}
                         placeholder="e.g. Mumbai / Remote / Hybrid"
                       />
+                    </div>
+                  </div>
+
+                  <div className="col-md-4">
+                    <div className="mb-3">
+                      <label className="form-label">
+                        Job Type / Employment Type <span className="text-danger"> *</span>
+                      </label>
+                      <select
+                        className="form-select"
+                        value={newEmploymentType}
+                        onChange={(e) => setNewEmploymentType(e.target.value)}
+                      >
+                        <option value="FULL_TIME">Full Time (FULL_TIME)</option>
+                        <option value="PART_TIME">Part Time (PART_TIME)</option>
+                        <option value="CONTRACT">Contract (CONTRACT)</option>
+                        <option value="INTERN">Intern (INTERN)</option>
+                      </select>
                     </div>
                   </div>
 
@@ -743,7 +763,7 @@ const JobList = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-4">
+                  <div className="col-md-3">
                     <div className="mb-3">
                       <label className="form-label">Vacancies</label>
                       <input
@@ -756,7 +776,7 @@ const JobList = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-4">
+                  <div className="col-md-3">
                     <div className="mb-3">
                       <label className="form-label">Location</label>
                       <input
@@ -768,7 +788,23 @@ const JobList = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-4">
+                  <div className="col-md-3">
+                    <div className="mb-3">
+                      <label className="form-label">Job Type</label>
+                      <select
+                        className="form-select"
+                        value={editEmploymentType}
+                        onChange={(e) => setEditEmploymentType(e.target.value)}
+                      >
+                        <option value="FULL_TIME">Full Time (FULL_TIME)</option>
+                        <option value="PART_TIME">Part Time (PART_TIME)</option>
+                        <option value="CONTRACT">Contract (CONTRACT)</option>
+                        <option value="INTERN">Intern (INTERN)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="col-md-3">
                     <div className="mb-3">
                       <label className="form-label">Status</label>
                       <select

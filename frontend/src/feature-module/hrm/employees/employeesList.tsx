@@ -24,6 +24,7 @@ interface Employee {
   Name: string;
   Image: string;
   CurrentRole: string;
+  Type?: string;
   Email: string;
   Phone: string;
   Designation: string;
@@ -273,6 +274,7 @@ const EmployeeList = () => {
         Email: emp.user?.email || emp.email || 'N/A',
         Phone: emp.phone || 'N/A',
         Designation: emp.designation?.name || 'N/A',
+        Type: emp.employmentType?.replace('_', ' ') || 'FULL TIME',
         JoiningDate: emp.dateOfJoining ? new Date(emp.dateOfJoining).toLocaleDateString() : 'N/A',
         Status: emp.onboardingStatus === 'DOCS_SUBMITTED' ? 'Pending Verification' : emp.onboardingStatus === 'CORRECTION_REQUESTED' ? 'Needs Correction' : emp.onboardingStatus === 'COMPLETED' ? 'Active' : emp.onboardingStatus,
         onboardingStatus: emp.onboardingStatus,
@@ -284,13 +286,13 @@ const EmployeeList = () => {
 
       setDbEmployees(mappedEmployees);
       if (deptRes?.data) {
-        setDbDepartments(deptRes.data.map((d: any) => ({ value: d.id, label: d.name })));
+        setDbDepartments(deptRes.data.map((d: any) => ({ value: String(d.id), label: d.name })));
       }
       if (desigRes?.data) {
-        setDbDesignations(desigRes.data.map((d: any) => ({ value: d.id, label: d.name })));
+        setDbDesignations(desigRes.data.map((d: any) => ({ value: String(d.id), label: d.name })));
       }
       if (rolesRes?.data?.success) {
-        setDbRoles(rolesRes.data.data.map((r: any) => ({ value: r.id, label: r.name })));
+        setDbRoles(rolesRes.data.data.map((r: any) => ({ value: String(r.id), label: r.name })));
       }
     } catch (err) {
       console.error(err);
@@ -484,6 +486,15 @@ const EmployeeList = () => {
         a.Designation.length - b.Designation.length,
     },
     {
+      title: "Type",
+      dataIndex: "Type",
+      render: (text: string) => (
+        <span className="badge badge-soft-info">{text}</span>
+      ),
+      sorter: (a: Employee, b: Employee) =>
+        (a.Type?.length || 0) - (b.Type?.length || 0),
+    },
+    {
       title: "Joining Date",
       dataIndex: "JoiningDate",
       sorter: (a: Employee, b: Employee) =>
@@ -533,6 +544,7 @@ const EmployeeList = () => {
               username: record.raw?.user?.name || '',
               company: record.raw?.user?.company?.name || '',
               role: record.raw?.user?.role || 'EMPLOYEE',
+              companyRoleId: record.raw?.companyRoleId || '',
               reportingManagerId: record.raw?.reportingManagerId || '',
               password: '',
               confirmPassword: '',
@@ -2223,6 +2235,7 @@ const EmployeeList = () => {
                   tabIndex={0}
                 >
                   <div className="modal-body pb-0 ">
+                    {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
                     <div className="row">
                       <div className="col-md-12">
                         <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">

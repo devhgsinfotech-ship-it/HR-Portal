@@ -16,6 +16,7 @@ interface Candidate {
   resumeUrl?: string;
   jobTitle: string;
   jobCode: string;
+  employmentType?: string;
   departmentName: string;
   appliedDate: string;
   stage: string;
@@ -65,6 +66,11 @@ const CandidatesList: React.FC = () => {
   const [generatingOffer, setGeneratingOffer] = useState<boolean>(false);
   const [converting, setConverting] = useState<boolean>(false);
 
+  // Modal States for Hiring & Converting Candidate to Employee
+  const [hireCand, setHireCand] = useState<Candidate | null>(null);
+  const [hireEmpType, setHireEmpType] = useState<string>('FULL_TIME');
+  const [hireJoiningDate, setHireJoiningDate] = useState<string>('');
+
   const fetchApplicants = async () => {
     setLoading(true);
     try {
@@ -80,6 +86,7 @@ const CandidatesList: React.FC = () => {
           resumeUrl: a.resumeUrl,
           jobTitle: a.jobTitle || 'General',
           jobCode: a.jobCode || '',
+          employmentType: a.employmentType || 'FULL_TIME',
           departmentName: a.departmentName || 'General',
           appliedDate: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString('en-IN') : 'N/A',
           stage: STAGE_CONFIG[a.stage]?.label || a.stage,
@@ -228,17 +235,30 @@ const CandidatesList: React.FC = () => {
     }
   };
 
-  // One-Click Convert Hired Candidate to Employee
-  const handleConvertToEmployee = async (cand: Candidate) => {
-    if (!window.confirm(`Are you sure you want to convert candidate "${cand.name}" into a full Employee? This will generate their employee profile and send onboarding credentials.`)) return;
+  // Open Convert / Hire Modal
+  const handleOpenHireModal = (cand: Candidate) => {
+    setHireCand(cand);
+    setHireEmpType(cand.employmentType || 'FULL_TIME');
+    setHireJoiningDate(new Date().toISOString().slice(0, 10));
+  };
+
+  // Submit Convert Candidate to Employee with Selected Employment Type
+  const handleHireSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!hireCand) return;
 
     setConverting(true);
     try {
-      const res = await apiClient.post(`/applicants/${cand.id}/convert-to-employee`, {
-        dateOfJoining: new Date().toISOString().slice(0, 10)
+      const res = await apiClient.post(`/applicants/${hireCand.id}/convert-to-employee`, {
+        dateOfJoining: hireJoiningDate || new Date().toISOString().slice(0, 10),
+        employmentType: hireEmpType
       });
 
-      alert(`Success! ${cand.name} converted to Employee (${res.data.employeeCode}). Onboarding invite sent to ${cand.email}.`);
+      alert(`Success! Candidate ${hireCand.name} converted to Employee (${res.data.employeeCode}) as ${hireEmpType.replace('_', ' ')}! Onboarding invite sent to ${hireCand.email}.`);
+      
+      const closeBtn = document.querySelector('#convert_candidate_modal .custom-btn-close') as HTMLElement;
+      if (closeBtn) closeBtn.click();
+
       fetchApplicants();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to convert candidate to employee');
@@ -429,15 +449,16 @@ const CandidatesList: React.FC = () => {
             <i className="ti ti-file-certificate me-1 fs-14" /> Offer
           </button>
 
-          {(record.rawStage === 'OFFER' || record.rawStage === 'HIRED') && (
+          {(record.rawStage === 'OFFER' || record.rawStage === 'HIRED' || record.rawStage === 'INTERVIEW' || record.rawStage === 'SHORTLISTED') && (
             <button
               type="button"
               className="btn btn-sm btn-success text-white py-1 px-2 d-inline-flex align-items-center"
-              onClick={() => handleConvertToEmployee(record)}
-              disabled={converting}
-              title="Convert Candidate to Active Employee Profile"
+              data-bs-toggle="modal"
+              data-bs-target="#convert_candidate_modal"
+              onClick={() => handleOpenHireModal(record)}
+              title="Hire & Convert Candidate to Employee Profile"
             >
-              <i className="ti ti-user-check me-1 fs-14" /> {converting ? 'Converting...' : 'Convert'}
+              <i className="ti ti-user-check me-1 fs-14" /> Hire & Convert
             </button>
           )}
 
@@ -803,7 +824,88 @@ const CandidatesList: React.FC = () => {
         </div>
       </div>
 
+      {/* Hire & Convert Candidate to Employee Modal */}
+      <div className="modal fade" id="convert_candidate_modal">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header bg-success-light">
+              <h4 className="modal-title text-success">
+                <i className="ti ti-user-check me-2" /> Hire Candidate & Create Employee
+              </h4>
+              <button
+                type="button"
+                className="btn-close custom-btn-close"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+              >
+                <i className="ti ti-x" />
+              </button>
+            </div>
+            <form onSubmit={handleHireSubmit}>
+              <div className="modal-body">
+                {hireCand && (
+                  <div className="alert alert-light border mb-3">
+                    <h6 className="fw-semibold mb-1">{hireCand.name}</h6>
+                    <p className="mb-0 text-muted fs-13">
+                      Email: {hireCand.email} | Job: {hireCand.jobTitle} ({hireCand.departmentName})
+                    </p>
+                  </div>
+                )}
 
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">
+                    Hiring Employment Type <span className="text-danger">*</span>
+                  </label>
+                  <select
+                    className="form-select"
+                    value={hireEmpType}
+                    onChange={(e) => setHireEmpType(e.target.value)}
+                    required
+                  >
+                    <option value="FULL_TIME">Full Time (FULL_TIME)</option>
+                    <option value="PART_TIME">Part Time (PART_TIME)</option>
+                    <option value="CONTRACT">Contract (CONTRACT)</option>
+                    <option value="INTERN">Intern (INTERN)</option>
+                  </select>
+                  <span className="text-muted fs-12 mt-1 d-block">
+                    Select whether candidate is joining as Full Time, Part Time, Contract, or Intern employee.
+                  </span>
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">
+                    Date of Joining <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={hireJoiningDate}
+                    onChange={(e) => setHireJoiningDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" data-bs-dismiss="modal">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-success text-white" disabled={converting}>
+                  {converting ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" />
+                      Converting...
+                    </>
+                  ) : (
+                    <>
+                      <i className="ti ti-check me-1" /> Complete Hiring & Send Invite
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </>
   );
 };

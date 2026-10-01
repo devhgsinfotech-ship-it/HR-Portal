@@ -14,11 +14,14 @@ async function getEffectiveCompanyId(req) {
 // ── GET REFERRALS ──────────────────────────────────────────────
 async function getReferrals(req, res) {
   try {
-    const companyId = await getEffectiveCompanyId(req);
-    const where = { companyId };
+    const where = {};
+    if (req.user.role !== 'SUPER_ADMIN') {
+      const companyId = await getEffectiveCompanyId(req);
+      where.companyId = companyId;
+    }
 
     // Regular employees see their own referrals; HR/Admins see all company referrals
-    if (req.user.role === 'EMPLOYEE') {
+    if (!['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR', 'MANAGER'].includes(req.user.role)) {
       where.referrerId = req.user.id;
     }
 
