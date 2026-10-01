@@ -74,7 +74,7 @@ async function getApplicants(req, res) {
       where,
       include: {
         jobPosting: {
-          select: { id: true, jobCode: true, title: true, department: { select: { name: true } } }
+          select: { id: true, jobCode: true, title: true, department: { select: { name: true } }, employmentType: true }
         },
         interviews: {
           include: {
@@ -105,6 +105,7 @@ async function getApplicants(req, res) {
       jobTitle: app.jobPosting ? app.jobPosting.title : 'General',
       jobCode: app.jobPosting ? app.jobPosting.jobCode : '',
       departmentName: app.jobPosting?.department?.name || 'General',
+      employmentType: app.jobPosting?.employmentType || 'FULL_TIME',
       interviewsCount: app.interviews.length,
       latestInterview: app.interviews[0] ? {
         id: app.interviews[0].id,
@@ -552,7 +553,7 @@ async function generateOfferLetter(req, res) {
 async function convertToEmployee(req, res) {
   try {
     const id = parseInt(req.params.id, 10);
-    const { departmentId, designationId, employeeCode, dateOfJoining } = req.body;
+    const { departmentId, designationId, employeeCode, dateOfJoining, employmentType } = req.body;
 
     if (isNaN(id)) return res.status(400).json({ message: 'Invalid applicant ID' });
 
@@ -604,6 +605,7 @@ async function convertToEmployee(req, res) {
           firstName: applicant.firstName || 'Candidate',
           lastName: applicant.lastName || '',
           phone: applicant.phone || null,
+          employmentType: employmentType || applicant.jobPosting?.employmentType || 'FULL_TIME',
           departmentId: departmentId ? parseInt(departmentId, 10) : (applicant.jobPosting?.departmentId || null),
           designationId: designationId ? parseInt(designationId, 10) : null,
           dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : new Date(),

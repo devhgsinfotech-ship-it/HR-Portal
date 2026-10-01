@@ -102,8 +102,8 @@ const EmployeesGrid = () => {
                 apiClient.get('/designations')
             ]);
             setDbEmployees(empRes.data);
-            setDbDepartments(deptRes.data.map((d: any) => ({ value: d.id, label: d.name })));
-            setDbDesignations(desigRes.data.map((d: any) => ({ value: d.id, label: d.name })));
+            setDbDepartments(deptRes.data.map((d: any) => ({ value: String(d.id), label: d.name })));
+            setDbDesignations(desigRes.data.map((d: any) => ({ value: String(d.id), label: d.name })));
             setLoading(false);
         } catch (err) {
             console.error('Error fetching grid data:', err);
@@ -627,6 +627,7 @@ const EmployeesGrid = () => {
                                                                         username: emp.user?.name || '',
                                                                         company: emp.user?.company?.name || '',
                                                                         role: emp.user?.role || 'EMPLOYEE',
+                                                                        companyRoleId: emp.companyRoleId || '',
                                                                         reportingManagerId: emp.reportingManagerId || '',
                                                                         password: '',
                                                                         confirmPassword: '',
@@ -715,8 +716,11 @@ const EmployeesGrid = () => {
                                                 <h6 className="mb-1">
                                                     <Link to={`${all_routes.employeedetails}?id=${emp.id}`}>{`${emp.firstName || ''} ${emp.lastName || ''}`.trim()}</Link>
                                                 </h6>
-                                                <span className="badge bg-pink-transparent fs-10 fw-medium">
+                                                <span className="badge bg-pink-transparent fs-10 fw-medium me-1">
                                                     {emp.designation?.name || 'N/A'}
+                                                </span>
+                                                <span className="badge bg-info-transparent fs-10 fw-medium">
+                                                    {emp.employmentType?.replace('_', ' ') || 'FULL TIME'}
                                                 </span>
                                             </div>
                                             <div className="row text-center">
