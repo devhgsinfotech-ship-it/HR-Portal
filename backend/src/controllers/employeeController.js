@@ -819,8 +819,15 @@ async function approveOnboarding(req, res) {
     try {
         const { id } = req.params; // Employee ID
 
-        const employee = await prisma.employee.findUnique({ where: { id: parseInt(id) } });
+        const employee = await prisma.employee.findUnique({ 
+            where: { id: parseInt(id) },
+            include: { user: true }
+        });
         if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+        if (employee.user?.role === 'HR' && req.user.role !== 'COMPANY_ADMIN' && req.user.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ message: 'Only a Company Admin can approve onboarding for an HR role' });
+        }
 
         const updated = await prisma.employee.update({
             where: { id: parseInt(id) },
@@ -852,6 +859,10 @@ async function resendInvite(req, res) {
 
         if (!employee) {
             return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        if (employee.user?.role === 'HR' && req.user.role !== 'COMPANY_ADMIN' && req.user.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ message: 'Only a Company Admin can resend invites to an HR role' });
         }
 
         if (employee.onboardingStatus !== 'INVITED') {
@@ -956,6 +967,10 @@ async function requestOnboardingCorrection(req, res) {
 
         if (!employee) {
             return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        if (employee.user?.role === 'HR' && req.user.role !== 'COMPANY_ADMIN' && req.user.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ message: 'Only a Company Admin can request correction for an HR role' });
         }
 
         const updated = await prisma.employee.update({
