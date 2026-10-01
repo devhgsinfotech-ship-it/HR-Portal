@@ -1106,9 +1106,11 @@ const EmployeesGrid = () => {
                                                 <div className="mb-3">
                                                     <label className="form-label">Reporting Manager</label>
                                                     <CommonSelect
+                                                        key={`rm-new-${newEmp.reportingManagerId}-${newEmp.companyRoleId}-${newEmp.role}`}
                                                         className="select"
-                                                        options={[{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed' }))]}
+                                                        options={[{ value: '', label: newEmp.role === 'HR' ? 'Company Admin' : '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed' }))]}
                                                         onChange={(opt) => setNewEmp({...newEmp, reportingManagerId: opt?.value || ''})}
+                                                        isDisabled={newEmp.role === 'HR'}
                                                     />
                                                 </div>
                                             </div>
@@ -1597,10 +1599,15 @@ const EmployeesGrid = () => {
                                                 <div className="mb-3">
                                                     <label className="form-label">Reporting Manager</label>
                                                     <CommonSelect
+                                                        key={`rm-${editEmp.id}-${editEmp.reportingManagerId}-${editEmp.companyRoleId}-${editEmp.role}`}
                                                         className="select"
-                                                        options={[{ value: '', label: '-- None --' }, ...dbEmployees.filter(e => e.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed' }))]}
-                                                        defaultValue={{ value: String(editEmp.reportingManagerId || ''), label: editEmp.reportingManagerId ? (dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.firstName ? `${dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.firstName} ${dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.lastName}`.trim() : 'Selected Manager') : '-- None --' }}
+                                                        options={[{ value: '', label: editEmp.role === 'HR' ? 'Company Admin' : '-- None --' }, ...dbEmployees.filter((e: any) => e.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed' }))]}
+                                                        defaultValue={(() => {
+                                                            const isHR = editEmp.role === 'HR';
+                                                            return { value: String(editEmp.reportingManagerId || ''), label: editEmp.reportingManagerId ? (dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.firstName ? `${dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.firstName} ${dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.lastName}`.trim() : 'Selected Manager') : (isHR ? 'Company Admin' : '-- None --') };
+                                                        })()}
                                                         onChange={(opt) => setEditEmp({...editEmp, reportingManagerId: opt?.value || ''})}
+                                                        isDisabled={editEmp.role === 'HR'}
                                                     />
                                                 </div>
                                             </div>

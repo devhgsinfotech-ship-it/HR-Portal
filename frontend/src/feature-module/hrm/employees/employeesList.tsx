@@ -1327,10 +1327,11 @@ const EmployeeList = () => {
                         <div className="mb-3">
                           <label className="form-label">Reporting Manager</label>
                           <CommonSelect
-                            key={`rm-new-${newEmp.reportingManagerId}`}
+                            key={`rm-new-${newEmp.reportingManagerId}-${newEmp.companyRoleId}-${newEmp.role}`}
                             className="select"
-                            options={[{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed' }))]}
+                            options={[{ value: '', label: newEmp.role === 'HR' ? 'Company Admin' : '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed' }))]}
                             onChange={(opt) => setNewEmp({...newEmp, reportingManagerId: opt?.value || ''})}
+                            isDisabled={newEmp.role === 'HR'}
                           />
                           <small className="text-muted">HR assigns who manages this employee</small>
                         </div>
@@ -2564,12 +2565,14 @@ const EmployeeList = () => {
                         <div className="mb-3">
                           <label className="form-label">Reporting Manager</label>
                           <CommonSelect
-                            key={`rm-${editEmp.id}-${editEmp.reportingManagerId}`}
+                            key={`rm-${editEmp.id}-${editEmp.reportingManagerId}-${editEmp.companyRoleId}-${editEmp.role}`}
                             className="select"
-                            options={[{ value: '', label: '-- None --' }, ...dbEmployees.filter((emp: any) => emp.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed' }))]}
+                            options={[{ value: '', label: editEmp.role === 'HR' ? 'Company Admin' : '-- None --' }, ...dbEmployees.filter((emp: any) => emp.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed' }))]}
                             onChange={(opt) => setEditEmp({...editEmp, reportingManagerId: opt?.value || ''})}
+                            isDisabled={editEmp.role === 'HR'}
                             defaultValue={(() => {
-                              const allOptions = [{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed' }))];
+                              const isHR = editEmp.role === 'HR';
+                              const allOptions = [{ value: '', label: isHR ? 'Company Admin' : '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed' }))];
                               return allOptions.find(m => m.value === String(editEmp.reportingManagerId)) || allOptions[0];
                             })()}
                           />

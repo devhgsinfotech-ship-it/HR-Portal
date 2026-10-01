@@ -54,7 +54,10 @@ const EmployeeDetails = () => {
   };
 
   const fetchEmployee = async () => {
-    if (!employeeId) return;
+    if (!employeeId) {
+      setLoading(false);
+      return;
+    }
     try {
       const res = await apiClient.get(`/employees/${employeeId}`);
       const data = res.data;

@@ -12,9 +12,10 @@ export interface SelectProps {
   className?: string;
   styles?: any; 
   onChange?: (option: Option | null) => void;
+  isDisabled?: boolean;
 }
 
-const CommonSelect: React.FC<SelectProps> = ({ options, defaultValue, className, onChange }) => {
+const CommonSelect: React.FC<SelectProps> = ({ options, defaultValue, className, onChange, isDisabled }) => {
   const [selectedOption, setSelectedOption] = useState<Option | undefined>(defaultValue);
 
   const customStyles = {
@@ -27,6 +28,11 @@ const CommonSelect: React.FC<SelectProps> = ({ options, defaultValue, className,
         backgroundColor: state.isFocused ? "#2e37a4" : "white",
         color: state.isFocused ? "#fff" : "#2e37a4",
       },
+    }),
+    control: (base: any) => ({
+      ...base,
+      opacity: isDisabled ? 0.7 : 1,
+      cursor: isDisabled ? 'not-allowed' : 'default',
     }),
   };
 
@@ -49,6 +55,7 @@ const CommonSelect: React.FC<SelectProps> = ({ options, defaultValue, className,
       value={selectedOption}
       onChange={handleChange}
       placeholder="Select"
+      isDisabled={isDisabled}
     />
   );
 };
