@@ -1,6 +1,22 @@
 // backend/src/utils/seedDefaultPlans.js
 const prisma = require('../config/prisma');
 
+const ALL_MODULES = [
+  'Employees', 'Invoices', 'Reports', 'Contacts',
+  'Clients', 'Estimates', 'Goals', 'Deals',
+  'Projects', 'Payments', 'Assets', 'Leads',
+  'Tickets', 'Taxes', 'Activities', 'Pipelines',
+  'Attendance', 'Payroll'
+];
+
+function createFeatureMap(enabledList) {
+  const map = {};
+  ALL_MODULES.forEach(mod => {
+    map[mod] = enabledList.includes(mod);
+  });
+  return map;
+}
+
 const DEFAULT_PLANS = [
   {
     name: 'Starter Plan',
@@ -10,7 +26,7 @@ const DEFAULT_PLANS = [
     priceYearly: 19990.00,
     maxEmployees: 10,
     maxStorageGb: 5.0,
-    features: ['Employee Management', 'Attendance & Leaves', 'Basic Reports', 'Self Service Portal'],
+    features: createFeatureMap(['Employees', 'Attendance', 'Reports']),
     isActive: true
   },
   {
@@ -21,7 +37,7 @@ const DEFAULT_PLANS = [
     priceYearly: 49990.00,
     maxEmployees: 50,
     maxStorageGb: 25.0,
-    features: ['All Starter Features', 'Automated Indian Payroll & Payslips', 'Project & Task Tracking', 'Asset Management', 'Dynamic Roles & Permissions'],
+    features: createFeatureMap(['Employees', 'Attendance', 'Reports', 'Payroll', 'Projects', 'Assets', 'Tickets', 'Invoices', 'Clients']),
     isActive: true
   },
   {
@@ -32,7 +48,7 @@ const DEFAULT_PLANS = [
     priceYearly: 129990.00,
     maxEmployees: 99999,
     maxStorageGb: 100.0,
-    features: ['All Professional Features', 'Unlimited Employees', 'Dedicated Account Manager', 'Custom Subdomain & SLA', 'Priority 24/7 Support'],
+    features: createFeatureMap(ALL_MODULES),
     isActive: true
   }
 ];
@@ -91,4 +107,5 @@ async function seedDefaultPlans() {
   }
 }
 
-module.exports = { seedDefaultPlans, DEFAULT_PLANS };
+module.exports = { seedDefaultPlans, DEFAULT_PLANS, ALL_MODULES, createFeatureMap };
+

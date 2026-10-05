@@ -7,18 +7,13 @@ const { verifyToken, requireRole } = require('../middleware/authMiddleware');
 // All subscription routes require authentication
 router.use(verifyToken);
 
-// Tenant Company Admin Subscription View & Upgrade
+// Tenant Company Admin Subscription View & Upgrade / Degrade
 router.get('/company', subscriptionController.getCompanySubscription);
 router.post('/company/change-plan', subscriptionController.changeCompanyPlan);
+router.get('/plans', subscriptionController.getPlans);
 
 // Super Admin Only Routes
 router.use(requireRole('SUPER_ADMIN'));
-
-// Super Admin Dashboard Summary Analytics
-router.get('/dashboard-summary', subscriptionController.getDashboardSummary);
-
-// Plans Management
-router.get('/plans', subscriptionController.getPlans);
 router.post('/plans', subscriptionController.createPlan);
 router.put('/plans/:id', subscriptionController.updatePlan);
 router.delete('/plans/:id', subscriptionController.deletePlan);
@@ -26,6 +21,7 @@ router.delete('/plans/:id', subscriptionController.deletePlan);
 // Tenant Subscriptions Management
 router.get('/subscriptions', subscriptionController.getSubscriptions);
 router.put('/subscriptions/:companyId', subscriptionController.updateCompanySubscription);
+router.put('/subscriptions/:companyId/features', subscriptionController.updateCompanyFeatures);
 router.post('/subscriptions/:companyId/extend-trial', subscriptionController.extendTrial);
 
 // Invoices & Billing Management

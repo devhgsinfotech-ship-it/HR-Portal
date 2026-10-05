@@ -1,6 +1,32 @@
 // backend/src/controllers/subscriptionController.js
 const prisma = require('../config/prisma');
 
+// Helper to resolve features map seamlessly
+function resolveFeatures(planFeatures, customFeatures) {
+  let base = planFeatures;
+  if (typeof base === 'string') {
+    try { base = JSON.parse(base); } catch (e) { base = {}; }
+  }
+
+  let baseMap = {};
+  if (Array.isArray(base)) {
+    base.forEach(item => { baseMap[item] = true; });
+  } else if (base && typeof base === 'object') {
+    baseMap = { ...base };
+  }
+
+  let custom = customFeatures;
+  if (typeof custom === 'string') {
+    try { custom = JSON.parse(custom); } catch (e) { custom = {}; }
+  }
+
+  if (custom && typeof custom === 'object' && !Array.isArray(custom)) {
+    Object.assign(baseMap, custom);
+  }
+
+  return baseMap;
+}
+
 // ============================================================
 // PLAN MANAGEMENT (Super Admin)
 // ============================================================
@@ -26,7 +52,7 @@ async function getPlans(req, res) {
       priceYearly: p.priceYearly,
       maxEmployees: p.maxEmployees,
       maxStorageGb: p.maxStorageGb,
-      features: Array.isArray(p.features) ? p.features : JSON.parse(p.features || '[]'),
+      features: resolveFeatures(p.features),
       isActive: p.isActive,
       totalSubscribers: p._count.subscriptions,
       createdAt: p.createdAt,
@@ -55,6 +81,12 @@ async function createPlan(req, res) {
       return res.status(400).json({ message: `Plan with code "${code}" already exists` });
     }
 
+    let parsedFeatures = features || {};
+    if (Array.isArray(features)) {
+      parsedFeatures = {};
+      features.forEach(f => { parsedFeatures[f] = true; });
+    }
+
     const plan = await prisma.subscriptionPlan.create({
       data: {
         name,
@@ -64,7 +96,7 @@ async function createPlan(req, res) {
         priceYearly: parseFloat(priceYearly),
         maxEmployees: maxEmployees ? parseInt(maxEmployees, 10) : 10,
         maxStorageGb: maxStorageGb ? parseFloat(maxStorageGb) : 5.0,
-        features: Array.isArray(features) ? features : [],
+        features: parsedFeatures,
         isActive: isActive !== undefined ? Boolean(isActive) : true
       }
     });
@@ -91,7 +123,15 @@ async function updatePlan(req, res) {
     if (priceYearly !== undefined) dataToUpdate.priceYearly = parseFloat(priceYearly);
     if (maxEmployees !== undefined) dataToUpdate.maxEmployees = parseInt(maxEmployees, 10);
     if (maxStorageGb !== undefined) dataToUpdate.maxStorageGb = parseFloat(maxStorageGb);
-    if (features !== undefined) dataToUpdate.features = Array.isArray(features) ? features : [];
+    if (features !== undefined) {
+      if (Array.isArray(features)) {
+        const featObj = {};
+        features.forEach(f => { featObj[f] = true; });
+        dataToUpdate.features = featObj;
+      } else {
+        dataToUpdate.features = features;
+      }
+    }
     if (isActive !== undefined) dataToUpdate.isActive = Boolean(isActive);
 
     const updated = await prisma.subscriptionPlan.update({
@@ -184,6 +224,8 @@ async function getSubscriptions(req, res) {
         priceYearly: sub.plan.priceYearly,
         maxEmployees: sub.plan.maxEmployees,
         currentEmployeeCount: sub.company._count.users,
+        features: resolveFeatures(sub.plan.features, sub.customFeatures),
+        customFeatures: sub.customFeatures || null,
         status: isExpired ? 'EXPIRED' : sub.status,
         billingCycle: sub.billingCycle,
         startDate: sub.startDate,
@@ -199,6 +241,36 @@ async function getSubscriptions(req, res) {
   } catch (error) {
     console.error('Error fetching subscriptions:', error);
     res.status(500).json({ message: 'Failed to fetch tenant subscriptions' });
+  }
+}
+
+async function updateCompanyFeatures(req, res) {
+  try {
+    const { companyId } = req.params;
+    const cid = parseInt(companyId, 10);
+    if (isNaN(cid)) return res.status(400).json({ message: 'Invalid company ID' });
+
+    const { customFeatures } = req.body;
+
+    let sub = await prisma.subscription.findUnique({ where: { companyId: cid } });
+    if (!sub) {
+      return res.status(404).json({ message: 'Subscription not found for company' });
+    }
+
+    const updated = await prisma.subscription.update({
+      where: { id: sub.id },
+      data: { customFeatures: customFeatures || {} },
+      include: { plan: true, company: true }
+    });
+
+    res.json({
+      message: 'Company custom features updated successfully',
+      subscription: updated,
+      features: resolveFeatures(updated.plan.features, updated.customFeatures)
+    });
+  } catch (error) {
+    console.error('Error updating company custom features:', error);
+    res.status(500).json({ message: 'Failed to update company custom features' });
   }
 }
 
@@ -405,9 +477,27 @@ async function updateInvoiceStatus(req, res) {
 
 async function getCompanySubscription(req, res) {
   try {
-    const companyId = req.user.companyId;
+    let companyId = req.user?.companyId;
+
+    if (!companyId && req.user?.id) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { companyId: true }
+      });
+      companyId = dbUser?.companyId;
+    }
+
+    if (!companyId && req.headers.host) {
+      const hostParts = req.headers.host.split('.');
+      if (hostParts.length > 1) {
+        const subdomain = hostParts[0].toLowerCase();
+        const company = await prisma.company.findUnique({ where: { subdomain } });
+        if (company) companyId = company.id;
+      }
+    }
+
     if (!companyId) {
-      return res.status(400).json({ message: 'No company scope found for user' });
+      return res.status(400).json({ message: 'No company scope found for user session.' });
     }
 
     let sub = await prisma.subscription.findUnique({
@@ -466,7 +556,7 @@ async function getCompanySubscription(req, res) {
         priceYearly: sub.plan.priceYearly,
         maxEmployees: sub.plan.maxEmployees,
         maxStorageGb: sub.plan.maxStorageGb,
-        features: Array.isArray(sub.plan.features) ? sub.plan.features : JSON.parse(sub.plan.features || '[]')
+        features: resolveFeatures(sub.plan.features, sub.customFeatures)
       },
       status: isExpired ? 'EXPIRED' : sub.status,
       billingCycle: sub.billingCycle,
@@ -546,15 +636,33 @@ async function getDashboardSummary(req, res) {
 
 async function changeCompanyPlan(req, res) {
   try {
-    const companyId = req.user.companyId;
+    let companyId = req.user?.companyId;
+
+    if (!companyId && req.user?.id) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { companyId: true }
+      });
+      companyId = dbUser?.companyId;
+    }
+
+    if (!companyId && req.headers.host) {
+      const hostParts = req.headers.host.split('.');
+      if (hostParts.length > 1) {
+        const subdomain = hostParts[0].toLowerCase();
+        const company = await prisma.company.findUnique({ where: { subdomain } });
+        if (company) companyId = company.id;
+      }
+    }
+
     if (!companyId) {
-      return res.status(400).json({ message: 'No company scope found for user' });
+      return res.status(400).json({ message: 'No company scope found for user session.' });
     }
 
     const { planId, billingCycle } = req.body;
     const targetPlanId = parseInt(planId, 10);
     if (isNaN(targetPlanId)) {
-      return res.status(400).json({ message: 'Target plan ID is required' });
+      return res.status(400).json({ message: 'Target plan ID is required.' });
     }
 
     const targetPlan = await prisma.subscriptionPlan.findUnique({
@@ -562,7 +670,22 @@ async function changeCompanyPlan(req, res) {
     });
 
     if (!targetPlan || !targetPlan.isActive) {
-      return res.status(404).json({ message: 'Selected plan is inactive or not found' });
+      return res.status(404).json({ message: 'Selected plan is inactive or not found.' });
+    }
+
+    // Check active employee count before allowing downgrade
+    const activeEmployeeCount = await prisma.user.count({
+      where: {
+        companyId,
+        accountStatus: 'ACTIVE',
+        role: { not: 'SUPER_ADMIN' }
+      }
+    });
+
+    if (activeEmployeeCount > targetPlan.maxEmployees) {
+      return res.status(400).json({
+        message: `Cannot switch to ${targetPlan.name} plan because your company currently has ${activeEmployeeCount} active employees, which exceeds the limit of ${targetPlan.maxEmployees}. If you still want to degrade your plan, please remove or deactivate employees first.`
+      });
     }
 
     const cycle = billingCycle === 'YEARLY' ? 'YEARLY' : 'MONTHLY';
@@ -620,14 +743,14 @@ async function changeCompanyPlan(req, res) {
     });
 
     res.json({
-      message: `Successfully upgraded to ${targetPlan.name}!`,
+      message: `Successfully changed plan to ${targetPlan.name}!`,
       subscription: sub,
       invoice,
       newQuota: targetPlan.maxEmployees
     });
   } catch (error) {
     console.error('Error changing company plan:', error);
-    res.status(500).json({ message: 'Failed to upgrade subscription plan' });
+    res.status(500).json({ message: error.message || 'Failed to update subscription plan' });
   }
 }
 
@@ -638,6 +761,7 @@ module.exports = {
   deletePlan,
   getSubscriptions,
   updateCompanySubscription,
+  updateCompanyFeatures,
   extendTrial,
   getInvoices,
   createInvoice,

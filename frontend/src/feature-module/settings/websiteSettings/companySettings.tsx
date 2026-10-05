@@ -92,15 +92,15 @@ const CompanySettings = () => {
   const handleUpgradePlan = async (targetPlanId: number) => {
     try {
       setUpgradingPlanId(targetPlanId);
-      const res = await apiClient.post('/api/subscription/company/change-plan', {
+      const res = await apiClient.post('/subscriptions/company/change-plan', {
         planId: targetPlanId,
         billingCycle: billingCycleToggle
       });
-      alert(res.data?.message || 'Plan upgraded successfully!');
-      const subRes = await apiClient.get('/api/subscription/company');
+      alert(res.data?.message || 'Plan updated successfully!');
+      const subRes = await apiClient.get('/subscriptions/company');
       if (subRes.data) setSubscriptionData(subRes.data);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to upgrade plan');
+      alert(err.response?.data?.message || 'Failed to update plan');
     } finally {
       setUpgradingPlanId(null);
     }

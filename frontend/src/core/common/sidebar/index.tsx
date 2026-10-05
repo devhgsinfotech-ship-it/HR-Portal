@@ -49,6 +49,12 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     p = '/' + p;
   }
 
+  // --- 0. EXPLICITLY HIDE COMPANY USER MANAGEMENT FROM SUPER ADMIN ---
+  const companyUserMgmt = ["user-management", "manage-users", "roles-permissions"];
+  if (companyUserMgmt.some(kw => p.includes(kw) || p === kw)) {
+    return ["COMPANY_ADMIN", "HR"];
+  }
+
   // --- 1. SUPER ADMIN EXPLICIT ALLOW LIST ---
   // Paths related to Super Admin responsibilities: 
   // Companies, Plans & Subscriptions, Billing, Platform Users, Roles, Settings, Integrations, Audit Logs
@@ -56,8 +62,7 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     "super-admin", "superadmin", 
     "compan", "plan", "subscription", "package", 
     "billing", "payment", "tax", "currency", // Billing & Financial Settings
-    "platform-user", "user", 
-    "role", "permission", 
+    "platform-user", 
     "setting", "integration", "audit", 
     "gdpr", "maintenance", "css", "js", "cronjob", "storage", "ban", "backup", "cache", // System/Other Settings
     "template" // Email/SMS templates
@@ -127,6 +132,15 @@ const getRouteRoles = (path: string | undefined): Role[] => {
 const filterMenu = (items: SidebarMenuItem[] | undefined, role: Role): SidebarMenuItem[] => {
   if (!items) return [];
   return items.filter(item => {
+    // Explicitly hide "User Management" parent menu for SUPER_ADMIN
+    if (role === "SUPER_ADMIN") {
+      const labelLower = (item.label || "").toLowerCase();
+      const baseLower = (item.base || "").toLowerCase();
+      if (labelLower === "user management" || baseLower === "user-management") {
+        return false;
+      }
+    }
+
     // Process submenu first
     if (item.submenuItems && item.submenuItems.length > 0) {
       item.submenuItems = filterMenu(item.submenuItems, role);

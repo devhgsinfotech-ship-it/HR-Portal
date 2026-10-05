@@ -24,10 +24,12 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+const { checkStorageQuota } = require('../middleware/subscriptionMiddleware');
+
 router.use(verifyToken);
 
 router.get('/employee/:employeeId', documentController.getEmployeeDocuments);
-router.post('/upload', upload.single('file'), documentController.uploadDocument);
+router.post('/upload', checkStorageQuota, upload.single('file'), documentController.uploadDocument);
 router.put('/:id/verify', requireRole('COMPANY_ADMIN', 'HR'), documentController.verifyDocument);
 router.delete('/:id', requireRole('COMPANY_ADMIN', 'HR'), documentController.deleteDocument);
 

@@ -31,6 +31,19 @@ const EmployeesGrid = () => {
     const [dbDesignations, setDbDesignations] = useState<any[]>([]);
     const [selectedDesignation, setSelectedDesignation] = useState<string>('All');
     const [loading, setLoading] = useState<boolean>(true);
+    const [quotaInfo, setQuotaInfo] = useState<{
+      currentCount: number;
+      maxEmployees: number;
+      slotsLeft: number;
+      isLimitReached: boolean;
+      planName: string;
+    } | null>(null);
+
+    useEffect(() => {
+      apiClient.get('/employees/quota-status')
+        .then(res => setQuotaInfo(res.data))
+        .catch(err => console.error('Error fetching quota status:', err));
+    }, []);
 
     const [passwordVisibility, setPasswordVisibility] = useState({
         password: false,
@@ -390,9 +403,16 @@ const EmployeesGrid = () => {
                                 <div className="mb-2">
                                     <Link
                                         to="#"
-                                        data-bs-toggle="modal" data-inert={true}
-                                        data-bs-target="#add_employee"
-                                        className="btn btn-primary d-flex align-items-center"
+                                        data-bs-toggle={quotaInfo?.isLimitReached ? "" : "modal"}
+                                        data-inert={true}
+                                        data-bs-target={quotaInfo?.isLimitReached ? "" : "#add_employee"}
+                                        className={`btn ${quotaInfo?.isLimitReached ? 'btn-secondary disabled' : 'btn-primary'} d-flex align-items-center`}
+                                        onClick={(e) => {
+                                          if (quotaInfo?.isLimitReached) {
+                                            e.preventDefault();
+                                            alert(`Employee quota limit reached (${quotaInfo.maxEmployees}/${quotaInfo.maxEmployees}). Please upgrade your plan to add more employees.`);
+                                          }
+                                        }}
                                     >
                                         <i className="ti ti-circle-plus me-2" />
                                         Add Employee
@@ -405,6 +425,33 @@ const EmployeesGrid = () => {
                         </div>
                     </div>
                     {/* /Breadcrumb */}
+
+                    {/* Employee Quota Banner */}
+                    {quotaInfo && (
+                      <div className={`alert ${quotaInfo.isLimitReached ? 'alert-danger border-danger' : quotaInfo.slotsLeft <= 3 ? 'alert-warning border-warning' : 'alert-info border-info'} d-flex align-items-center justify-content-between rounded-3 p-3 mb-3`}>
+                        <div className="d-flex align-items-center">
+                          <i className={`ti ${quotaInfo.isLimitReached ? 'ti-alert-octagon-filled fs-24 me-2 text-danger' : 'ti-info-circle-filled fs-24 me-2 text-info'}`} />
+                          <div>
+                            <h6 className="mb-0 fw-semibold">
+                              {quotaInfo.isLimitReached
+                                ? `Employee Quota Limit Reached (${quotaInfo.currentCount} / ${quotaInfo.maxEmployees})`
+                                : `Employee Quota: ${quotaInfo.currentCount} / ${quotaInfo.maxEmployees} Employees (${quotaInfo.slotsLeft} ${quotaInfo.slotsLeft === 1 ? 'Slot' : 'Slots'} Remaining)`
+                              }
+                            </h6>
+                            <span className="fs-12">
+                              {quotaInfo.isLimitReached
+                                ? `Your company has filled all available slots on the ${quotaInfo.planName}. Please upgrade your plan to add more team members.`
+                                : `Current Subscription Plan: ${quotaInfo.planName}`
+                              }
+                            </span>
+                          </div>
+                        </div>
+                        <Link to={all_routes.membershipplan} className="btn btn-sm btn-dark ms-3 flex-shrink-0">
+                          <i className="ti ti-arrow-up-right-circle me-1" />
+                          Upgrade Plan
+                        </Link>
+                      </div>
+                    )}
 
                     {/* Stats Row */}
                     <div className="row">

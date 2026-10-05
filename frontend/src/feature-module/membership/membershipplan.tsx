@@ -1,570 +1,239 @@
-
-import { Link } from "react-router-dom";
-import CommonSelect from "../../core/common/commonSelect";
-import { membershipplan } from "../../core/common/selectoption/selectoption";
-import { all_routes } from "../../router/all_routes";
-import TooltipOption from "../../core/common/tooltipOption";
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { all_routes } from '../../router/all_routes';
+import apiClient from '../../core/utils/apiClient';
 
 const Membershipplan = () => {
   const routes = all_routes;
+  const [plans, setPlans] = useState<any[]>([]);
+  const [companySub, setCompanySub] = useState<any>(null);
+  const [isYearly, setIsYearly] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [upgrading, setUpgrading] = useState<number | null>(null);
+
+  const fetchSubscriptionData = async () => {
+    try {
+      setLoading(true);
+      const [subRes, plansRes] = await Promise.all([
+        apiClient.get('/subscriptions/company').catch(() => null),
+        apiClient.get('/super-admin/plans').catch(() => null)
+      ]);
+
+      if (subRes?.data) setCompanySub(subRes.data);
+      if (plansRes?.data && Array.isArray(plansRes.data)) {
+        setPlans(plansRes.data.filter((p: any) => p.isActive));
+      }
+    } catch (err) {
+      console.error('Error loading membership data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubscriptionData();
+  }, []);
+
+  const handleUpgradePlan = async (planId: number, planName: string) => {
+    try {
+      setUpgrading(planId);
+      const cycle = isYearly ? 'YEARLY' : 'MONTHLY';
+      const res = await apiClient.post('/subscriptions/company/change-plan', {
+        planId,
+        billingCycle: cycle
+      });
+
+      alert(res.data?.message || `Successfully changed plan to ${planName}.`);
+      fetchSubscriptionData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to change plan.');
+    } finally {
+      setUpgrading(null);
+    }
+  };
+
+  const getFeatureList = (features: any): string[] => {
+    if (Array.isArray(features)) return features;
+    if (features && typeof features === 'object') {
+      return Object.keys(features).filter(k => features[k] === true);
+    }
+    return [];
+  };
+
   return (
-    <div>
-      <>
-        {/* Page Wrapper */}
-        <div className="page-wrapper">
-          <div className="content">
-            {/* Page Header */}
-            <div className="d-md-flex d-block align-items-center justify-content-between mb-3">
-              <div className="my-auto mb-2">
-                <h3 className="page-title mb-1">Membership Plans</h3>
-                <nav>
-                  <ol className="breadcrumb mb-0">
-                    <li className="breadcrumb-item">
-                      <Link to={routes.adminDashboard}>Dashboard</Link>
-                    </li>
-                    <li className="breadcrumb-item">Membership</li>
-                    <li className="breadcrumb-item active" aria-current="page">
-                      Membership Plans
-                    </li>
-                  </ol>
-                </nav>
-              </div>
-              <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-              <TooltipOption />
-                <div className="mb-2">
-                  <Link
-                    to="#"
-                    data-bs-toggle="modal" data-inert={true}
-                    data-bs-target="#add_membership"
-                    className="btn btn-primary d-flex align-items-center"
-                  >
-                    <i className="ti ti-square-rounded-plus me-2" />
-                    Add Membership
-                  </Link>
+    <div className="page-wrapper">
+      <div className="content">
+        {/* Header */}
+        <div className="d-md-flex d-block align-items-center justify-content-between mb-3">
+          <div className="my-auto mb-2">
+            <h3 className="page-title mb-1">Subscription &amp; Membership Plans</h3>
+            <nav>
+              <ol className="breadcrumb mb-0">
+                <li className="breadcrumb-item">
+                  <Link to={routes.adminDashboard}>Dashboard</Link>
+                </li>
+                <li className="breadcrumb-item">Membership</li>
+                <li className="breadcrumb-item active" aria-current="page">
+                  Membership Plans
+                </li>
+              </ol>
+            </nav>
+          </div>
+        </div>
+
+        {/* Current Subscription Status Card */}
+        {companySub && (
+          <div className="card bg-primary-transparent border-primary mb-4">
+            <div className="card-body p-4">
+              <div className="row align-items-center">
+                <div className="col-md-7">
+                  <span className="badge bg-primary mb-2">ACTIVE PLAN</span>
+                  <h3 className="text-dark fw-bold mb-1">
+                    {companySub.plan?.name} ({companySub.billingCycle || 'MONTHLY'})
+                  </h3>
+                  <p className="text-muted fs-13 mb-3">
+                    {companySub.plan?.description || 'Your current active organization subscription.'}
+                  </p>
+
+                  <div className="d-flex align-items-center flex-wrap gap-4">
+                    <div>
+                      <span className="text-muted fs-12 d-block">EMPLOYEE QUOTA</span>
+                      <h5 className={`mb-0 ${companySub.currentEmployeeCount >= companySub.maxEmployees ? 'text-danger' : 'text-dark'}`}>
+                        {companySub.currentEmployeeCount} / {companySub.maxEmployees} Employees
+                      </h5>
+                    </div>
+                    <div>
+                      <span className="text-muted fs-12 d-block">STORAGE LIMIT</span>
+                      <h5 className="mb-0 text-dark">
+                        {companySub.plan?.maxStorageGb || 5} GB
+                      </h5>
+                    </div>
+                    <div>
+                      <span className="text-muted fs-12 d-block">STATUS</span>
+                      <span className={`badge ${companySub.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'} fs-12`}>
+                        {companySub.status === 'TRIAL' ? `14-Day Trial (${companySub.trialDaysLeft} days left)` : companySub.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-md-5 text-md-end mt-3 mt-md-0">
+                  <div className="p-3 bg-white rounded-3 border d-inline-block text-center shadow-sm">
+                    <span className="text-muted fs-12">Price</span>
+                    <h2 className="text-primary fw-bold mb-0">
+                      ₹{(companySub.billingCycle === 'YEARLY' ? companySub.plan?.priceYearly : companySub.plan?.priceMonthly)?.toLocaleString('en-IN')}
+                      <span className="fs-13 text-muted fw-normal">/{companySub.billingCycle === 'YEARLY' ? 'year' : 'month'}</span>
+                    </h2>
+                  </div>
                 </div>
               </div>
             </div>
-            {/* /Page Header */}
-            <div className="card border-0">
-              <div className="card-body">
-                <div className="d-flex align-items-center justify-content-center">
-                  <h5>Monthly</h5>
-                  <div className="form-check form-check-md form-switch mx-3">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      role="switch"
-                    />
-                  </div>
-                  <h5>Yearly</h5>
-                </div>
+          </div>
+        )}
+
+        {/* Monthly / Yearly Billing Toggle */}
+        <div className="card border-0 mb-4">
+          <div className="card-body">
+            <div className="d-flex align-items-center justify-content-center">
+              <h5 className={`mb-0 ${!isYearly ? 'text-primary fw-bold' : 'text-muted'}`}>Monthly Billing</h5>
+              <div className="form-check form-check-md form-switch mx-3 mb-0">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  checked={isYearly}
+                  onChange={(e) => setIsYearly(e.target.checked)}
+                />
               </div>
-            </div>
-            <div className="row">
-              {/* Membership */}
-              <div className="col-lg-4 col-md-6 d-flex">
-                <div className="card flex-fill">
-                  <div className="card-body">
-                    <div className="border-bottom mb-3">
-                      <span className="badge bg-info mb-3">Starter Pack</span>
-                      <h3 className="mb-3">
-                        Essential tools for small and growing schools to
-                        streamline operations.
-                      </h3>
-                    </div>
-                    <div>
-                      <div className="bg-light-300 p-3 rounded-1 text-center mb-3">
-                        <h2>
-                          $99
-                          <span className="text-gray-7 fs-14 fw-normal">
-                            {" "}
-                            /month
-                          </span>
-                        </h2>
-                      </div>
-                      <ul className="list-unstyled gap-3">
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              5 Students &amp; Teachers
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              <div className="flex-grow-1">
-                                15 Classes &amp; Sections
-                              </div>
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              <div className="flex-grow-1">
-                                5 Subjects &amp; Exams
-                              </div>
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              <div className="flex-grow-1">5 Departments</div>
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              <div className="flex-grow-1">5 Designations</div>
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-danger me-2">
-                              <i className="ti ti-circle-x-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              Library &amp; Transport
-                            </div>
-                          </div>
-                        </li>
-                      </ul>
-                      <Link to="#" className="btn btn-primary w-100">
-                        Choose Plan
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Membership */}
-              {/* Membership */}
-              <div className="col-lg-4 col-md-6 d-flex">
-                <div className="card flex-fill">
-                  <div className="card-body">
-                    <div className="border-bottom mb-3">
-                      <div className="d-flex align-items-center justify-content-between">
-                        <span className="badge bg-info mb-3">
-                          Enterprise Pack
-                        </span>
-                        <span className="badge badge-soft-warning mb-3">
-                          Recommended
-                        </span>
-                      </div>
-                      <h3 className="mb-3">
-                        Comprehensive features for mid-sized schools to enhance
-                        efficiency.
-                      </h3>
-                    </div>
-                    <div>
-                      <div className="bg-light-300 p-3 rounded-1 text-center mb-3">
-                        <h2>
-                          $149
-                          <span className="text-gray-7 fs-14 fw-normal">
-                            {" "}
-                            /month
-                          </span>
-                        </h2>
-                      </div>
-                      <ul className="list-unstyled gap-3">
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              10 Students &amp; Teachers
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              20 Classes &amp; Sections
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              10 Subjects &amp; Exams
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">10 Departments</div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">10 Designations</div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-danger me-2">
-                              <i className="ti ti-circle-x-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              Library &amp; Transport
-                            </div>
-                          </div>
-                        </li>
-                      </ul>
-                      <Link to="#" className="btn btn-primary w-100">
-                        Choose Plan
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Membership */}
-              {/* Membership */}
-              <div className="col-lg-4 col-md-6 d-flex">
-                <div className="card flex-fill">
-                  <div className="card-body">
-                    <div className="border-bottom mb-3">
-                      <span className="badge bg-info mb-3">Premium Pack</span>
-                      <h3 className="mb-3">
-                        Robust solutions for large schools to optimize
-                        management.
-                      </h3>
-                    </div>
-                    <div>
-                      <div className="bg-light-300 p-3 rounded-1 text-center mb-3">
-                        <h2>
-                          $199
-                          <span className="text-gray-7 fs-14 fw-normal">
-                            {" "}
-                            /month
-                          </span>
-                        </h2>
-                      </div>
-                      <ul className="list-unstyled gap-3">
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              Unlimited Students &amp; Teachers
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              Unlimited Classes &amp; Sections
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              Unlimited Subjects &amp; Exams
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              Unlimited Departments
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-check-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              Unlimited Designations
-                            </div>
-                          </div>
-                        </li>
-                        <li className="mb-3">
-                          <div className="d-flex align-items-center">
-                            <span className="flex-shrink-0 text-success me-2">
-                              <i className="ti ti-circle-x-filled fs-15 align-middle" />
-                            </span>
-                            <div className="flex-grow-1">
-                              Library &amp; Transport
-                            </div>
-                          </div>
-                        </li>
-                      </ul>
-                      <Link to="#" className="btn btn-primary w-100">
-                        Choose Plan
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Membership */}
+              <h5 className={`mb-0 ${isYearly ? 'text-primary fw-bold' : 'text-muted'}`}>
+                Yearly Billing <span className="badge bg-success-transparent text-success fs-12 ms-1">Save up to 17%</span>
+              </h5>
             </div>
           </div>
         </div>
-        {/* /Page Wrapper */}
-        {/* Add Plan */}
-        <div className="modal fade" id="add_membership">
-          <div className="modal-dialog modal-dialog-centered  modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h4 className="modal-title">Add Plan</h4>
-                <button
-                  type="button"
-                  className="btn-close custom-btn-close"
-                  data-bs-dismiss="modal"
-                  aria-label="Close"
-                >
-                  <i className="ti ti-x" />
-                </button>
-              </div>
-              <form >
-                <div className="modal-body mb-2">
-                  <div className="row">
-                    <div className="col-lg-4 col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">Plan Name</label>
-                        <input type="text" className="form-control" />
-                      </div>
-                    </div>
-                    <div className="col-lg-4 col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">Type</label>
-                        <CommonSelect
-                          className="select"
-                          options={membershipplan}
-                        />
-                      </div>
-                    </div>
-                    <div className="col-lg-4 col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">Plan Price</label>
-                        <input type="text" className="form-control" />
-                      </div>
-                    </div>
-                    <div className="col-md-12">
-                      <h5 className="mb-3">Plan Settings</h5>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">
-                          Students &amp; Teachers
-                        </label>
-                        <div className=" d-flex align-items-center mb-3">
-                          <div className="w-100 me-3">
-                            <input type="text" className="form-control" />
-                          </div>
-                          <div className="status-toggle modal-status">
-                            <input
-                              type="checkbox"
-                              id="plan"
-                              className="check"
-                            />
-                            <label htmlFor="plan" className="checktoggle">
-                              {" "}
-                            </label>
-                          </div>
+
+        {/* Plans Grid */}
+        {loading ? (
+          <div className="text-center py-5">
+            <div className="spinner-border text-primary" role="status">
+              <span className="visually-hidden">Loading plans...</span>
+            </div>
+          </div>
+        ) : (
+          <div className="row">
+            {plans.map((p) => {
+              const isCurrent = companySub?.plan?.id === p.id;
+              const featList = getFeatureList(p.features);
+              const price = isYearly ? p.priceYearly : p.priceMonthly;
+
+              return (
+                <div className="col-lg-4 col-md-6 d-flex mb-4" key={p.id}>
+                  <div className={`card flex-fill w-100 ${isCurrent ? 'border-2 border-primary shadow-sm' : 'border'}`}>
+                    <div className="card-body d-flex flex-column">
+                      <div className="border-bottom pb-3 mb-3">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <h4 className="fw-bold mb-0">{p.name}</h4>
+                          {isCurrent && <span className="badge bg-primary">Current Plan</span>}
                         </div>
-                        <label className="checkboxs">
-                          <input type="checkbox" />
-                          <span className="checkmarks" />
-                          Unlimited
-                        </label>
+                        <p className="text-muted fs-13 mb-0">
+                          {p.description || 'Flexible HR suite tailored for your team.'}
+                        </p>
                       </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">
-                          Classes &amp; Sections
-                        </label>
-                        <div className=" d-flex align-items-center mb-3">
-                          <div className="w-100 me-3">
-                            <input type="text" className="form-control" />
-                          </div>
-                          <div className="status-toggle modal-status">
-                            <input
-                              type="checkbox"
-                              id="plan1"
-                              className="check"
-                            />
-                            <label htmlFor="plan1" className="checktoggle">
-                              {" "}
-                            </label>
-                          </div>
-                        </div>
-                        <label className="checkboxs">
-                          <input type="checkbox" />
-                          <span className="checkmarks" />
-                          Unlimited
-                        </label>
+
+                      <div className="bg-light p-3 rounded-3 text-center mb-3">
+                        <h2 className="text-dark fw-bold mb-0">
+                          ₹{price?.toLocaleString('en-IN')}
+                          <span className="text-muted fs-13 fw-normal">/{isYearly ? 'yr' : 'mo'}</span>
+                        </h2>
+                        <span className="fs-12 text-muted">Up to {p.maxEmployees} Employees • {p.maxStorageGb} GB Storage</span>
                       </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">
-                          Subjects &amp; Exams
-                        </label>
-                        <div className=" d-flex align-items-center mb-3">
-                          <div className="w-100 me-3">
-                            <input type="text" className="form-control" />
-                          </div>
-                          <div className="status-toggle modal-status">
-                            <input
-                              type="checkbox"
-                              id="plan2"
-                              className="check"
-                            />
-                            <label htmlFor="plan2" className="checktoggle">
-                              {" "}
-                            </label>
-                          </div>
-                        </div>
-                        <label className="checkboxs">
-                          <input type="checkbox" />
-                          <span className="checkmarks" />
-                          Unlimited
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">Departments</label>
-                        <div className=" d-flex align-items-center mb-3">
-                          <div className="w-100 me-3">
-                            <input type="text" className="form-control" />
-                          </div>
-                          <div className="status-toggle modal-status">
-                            <input
-                              type="checkbox"
-                              id="plan3"
-                              className="check"
-                            />
-                            <label htmlFor="plan3" className="checktoggle">
-                              {" "}
-                            </label>
-                          </div>
-                        </div>
-                        <label className="checkboxs">
-                          <input type="checkbox" />
-                          <span className="checkmarks" />
-                          Unlimited
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">Designations</label>
-                        <div className=" d-flex align-items-center mb-3">
-                          <div className="w-100 me-3">
-                            <input type="text" className="form-control" />
-                          </div>
-                          <div className="status-toggle modal-status">
-                            <input
-                              type="checkbox"
-                              id="plan4"
-                              className="check"
-                            />
-                            <label htmlFor="plan4" className="checktoggle">
-                              {" "}
-                            </label>
-                          </div>
-                        </div>
-                        <label className="checkboxs">
-                          <input type="checkbox" />
-                          <span className="checkmarks" />
-                          Unlimited
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">
-                          Library &amp; Transport
-                        </label>
-                        <div className=" d-flex align-items-center mb-3">
-                          <div className="w-100 me-3">
-                            <input type="text" className="form-control" />
-                          </div>
-                          <div className="status-toggle modal-status">
-                            <input
-                              type="checkbox"
-                              id="plan5"
-                              className="check"
-                            />
-                            <label htmlFor="plan5" className="checktoggle">
-                              {" "}
-                            </label>
-                          </div>
-                        </div>
-                        <label className="checkboxs">
-                          <input type="checkbox" />
-                          <span className="checkmarks" />
-                          Unlimited
-                        </label>
+
+                      <h6 className="fw-semibold mb-2 fs-13 text-uppercase text-muted">Enabled Modules</h6>
+                      <ul className="list-unstyled flex-grow-1 mb-4">
+                        {featList.length > 0 ? (
+                          featList.map((f: string) => (
+                            <li className="mb-2" key={f}>
+                              <div className="d-flex align-items-center">
+                                <span className="text-success me-2">
+                                  <i className="ti ti-circle-check-filled fs-16 align-middle" />
+                                </span>
+                                <span className="fs-14 text-dark">{f}</span>
+                              </div>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="text-muted fs-13">Core HR Access</li>
+                        )}
+                      </ul>
+
+                      <div className="mt-auto">
+                        {isCurrent ? (
+                          <button className="btn btn-light w-100 text-muted border fw-semibold" disabled>
+                            <i className="ti ti-check me-1" /> Active Plan
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-primary w-100 fw-semibold"
+                            disabled={upgrading === p.id}
+                            onClick={() => handleUpgradePlan(p.id, p.name)}
+                          >
+                            {upgrading === p.id 
+                              ? 'Updating Plan...' 
+                              : (companySub?.plan?.maxEmployees && p.maxEmployees < companySub.plan.maxEmployees)
+                                ? `Degrade to ${p.name}`
+                                : `Upgrade to ${p.name}`
+                            }
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
-                <div className="modal-footer">
-                  <Link
-                    to="#"
-                    className="btn btn-light me-2"
-                    data-bs-dismiss="modal"
-                  >
-                    Cancel
-                  </Link>
-                  <Link to="#" className="btn btn-primary" data-bs-dismiss="modal">
-                    Add Plan
-                  </Link>
-                </div>
-              </form>
-            </div>
+              );
+            })}
           </div>
-        </div>
-        {/* /Add Plan */}
-      </>
+        )}
+      </div>
     </div>
   );
 };

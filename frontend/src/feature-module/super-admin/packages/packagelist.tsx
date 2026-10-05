@@ -39,6 +39,19 @@ const Packages = () => {
     isActive: true
   });
 
+  const [editingPlan, setEditingPlan] = useState<any>({
+    id: 0,
+    name: '',
+    code: '',
+    description: '',
+    priceMonthly: 0,
+    priceYearly: 0,
+    maxEmployees: 10,
+    maxStorageGb: 5,
+    features: [],
+    isActive: true
+  });
+
   const [customFeature, setCustomFeature] = useState('');
 
   const availableModules = [
@@ -67,6 +80,28 @@ const Packages = () => {
     fetchPlans();
   }, []);
 
+  const openEditModal = (plan: any) => {
+    let enabledFeats: string[] = [];
+    if (Array.isArray(plan.features)) {
+      enabledFeats = plan.features;
+    } else if (plan.features && typeof plan.features === 'object') {
+      enabledFeats = Object.keys(plan.features).filter(k => plan.features[k] === true);
+    }
+
+    setEditingPlan({
+      id: plan.id,
+      name: plan.name || '',
+      code: plan.code || '',
+      description: plan.description || '',
+      priceMonthly: plan.priceMonthly || 0,
+      priceYearly: plan.priceYearly || 0,
+      maxEmployees: plan.maxEmployees || 10,
+      maxStorageGb: plan.maxStorageGb || 5,
+      features: enabledFeats,
+      isActive: plan.isActive ?? true
+    });
+  };
+
   const handleModuleToggle = (moduleName: string) => {
     setNewPlan(prev => {
       const exists = prev.features.includes(moduleName);
@@ -84,6 +119,23 @@ const Packages = () => {
     }));
   };
 
+  const handleEditModuleToggle = (moduleName: string) => {
+    setEditingPlan((prev: any) => {
+      const exists = prev.features.includes(moduleName);
+      const updated = exists
+        ? prev.features.filter((f: string) => f !== moduleName)
+        : [...prev.features, moduleName];
+      return { ...prev, features: updated };
+    });
+  };
+
+  const handleEditSelectAllModules = (checked: boolean) => {
+    setEditingPlan((prev: any) => ({
+      ...prev,
+      features: checked ? [...availableModules] : []
+    }));
+  };
+
   const handleAddPlanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPlan.name.trim()) {
@@ -95,9 +147,14 @@ const Packages = () => {
       
       let featList = [...newPlan.features];
       if (customFeature.trim()) {
-        const customArr = customFeature.split(',').map(f => f.trim()).filter(Boolean);
+        const customArr = customFeature.split(',').map((f: string) => f.trim()).filter(Boolean);
         featList = Array.from(new Set([...featList, ...customArr]));
       }
+
+      const featMap: Record<string, boolean> = {};
+      availableModules.forEach(mod => {
+        featMap[mod] = featList.includes(mod);
+      });
 
       await apiClient.post('/super-admin/plans', {
         name: newPlan.name,
@@ -107,18 +164,16 @@ const Packages = () => {
         priceYearly: Number(newPlan.priceYearly),
         maxEmployees: Number(newPlan.maxEmployees),
         maxStorageGb: Number(newPlan.maxStorageGb),
-        features: featList,
+        features: featMap,
         isActive: newPlan.isActive
       });
 
       alert('Plan created successfully!');
       fetchPlans();
 
-      // Close modal
       const closeBtn = document.getElementById('close_add_plans_modal');
       if (closeBtn) closeBtn.click();
 
-      // Reset form
       setNewPlan({
         name: '',
         code: '',
@@ -136,6 +191,39 @@ const Packages = () => {
       setCustomFeature('');
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to create plan');
+    }
+  };
+
+  const handleEditPlanSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPlan || !editingPlan.name.trim()) {
+      alert('Plan Name is required');
+      return;
+    }
+    try {
+      const featMap: Record<string, boolean> = {};
+      availableModules.forEach(mod => {
+        featMap[mod] = editingPlan.features.includes(mod);
+      });
+
+      await apiClient.put(`/super-admin/plans/${editingPlan.id}`, {
+        name: editingPlan.name,
+        description: editingPlan.description,
+        priceMonthly: Number(editingPlan.priceMonthly),
+        priceYearly: Number(editingPlan.priceYearly),
+        maxEmployees: Number(editingPlan.maxEmployees),
+        maxStorageGb: Number(editingPlan.maxStorageGb),
+        features: featMap,
+        isActive: editingPlan.isActive
+      });
+
+      alert('Plan updated successfully!');
+      fetchPlans();
+
+      const closeBtn = document.getElementById('close_edit_plans_modal');
+      if (closeBtn) closeBtn.click();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update plan');
     }
   };
 
@@ -198,6 +286,26 @@ const Packages = () => {
       ),
       sorter: (a: PackageListItem, b: PackageListItem) => a.Status.localeCompare(b.Status),
     },
+    {
+      title: "Action",
+      dataIndex: "action",
+      render: (_: any, record: PackageListItem) => {
+        const fullPlan = plans.find(p => p.id === record.id);
+        return (
+          <div className="action-icon d-inline-flex">
+            <Link
+              to="#"
+              className="me-2"
+              data-bs-toggle="modal"
+              data-bs-target="#edit_plans"
+              onClick={() => openEditModal(fullPlan || record)}
+            >
+              <i className="ti ti-edit text-primary fs-16" />
+            </Link>
+          </div>
+        );
+      }
+    }
   ];
 
   const planName = [
@@ -795,6 +903,7 @@ const Packages = () => {
               <h4 className="modal-title">Edit Plan</h4>
               <button
                 type="button"
+                id="close_edit_plans_modal"
                 className="btn-close custom-btn-close"
                 data-bs-dismiss="modal"
                 aria-label="Close"
@@ -802,351 +911,155 @@ const Packages = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form>
+            <form onSubmit={handleEditPlanSubmit}>
               <div className="modal-body pb-0">
                 <div className="row">
-                  <div className="col-md-12">
-                    <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
-                      <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-30.jpg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </div>
-                      <div className="profile-upload">
-                        <div className="mb-2">
-                          <h6 className="mb-1">Upload Profile Image</h6>
-                          <p className="fs-12">Image should be below 4 mb</p>
-                        </div>
-                        <div className="profile-uploader d-flex align-items-center">
-                          <div className="drag-upload-btn btn btn-sm btn-primary me-2">
-                            Upload
-                            <input
-                              type="file"
-                              className="form-control image-sign"
-                              multiple
-                            />
-                          </div>
-                          <Link
-                            to="#"
-                            className="btn btn-light btn-sm"
-                          >
-                            Cancel
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                   <div className="col-md-6">
-                    <div className="mb-3 ">
+                    <div className="mb-3">
                       <label className="form-label">
                         Plan Name<span className="text-danger"> *</span>
                       </label>
-                      <CommonSelect
-                        className='select'
-                        options={planName}
-                        defaultValue={planName[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Plan Type<span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={planType}
-                        defaultValue={planType[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Plan Position<span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={planPosition}
-                        defaultValue={planPosition[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Plan Currency<span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={currency}
-                        defaultValue={currency[1]}
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="e.g. Starter Plan"
+                        value={editingPlan.name}
+                        onChange={(e) => setEditingPlan({ ...editingPlan, name: e.target.value })}
+                        required
                       />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <div className="d-flex justify-content-between">
-                        <label className="form-label">
-                          Plan Currency<span className="text-danger"> *</span>
-                        </label>
-                        <span className="text-primary">
-                          <i className="fa-solid fa-circle-exclamation me-2" />
-                          Set 0 for free
-                        </span>
-                      </div>
-                      <CommonSelect
-                        className='select'
-                        options={plancurrency}
-                        defaultValue={plancurrency[1]}
+                      <label className="form-label">
+                        Plan Code / Identifier
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editingPlan.code}
+                        disabled
                       />
                     </div>
                   </div>
-                  <div className="col-md-3">
-                    <div className="mb-3 ">
+
+                  <div className="col-md-6">
+                    <div className="mb-3">
                       <label className="form-label">
-                        Discount Type<span className="text-danger"> *</span>
+                        Monthly Price (₹ INR)<span className="text-danger"> *</span>
                       </label>
-                      <div className="pass-group">
-                        <CommonSelect
-                          className='select'
-                          options={discountType}
-                          defaultValue={discountType[1]}
+                      <div className="input-group">
+                        <span className="input-group-text">₹</span>
+                        <input
+                          type="number"
+                          className="form-control"
+                          value={editingPlan.priceMonthly}
+                          onChange={(e) => setEditingPlan({ ...editingPlan, priceMonthly: Number(e.target.value) })}
+                          required
                         />
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-3">
-                    <div className="mb-3 ">
+                  <div className="col-md-6">
+                    <div className="mb-3">
                       <label className="form-label">
-                        Discount<span className="text-danger"> *</span>
+                        Yearly Price (₹ INR)<span className="text-danger"> *</span>
                       </label>
-                      <div className="pass-group">
-                        <input type="text" className="form-control" />
+                      <div className="input-group">
+                        <span className="input-group-text">₹</span>
+                        <input
+                          type="number"
+                          className="form-control"
+                          value={editingPlan.priceYearly}
+                          onChange={(e) => setEditingPlan({ ...editingPlan, priceYearly: Number(e.target.value) })}
+                          required
+                        />
                       </div>
                     </div>
                   </div>
-                  <div className="col-lg-3">
+
+                  <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Limitations Invoices</label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Max Employees</label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        value={editingPlan.maxEmployees}
+                        onChange={(e) => setEditingPlan({ ...editingPlan, maxEmployees: Number(e.target.value) })}
+                      />
                     </div>
                   </div>
-                  <div className="col-lg-3">
+                  <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Max Customers</label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Max Storage (GB)</label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        value={editingPlan.maxStorageGb}
+                        onChange={(e) => setEditingPlan({ ...editingPlan, maxStorageGb: Number(e.target.value) })}
+                      />
                     </div>
                   </div>
-                  <div className="col-lg-3">
+                  <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Product</label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Status<span className="text-danger"> *</span></label>
+                      <select
+                        className="form-select"
+                        value={editingPlan.isActive ? 'Active' : 'Inactive'}
+                        onChange={(e) => setEditingPlan({ ...editingPlan, isActive: e.target.value === 'Active' })}
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                      </select>
                     </div>
                   </div>
-                  <div className="col-lg-3">
-                    <div className="mb-3">
-                      <label className="form-label">Supplier</label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
+
                   <div className="col-lg-12">
-                    <div className="d-flex align-items-center justify-content-between mb-3">
-                      <h6>Plan Modules</h6>
+                    <div className="d-flex align-items-center justify-content-between mb-2">
+                      <h6 className="mb-0">Plan Modules &amp; Features</h6>
                       <div className="form-check d-flex align-items-center">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
+                        <input
+                          className="form-check-input me-1"
+                          type="checkbox"
+                          id="editSelectAllModulesCheck"
+                          checked={editingPlan.features?.length === availableModules.length}
+                          onChange={(e) => handleEditSelectAllModules(e.target.checked)}
+                        />
+                        <label className="form-check-label text-dark fw-medium" htmlFor="editSelectAllModulesCheck">
                           Select All
                         </label>
                       </div>
                     </div>
-                  </div>
-                  <div className="row">
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Employees
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Invoices
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Reports
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Contacts
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Clients
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Estimates
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Goals
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Deals
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Projects
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Payments
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Assets
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Leads
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Tickets
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Taxes
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Activities
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-lg-3 col-sm-6">
-                      <div className="form-check d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 text-dark fw-medium">
-                          <input className="form-check-input" type="checkbox" />
-                          Pipelines
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="d-flex align-items-center mb-3">
-                        <label className="form-check-label mt-0 me-2 text-dark fw-medium">
-                          Access Trial
-                        </label>
-                        <div className="form-check form-switch me-2">
-                          <input
-                            className="form-check-input me-2"
-                            type="checkbox"
-                            role="switch"
-                          />
+                    <div className="row bg-light rounded p-3 mb-3">
+                      {availableModules.map((mod) => (
+                        <div className="col-lg-3 col-sm-6 mb-2" key={mod}>
+                          <div className="form-check">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id={`edit_mod_${mod}`}
+                              checked={editingPlan.features?.includes(mod)}
+                              onChange={() => handleEditModuleToggle(mod)}
+                            />
+                            <label className="form-check-label text-dark" htmlFor={`edit_mod_${mod}`}>
+                              {mod}
+                            </label>
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
                   </div>
-                  <div className="row align-items-center gx-3">
-                    <div className="col-md-4">
-                      <div className="d-flex align-items-center mb-3">
-                        <div className="flex-fill">
-                          <label className="form-label">Trial Days</label>
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="d-block align-items-center ms-3">
-                        <label className="form-check-label mt-0 me-2  text-dark">
-                          Is Recommended
-                        </label>
-                        <div className="form-check form-switch me-2">
-                          <input
-                            className="form-check-input me-2"
-                            type="checkbox"
-                            role="switch"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-5">
-                      <div className="mb-3 ">
-                        <label className="form-label">
-                          Status<span className="text-danger"> *</span>
-                        </label>
-                        <CommonSelect
-                          className='select'
-                          options={status}
-                          defaultValue={status[1]}
-                        />
-                      </div>
-                    </div>
-                  </div>
+
                   <div className="col-md-12">
                     <div className="mb-3">
                       <label className="form-label">Description</label>
-                      <textarea className="form-control" defaultValue={""} />
+                      <textarea
+                        className="form-control"
+                        rows={2}
+                        placeholder="Description of this subscription plan..."
+                        value={editingPlan.description}
+                        onChange={(e) => setEditingPlan({ ...editingPlan, description: e.target.value })}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1159,7 +1072,7 @@ const Packages = () => {
                 >
                   Cancel
                 </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                <button type="submit" className="btn btn-primary">
                   Save Changes
                 </button>
               </div>
@@ -1169,8 +1082,6 @@ const Packages = () => {
       </div>
       {/* /Edit Plan */}
     </>
-
-
   )
 }
 
