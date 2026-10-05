@@ -1,5 +1,6 @@
 // backend/src/controllers/subscriptionController.js
 const prisma = require('../config/prisma');
+const bcrypt = require('bcryptjs');
 
 // Helper to resolve features map seamlessly
 function resolveFeatures(planFeatures, customFeatures) {
@@ -636,7 +637,7 @@ async function getDashboardSummary(req, res) {
 
 async function changeCompanyPlan(req, res) {
   try {
-    let companyId = req.user?.companyId;
+    let companyId = req.params?.companyId ? parseInt(req.params.companyId, 10) : (req.body?.companyId ? parseInt(req.body.companyId, 10) : req.user?.companyId);
 
     if (!companyId && req.user?.id) {
       const dbUser = await prisma.user.findUnique({
@@ -754,6 +755,377 @@ async function changeCompanyPlan(req, res) {
   }
 }
 
+async function createCompanyWithSubscription(req, res) {
+  try {
+    const {
+      name,
+      email,
+      subdomain,
+      phone,
+      password,
+      planId,
+      planName,
+      billingCycle,
+      status,
+      address,
+      industry,
+      companySize
+    } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({ message: 'Company Name and Email are required.' });
+    }
+
+    let cleanSubdomain = (subdomain || name).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    if (!cleanSubdomain || cleanSubdomain.length < 2) {
+      cleanSubdomain = `comp${Date.now().toString().slice(-6)}`;
+    }
+
+    // Check if subdomain is already taken; append number if needed
+    let finalSubdomain = cleanSubdomain;
+    let counter = 2;
+    while (true) {
+      const taken = await prisma.company.findUnique({ where: { subdomain: finalSubdomain } });
+      if (!taken) break;
+      finalSubdomain = `${cleanSubdomain}${counter}`;
+      counter++;
+    }
+
+    // Check if email already exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(409).json({ message: 'An account with this email already exists.' });
+    }
+
+    // Find target plan by planId or planName or default to Starter Plan
+    let selectedPlan = null;
+    if (planId) {
+      const pid = parseInt(planId, 10);
+      if (!isNaN(pid)) {
+        selectedPlan = await prisma.subscriptionPlan.findUnique({ where: { id: pid } });
+      }
+    }
+    if (!selectedPlan && planName) {
+      selectedPlan = await prisma.subscriptionPlan.findFirst({
+        where: { name: { contains: planName } }
+      });
+    }
+    if (!selectedPlan) {
+      selectedPlan = await prisma.subscriptionPlan.findFirst({ where: { code: 'STARTER' } });
+    }
+    if (!selectedPlan) {
+      selectedPlan = await prisma.subscriptionPlan.findFirst();
+    }
+
+    const hashedPassword = await bcrypt.hash(password || 'Password123!', 10);
+    const cycle = (billingCycle === 'YEARLY' || billingCycle === 'Yearly') ? 'YEARLY' : 'MONTHLY';
+    const subStatus = (status === 'ACTIVE' || status === 'Active') ? 'ACTIVE' : 'TRIAL';
+
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
+    const { seedDefaultCompanyRoles } = require('../utils/seedDefaultRoles');
+
+    const result = await prisma.$transaction(async (tx) => {
+      const company = await tx.company.create({
+        data: {
+          name,
+          email,
+          subdomain: finalSubdomain,
+          phone: phone || null,
+          address: address || null,
+          industry: industry || null,
+          companySize: companySize || null,
+          isActive: true,
+          isEmailVerified: true
+        }
+      });
+
+      const user = await tx.user.create({
+        data: {
+          companyId: company.id,
+          name: `${name} Admin`,
+          email,
+          password: hashedPassword,
+          role: 'COMPANY_ADMIN',
+          accountStatus: 'ACTIVE'
+        }
+      });
+
+      await tx.companySetting.create({
+        data: { companyId: company.id }
+      });
+
+      if (typeof seedDefaultCompanyRoles === 'function') {
+        await seedDefaultCompanyRoles(tx, company.id);
+      }
+
+      const subscription = await tx.subscription.create({
+        data: {
+          companyId: company.id,
+          planId: selectedPlan.id,
+          status: subStatus,
+          billingCycle: cycle,
+          trialEndsAt
+        },
+        include: { plan: true }
+      });
+
+      return { company, user, subscription };
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `Company "${result.company.name}" created successfully with ${result.subscription.plan.name} (${result.subscription.status}).`,
+      company: result.company,
+      subscription: result.subscription
+    });
+  } catch (error) {
+    console.error('Error creating company with subscription:', error);
+    res.status(500).json({ message: error.message || 'Failed to create company' });
+  }
+}
+
+async function getSuperAdminCompanies(req, res) {
+  try {
+    const { search, plan, status, domainStatus } = req.query;
+
+    let whereClause = {};
+    if (search) {
+      whereClause.OR = [
+        { name: { contains: search } },
+        { email: { contains: search } },
+        { subdomain: { contains: search } }
+      ];
+    }
+    if (status === 'Active' || status === 'active') {
+      whereClause.isActive = true;
+    } else if (status === 'Inactive' || status === 'inactive') {
+      whereClause.isActive = false;
+    }
+    if (domainStatus) {
+      whereClause.domainStatus = domainStatus.toUpperCase();
+    }
+
+    const companies = await prisma.company.findMany({
+      where: whereClause,
+      include: {
+        subscription: {
+          include: {
+            plan: true
+          }
+        },
+        _count: {
+          select: { users: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const formattedCompanies = companies.map(comp => {
+      const sub = comp.subscription;
+      const planName = sub?.plan?.name || 'Starter';
+      const cycle = sub?.billingCycle ? ` (${sub.billingCycle.charAt(0) + sub.billingCycle.slice(1).toLowerCase()})` : ' (Monthly)';
+      const fullPlanDisplay = `${planName}${cycle}`;
+
+      return {
+        id: comp.id,
+        name: comp.name,
+        email: comp.email,
+        subdomain: comp.subdomain,
+        accountUrl: `${comp.subdomain}.yourhrms.com`,
+        logoUrl: comp.logoUrl,
+        plan: fullPlanDisplay,
+        planId: sub?.planId,
+        planName: planName,
+        billingCycle: sub?.billingCycle || 'MONTHLY',
+        subscriptionStatus: sub?.status || 'TRIAL',
+        createdAt: comp.createdAt,
+        isActive: comp.isActive,
+        status: comp.isActive ? 'Active' : 'Inactive',
+        domainStatus: comp.domainStatus || 'APPROVED',
+        userCount: comp._count?.users || 0
+      };
+    });
+
+    // Stats for dashboard cards
+    const totalCompanies = await prisma.company.count();
+    const activeCompanies = await prisma.company.count({ where: { isActive: true } });
+    const inactiveCompanies = await prisma.company.count({ where: { isActive: false } });
+    const pendingDomains = await prisma.company.count({ where: { domainStatus: 'PENDING' } });
+
+    res.json({
+      companies: formattedCompanies,
+      stats: {
+        totalCompanies,
+        activeCompanies,
+        inactiveCompanies,
+        pendingDomains
+      }
+    });
+  } catch (error) {
+    console.error('Error in getSuperAdminCompanies:', error);
+    res.status(500).json({ message: error.message || 'Failed to fetch companies' });
+  }
+}
+
+async function updateSuperAdminCompany(req, res) {
+  try {
+    const { id } = req.params;
+    const { name, email, subdomain, phone, address, isActive, domainStatus } = req.body;
+
+    const companyId = parseInt(id, 10);
+    if (isNaN(companyId)) {
+      return res.status(400).json({ message: 'Invalid company ID' });
+    }
+
+    const updated = await prisma.company.update({
+      where: { id: companyId },
+      data: {
+        ...(name && { name }),
+        ...(email && { email }),
+        ...(subdomain && { subdomain: subdomain.toLowerCase().trim().replace(/[^a-z0-9]/g, '') }),
+        ...(phone !== undefined && { phone }),
+        ...(address !== undefined && { address }),
+        ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+        ...(domainStatus && { domainStatus })
+      }
+    });
+
+    res.json({ message: 'Company updated successfully', company: updated });
+  } catch (error) {
+    console.error('Error updating company:', error);
+    res.status(500).json({ message: error.message || 'Failed to update company' });
+  }
+}
+
+async function deleteSuperAdminCompany(req, res) {
+  try {
+    const { id } = req.params;
+    const companyId = parseInt(id, 10);
+    if (isNaN(companyId)) {
+      return res.status(400).json({ message: 'Invalid company ID' });
+    }
+
+    await prisma.company.update({
+      where: { id: companyId },
+      data: { isActive: false }
+    });
+
+    res.json({ message: 'Company deactivated successfully' });
+  } catch (error) {
+    console.error('Error deleting company:', error);
+    res.status(500).json({ message: error.message || 'Failed to delete company' });
+  }
+}
+
+async function getSuperAdminDomains(req, res) {
+  try {
+    const { status, search } = req.query;
+
+    let whereClause = {};
+    if (status && status !== 'all') {
+      whereClause.domainStatus = status.toUpperCase();
+    }
+    if (search) {
+      whereClause.OR = [
+        { name: { contains: search } },
+        { email: { contains: search } },
+        { subdomain: { contains: search } }
+      ];
+    }
+
+    const domains = await prisma.company.findMany({
+      where: whereClause,
+      include: {
+        subscription: {
+          include: { plan: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const formattedDomains = domains.map(d => ({
+      id: d.id,
+      companyName: d.name,
+      email: d.email,
+      domain: `${d.subdomain}.yourhrms.com`,
+      subdomain: d.subdomain,
+      status: d.domainStatus || 'PENDING',
+      isActive: d.isActive,
+      createdDate: d.createdAt,
+      plan: d.subscription?.plan?.name || 'Starter'
+    }));
+
+    res.json({ domains: formattedDomains });
+  } catch (error) {
+    console.error('Error fetching domain requests:', error);
+    res.status(500).json({ message: error.message || 'Failed to fetch domain requests' });
+  }
+}
+
+async function updateDomainStatus(req, res) {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const companyId = parseInt(id, 10);
+    if (isNaN(companyId)) {
+      return res.status(400).json({ message: 'Invalid company ID' });
+    }
+
+    const newStatus = status ? status.toUpperCase() : 'APPROVED';
+    const isApproved = newStatus === 'APPROVED';
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      include: { subscription: true }
+    });
+
+    if (!company) {
+      return res.status(404).json({ message: 'Company not found' });
+    }
+
+    const updatedCompany = await prisma.company.update({
+      where: { id: companyId },
+      data: {
+        domainStatus: newStatus,
+        isActive: isApproved
+      }
+    });
+
+    if (isApproved && !company.subscription) {
+      let starterPlan = await prisma.subscriptionPlan.findFirst({ where: { code: 'STARTER' } });
+      if (!starterPlan) {
+        starterPlan = await prisma.subscriptionPlan.findFirst();
+      }
+
+      if (starterPlan) {
+        const trialEndsAt = new Date();
+        trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
+        await prisma.subscription.create({
+          data: {
+            companyId: company.id,
+            planId: starterPlan.id,
+            status: 'TRIAL',
+            billingCycle: 'MONTHLY',
+            trialEndsAt
+          }
+        });
+      }
+    }
+
+    res.json({
+      message: `Domain request ${newStatus.toLowerCase()} successfully`,
+      company: updatedCompany
+    });
+  } catch (error) {
+    console.error('Error updating domain status:', error);
+    res.status(500).json({ message: error.message || 'Failed to update domain status' });
+  }
+}
+
 module.exports = {
   getPlans,
   createPlan,
@@ -768,5 +1140,11 @@ module.exports = {
   updateInvoiceStatus,
   getCompanySubscription,
   getDashboardSummary,
-  changeCompanyPlan
+  changeCompanyPlan,
+  createCompanyWithSubscription,
+  getSuperAdminCompanies,
+  updateSuperAdminCompany,
+  deleteSuperAdminCompany,
+  getSuperAdminDomains,
+  updateDomainStatus
 };

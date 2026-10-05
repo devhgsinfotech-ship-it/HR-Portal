@@ -193,6 +193,7 @@ async function register(req, res) {
                     companySize: companySize || null,
                     address: address || null,
                     logoUrl: logoUrl || null,
+                    domainStatus: 'PENDING',          // ← Pending Super Admin Domain Approval
                 },
             });
 

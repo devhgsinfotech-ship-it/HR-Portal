@@ -1,108 +1,172 @@
-import { Link } from 'react-router-dom'
-import { all_routes } from '../../../router/all_routes'
-import PredefinedDateRanges from '../../../core/common/datePicker'
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { all_routes } from '../../../router/all_routes';
 import ImageWithBasePath from '../../../core/common/imageWithBasePath';
 import Table from "../../../core/common/dataTable/index";
-import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
-import { domain_details } from '../../../core/data/json/domainDetails'
+import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
+import apiClient from '../../../core/utils/apiClient';
 
 interface DomainDetails {
-  CompanyName: string;
-  Image: string;
-  AccountURL: string;
-  Plan: string;
-  CreatedDate: string;
-  DomainStatus: 'Approved' | 'Pending' | 'Rejected' | string;
+  id: number;
+  companyName: string;
+  email: string;
+  domain: string;
+  subdomain: string;
+  plan: string;
+  createdDate: string;
+  status: 'APPROVED' | 'PENDING' | 'REJECTED' | string;
 }
 
 const Domain = () => {
-  const data: DomainDetails[] = domain_details;
+  const [domains, setDomains] = useState<DomainDetails[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedDomain, setSelectedDomain] = useState<DomainDetails | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'danger', text: string } | null>(null);
+
+  const fetchDomains = async () => {
+    try {
+      setLoading(true);
+      const res = await apiClient.get('/subscriptions/domains');
+      if (res.data && res.data.domains) {
+        setDomains(res.data.domains);
+      }
+    } catch (err) {
+      console.error('Failed to fetch domains:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDomains();
+  }, []);
+
+  const handleUpdateStatus = async (domainId: number, newStatus: 'APPROVED' | 'REJECTED') => {
+    try {
+      const res = await apiClient.put(`/subscriptions/domains/${domainId}/status`, { status: newStatus });
+      setMessage({ type: 'success', text: res.data?.message || `Domain request ${newStatus.toLowerCase()} successfully!` });
+      fetchDomains();
+      // Close modal if open
+      const closeBtn = document.getElementById('close-domain-modal');
+      if (closeBtn) closeBtn.click();
+    } catch (err: any) {
+      setMessage({ type: 'danger', text: err.response?.data?.message || 'Failed to update domain status' });
+    }
+  };
+
   const columns = [
     {
       title: "Company Name",
-      dataIndex: "CompanyName",
+      dataIndex: "companyName",
       render: (_text: string, record: DomainDetails) => (
         <div className="d-flex align-items-center file-name-icon">
-          <Link to="#" className="avatar avatar-md border rounded-circle">
+          <Link to="#" className="avatar avatar-md border rounded-circle me-2">
             <ImageWithBasePath
-              src={`assets/img/company/${record.Image}`}
+              src="assets/img/company/company-01.svg"
               className="img-fluid"
-              alt={`${record.CompanyName} logo`}
+              alt={`${record.companyName} logo`}
             />
           </Link>
-          <div className="ms-2">
-            <h6 className="fw-medium">
-              <Link to="#">{record.CompanyName}</Link>
+          <div>
+            <h6 className="fw-medium mb-0">
+              <Link to="#" onClick={() => setSelectedDomain(record)} data-bs-toggle="modal" data-bs-target="#domain_detail">
+                {record.companyName}
+              </Link>
             </h6>
+            <small className="text-muted">{record.email}</small>
           </div>
         </div>
       ),
-      sorter: (a: DomainDetails, b: DomainDetails) => a.CompanyName.length - b.CompanyName.length,
+      sorter: (a: DomainDetails, b: DomainDetails) => a.companyName.localeCompare(b.companyName),
     },
     {
-      title: "Domain URL",
-      dataIndex: "AccountURL",
-      sorter: (a: DomainDetails, b: DomainDetails) => a.AccountURL.length - b.AccountURL.length,
+      title: "Subdomain / Domain URL",
+      dataIndex: "domain",
+      render: (text: string) => <span className="text-primary fw-medium">{text}</span>,
+      sorter: (a: DomainDetails, b: DomainDetails) => a.domain.localeCompare(b.domain),
     },
     {
       title: "Plan",
-      dataIndex: "Plan",
-      sorter: (a: DomainDetails, b: DomainDetails) => a.Plan.length - b.Plan.length,
+      dataIndex: "plan",
+      sorter: (a: DomainDetails, b: DomainDetails) => a.plan.localeCompare(b.plan),
     },
     {
       title: "Created Date",
-      dataIndex: "CreatedDate",
-      sorter: (a: DomainDetails, b: DomainDetails) => a.CreatedDate.length - b.CreatedDate.length,
+      dataIndex: "createdDate",
+      render: (text: string) => text ? new Date(text).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A',
+      sorter: (a: DomainDetails, b: DomainDetails) => new Date(a.createdDate).getTime() - new Date(b.createdDate).getTime(),
     },
     {
-      title: "Status",
-      dataIndex: "DomainStatus",
-      render: (text: DomainDetails['DomainStatus'], _record: DomainDetails) => (
-        <Link
-          to="#"
-          className={`badge ${text === 'Approved' ? 'badge-soft-success' : text === 'Pending' ? 'badge-soft-info' : 'badge-soft-danger'} d-inline-flex align-items-center badge-xs`}
-        >
-          <i className="ti ti-checks me-1" />
-          {text}
-        </Link>
-      ),
-      sorter: (a: DomainDetails, b: DomainDetails) => a.DomainStatus.length - b.DomainStatus.length,
+      title: "Domain Status",
+      dataIndex: "status",
+      render: (text: string, record: DomainDetails) => {
+        const badgeClass = text === 'APPROVED' ? 'badge-soft-success' : text === 'PENDING' ? 'badge-soft-info' : 'badge-soft-danger';
+        return (
+          <span className={`badge ${badgeClass} d-inline-flex align-items-center badge-xs`}>
+            <i className="ti ti-checks me-1" />
+            {text}
+          </span>
+        );
+      },
+      sorter: (a: DomainDetails, b: DomainDetails) => a.status.localeCompare(b.status),
     },
     {
-      title: "",
-      dataIndex: "DomainStatus",
-      render: (text: DomainDetails['DomainStatus']) => (
-        <div className="action-icon d-inline-flex">
+      title: "Approval Action",
+      dataIndex: "status",
+      render: (text: string, record: DomainDetails) => (
+        <div className="action-icon d-inline-flex align-items-center">
           <Link
             to="#"
             className="me-2"
             data-bs-toggle="modal"
-            data-bs-target={`${text === 'Approved' ? '#domain_approved' : text === 'Pending' ? '#domain_pending' : text === 'Rejected' ? '#domain_rejected' : ''}`}
+            data-bs-target="#domain_detail"
+            onClick={() => setSelectedDomain(record)}
           >
-            <i className="ti ti-eye" />
+            <i className="ti ti-eye fs-16" />
           </Link>
-          <Link
-            to="#"
-            data-bs-toggle="modal"
-            data-bs-target="#delete_modal"
-          >
-            <i className="ti ti-trash" />
-          </Link>
+          {record.status === 'PENDING' && (
+            <>
+              <button
+                className="btn btn-sm btn-success me-1 py-0 px-2"
+                onClick={() => handleUpdateStatus(record.id, 'APPROVED')}
+                title="Approve Domain Request"
+              >
+                <i className="ti ti-check me-1" /> Approve
+              </button>
+              <button
+                className="btn btn-sm btn-outline-danger py-0 px-2"
+                onClick={() => handleUpdateStatus(record.id, 'REJECTED')}
+                title="Reject Domain Request"
+              >
+                <i className="ti ti-x me-1" /> Reject
+              </button>
+            </>
+          )}
+          {record.status === 'APPROVED' && (
+            <span className="text-success fs-12 fw-semibold">
+              <i className="ti ti-check" /> Active & Registered
+            </span>
+          )}
         </div>
       ),
-      sorter: (a: DomainDetails, b: DomainDetails) => a.DomainStatus.length - b.DomainStatus.length,
     },
   ];
 
   return (
     <>
-      {/* Page Wrapper */}
       <div className="page-wrapper">
         <div className="content">
+          {message && (
+            <div className={`alert alert-${message.type} alert-dismissible fade show`} role="alert">
+              {message.text}
+              <button type="button" className="btn-close" onClick={() => setMessage(null)}></button>
+            </div>
+          )}
+
           {/* Breadcrumb */}
           <div className="d-md-flex d-block align-items-center justify-content-between page-breadcrumb mb-3">
             <div className="my-auto mb-2">
-              <h2 className="mb-1">Domain</h2>
+              <h2 className="mb-1">Domain Requests</h2>
               <nav>
                 <ol className="breadcrumb mb-0">
                   <li className="breadcrumb-item">
@@ -118,197 +182,41 @@ const Domain = () => {
               </nav>
             </div>
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
-              <div className="me-2 mb-2">
-                <div className="dropdown">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    <i className="ti ti-file-export me-1" />
-                    Export
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        <i className="ti ti-file-type-pdf me-1" />
-                        Export as PDF
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        <i className="ti ti-file-type-xls me-1" />
-                        Export as Excel{" "}
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
               <div className="ms-2 head-icons">
                 <CollapseHeader />
               </div>
             </div>
           </div>
           {/* /Breadcrumb */}
+
           <div className="card">
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-              <h5>Domain List</h5>
-              <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-                <div className="me-3">
-                  <div className="input-icon position-relative">
-                    <PredefinedDateRanges />
-                  </div>
-                </div>
-                <div className="dropdown me-3">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Select Plan
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Monthly
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Yearly
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-                <div className="dropdown me-3">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Select Status
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Approved
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Pending
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Rejected
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-                <div className="dropdown">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Sort By : Last 7 Days
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Recently Added
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Ascending
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Descending
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Last Month
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Last 7 Days
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
+              <h5>Domain Approval Requests</h5>
             </div>
             <div className="card-body p-0">
-              <Table dataSource={data} columns={columns} Selection={true} />
+              {loading ? (
+                <div className="p-4 text-center">Loading domain requests...</div>
+              ) : (
+                <Table dataSource={domains} columns={columns} Selection={true} />
+              )}
             </div>
           </div>
         </div>
-        <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-          <p className="mb-0">2014 - 2026 © SmartHR.</p>
-          <p>
-            Designed &amp; Developed By{" "}
-            <Link to="#" className="text-primary">
-              Dreams
-            </Link>
-          </p>
-        </div>
       </div>
-      {/* /Page Wrapper */}
-      {/* Domain Details */}
-      <div className="modal fade" id="domain_approved">
+
+      {/* Domain Detail Modal */}
+      <div className="modal fade" id="domain_detail">
         <div className="modal-dialog modal-dialog-centered modal-md">
           <div className="modal-content">
             <div className="modal-header">
               <h4 className="modal-title d-flex align-items-center">
-                Domain Detail
-                <span className="badge bg-outline-success d-inline-flex align-items-center badge-xs ms-2">
-                  <i className="ti ti-point-filled" />
-                  Approved
+                Domain Details
+                <span className={`badge ${selectedDomain?.status === 'APPROVED' ? 'bg-outline-success' : selectedDomain?.status === 'PENDING' ? 'bg-outline-skyblue' : 'bg-outline-danger'} ms-2`}>
+                  {selectedDomain?.status}
                 </span>
               </h4>
               <button
+                id="close-domain-modal"
                 type="button"
                 className="btn-close custom-btn-close"
                 data-bs-dismiss="modal"
@@ -317,282 +225,55 @@ const Domain = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form>
-              <div className="modal-body pb-0">
+            <div className="modal-body pb-3">
+              {selectedDomain && (
                 <div className="row">
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <div className="p-3 mb-3 br-5 bg-transparent-light">
-                        <div className="row">
-                          <div className="col-md-12">
-                            <div className="d-flex align-items-center file-name-icon">
-                              <Link
-                                to="#"
-                                className="avatar avatar-md border avatar-rounded"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/company/company-01.svg"
-                                  className="img-fluid"
-                                  alt="img"
-                                />
-                              </Link>
-                              <div className="ms-2">
-                                <h6 className="fw-medium fs-14">
-                                  <Link to="#">BrightWave Innovations</Link>
-                                </h6>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                  <div className="col-md-12 mb-3">
+                    <div className="p-3 rounded bg-light">
+                      <h6 className="fw-bold mb-1">{selectedDomain.companyName}</h6>
+                      <p className="text-muted mb-0">{selectedDomain.email}</p>
                     </div>
                   </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Plan Name</span>
-                      <h6 className="fw-normal">Advanced</h6>
-                    </div>
+                  <div className="col-md-6 mb-3">
+                    <span className="fs-12 text-muted">Domain URL</span>
+                    <h6 className="fw-normal text-primary">{selectedDomain.domain}</h6>
                   </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Plan Type</span>
-                      <h6 className="fw-normal">Monthly</h6>
-                    </div>
+                  <div className="col-md-6 mb-3">
+                    <span className="fs-12 text-muted">Plan</span>
+                    <h6 className="fw-normal">{selectedDomain.plan}</h6>
                   </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Account URL</span>
-                      <h6 className="fw-normal">bwi.example.com</h6>
-                    </div>
+                  <div className="col-md-6 mb-3">
+                    <span className="fs-12 text-muted">Created Date</span>
+                    <h6 className="fw-normal">{new Date(selectedDomain.createdDate).toLocaleDateString()}</h6>
                   </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Price</span>
-                      <h6 className="fw-normal">200</h6>
-                    </div>
+                  <div className="col-md-6 mb-3">
+                    <span className="fs-12 text-muted">Domain Status</span>
+                    <h6 className="fw-normal">{selectedDomain.status}</h6>
                   </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Register Date</span>
-                      <h6 className="fw-normal">12 Sep 2024</h6>
+                  {selectedDomain.status === 'PENDING' && (
+                    <div className="col-md-12 mt-3 d-flex justify-content-end gap-2">
+                      <button
+                        className="btn btn-outline-danger"
+                        onClick={() => handleUpdateStatus(selectedDomain.id, 'REJECTED')}
+                      >
+                        Reject Domain
+                      </button>
+                      <button
+                        className="btn btn-success"
+                        onClick={() => handleUpdateStatus(selectedDomain.id, 'APPROVED')}
+                      >
+                        Approve & Activate Company
+                      </button>
                     </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Expiring On</span>
-                      <h6 className="fw-normal">11 Oct 2024</h6>
-                    </div>
-                  </div>
+                  )}
                 </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      {/* /Domain Details */}
-      {/* Domain Details */}
-      <div className="modal fade" id="domain_pending">
-        <div className="modal-dialog modal-dialog-centered modal-md">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title d-flex align-items-center">
-                Domain Detail
-                <span className="badge bg-outline-skyblue d-inline-flex align-items-center badge-xs ms-2">
-                  <i className="ti ti-point-filled" />
-                  Pending
-                </span>
-              </h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
+              )}
             </div>
-            <form>
-              <div className="modal-body pb-0">
-                <div className="row">
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <div className="p-3 mb-3 br-5 bg-transparent-light">
-                        <div className="row">
-                          <div className="col-md-6">
-                            <div className="d-flex align-items-center file-name-icon">
-                              <Link
-                                to="#"
-                                className="avatar avatar-md border avatar-rounded"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/company/company-01.svg"
-                                  className="img-fluid"
-                                  alt="img"
-                                />
-                              </Link>
-                              <div className="ms-2">
-                                <h6 className="fw-medium fs-14">
-                                  <Link to="#">BrightWave Innovations</Link>
-                                </h6>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="col-md-6 text-end">
-                            <span className="badge badge-success d-inline-flex align-items-center badge-xs ms-2">
-                              <i className="ti ti-check me-1" />
-                              Approve
-                            </span>
-                            <span className="badge badge-danger d-inline-flex align-items-center badge-xs ms-2">
-                              <i className="ti ti-x me-1" />
-                              Reject
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Plan Name</span>
-                      <h6 className="fw-normal">Advanced</h6>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Plan Type</span>
-                      <h6 className="fw-normal">Monthly</h6>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Account URL</span>
-                      <h6 className="fw-normal">bwi.example.com</h6>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Price</span>
-                      <h6 className="fw-normal">200</h6>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Register Date</span>
-                      <h6 className="fw-normal">12 Sep 2024</h6>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Expiring On</span>
-                      <h6 className="fw-normal">11 Oct 2024</h6>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </form>
           </div>
         </div>
       </div>
-      {/* /Domain Details */}
-      {/* Domain Details */}
-      <div className="modal fade" id="domain_rejected">
-        <div className="modal-dialog modal-dialog-centered modal-md">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title d-flex align-items-center">
-                Domain Detail
-                <span className="badge bg-outline-danger d-inline-flex align-items-center badge-xs ms-2">
-                  <i className="ti ti-point-filled" />
-                  Rejected
-                </span>
-              </h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <form>
-              <div className="modal-body pb-0">
-                <div className="row">
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <div className="p-3 mb-3 br-5 bg-transparent-light">
-                        <div className="row">
-                          <div className="col-md-12">
-                            <div className="d-flex align-items-center file-name-icon">
-                              <Link
-                                to="#"
-                                className="avatar avatar-md border avatar-rounded"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/company/company-01.svg"
-                                  className="img-fluid"
-                                  alt="img"
-                                />
-                              </Link>
-                              <div className="ms-2">
-                                <h6 className="fw-medium fs-14">
-                                  <Link to="#">BrightWave Innovations</Link>
-                                </h6>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Plan Name</span>
-                      <h6 className="fw-normal">Advanced</h6>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Plan Type</span>
-                      <h6 className="fw-normal">Monthly</h6>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Account URL</span>
-                      <h6 className="fw-normal">bwi.example.com</h6>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Price</span>
-                      <h6 className="fw-normal">200</h6>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Register Date</span>
-                      <h6 className="fw-normal">12 Sep 2024</h6>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <span className="fs-12">Expiring On</span>
-                      <h6 className="fw-normal">11 Oct 2024</h6>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      {/* /Domain Details */}
     </>
+  );
+};
 
-
-
-  )
-}
-
-export default Domain
+export default Domain;

@@ -20,6 +20,7 @@ model Company {
   logoUrl          String?
   isEmailVerified  Boolean           @default(false)
   isActive         Boolean           @default(true)
+  domainStatus     String            @default("APPROVED")
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   emailDomain      String?
