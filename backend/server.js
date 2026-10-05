@@ -146,6 +146,8 @@ app.use('/api/users', userRoutes);
 // SaaS Subscriptions & Plans
 app.use('/super-admin', subscriptionRoutes);
 app.use('/api/super-admin', subscriptionRoutes);
+app.use('/subscriptions', subscriptionRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 
 // Phase 4 APIs

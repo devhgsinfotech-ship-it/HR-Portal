@@ -1920,6 +1920,39 @@ async function getDashboardSummary(req, res) {
     }
 }
 
+async function getQuotaStatus(req, res) {
+    try {
+        const companyId = req.user?.companyId;
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company scope found for user' });
+        }
+
+        const subscription = await prisma.subscription.findUnique({
+            where: { companyId },
+            include: { plan: true }
+        });
+
+        const maxEmployees = subscription?.plan?.maxEmployees || 10;
+        const currentEmployeesCount = await prisma.user.count({
+            where: { companyId }
+        });
+
+        const slotsLeft = Math.max(0, maxEmployees - currentEmployeesCount);
+        const isLimitReached = currentEmployeesCount >= maxEmployees;
+
+        res.json({
+            currentCount: currentEmployeesCount,
+            maxEmployees,
+            slotsLeft,
+            isLimitReached,
+            planName: subscription?.plan?.name || 'Starter Plan'
+        });
+    } catch (error) {
+        console.error('Error fetching quota status:', error);
+        res.status(500).json({ message: 'Failed to fetch employee quota status' });
+    }
+}
+
 module.exports = {
     checkEmailAvailability,
     createEmployee,
@@ -1948,5 +1981,6 @@ module.exports = {
     toggleLikeComment,
     getOnLeaveToday,
     getNextHoliday,
-    getDashboardSummary
+    getDashboardSummary,
+    getQuotaStatus
 };

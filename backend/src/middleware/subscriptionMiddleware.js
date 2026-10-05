@@ -89,7 +89,74 @@ async function checkEmployeeQuota(req, res, next) {
   }
 }
 
+/**
+ * Enforces storage quota limit (in GB) based on the company's subscription plan.
+ */
+async function checkStorageQuota(req, res, next) {
+  try {
+    if (req.user && req.user.role === 'SUPER_ADMIN') {
+      return next();
+    }
+
+    const companyId = req.user ? req.user.companyId : null;
+    if (!companyId) return next();
+
+    const subscription = await prisma.subscription.findUnique({
+      where: { companyId },
+      include: { plan: true }
+    });
+
+    if (!subscription || !subscription.plan) {
+      return next();
+    }
+
+    const maxStorageGb = subscription.plan.maxStorageGb;
+    const maxStorageBytes = maxStorageGb * 1024 * 1024 * 1024;
+
+    const fs = require('fs');
+    const path = require('path');
+    const uploadsDir = path.join(__dirname, '../../uploads');
+    let usedBytes = 0;
+
+    if (fs.existsSync(uploadsDir)) {
+      const getDirSize = (dirPath) => {
+        let size = 0;
+        try {
+          const files = fs.readdirSync(dirPath);
+          for (const file of files) {
+            const filePath = path.join(dirPath, file);
+            const stats = fs.statSync(filePath);
+            if (stats.isDirectory()) {
+              size += getDirSize(filePath);
+            } else if (stats.isFile()) {
+              size += stats.size;
+            }
+          }
+        } catch (e) {}
+        return size;
+      };
+      usedBytes = getDirSize(uploadsDir);
+    }
+
+    // Check if incoming file pushes usage over limit
+    const incomingFileSize = req.file ? req.file.size : (req.headers['content-length'] ? parseInt(req.headers['content-length'], 10) : 0);
+
+    if ((usedBytes + incomingFileSize) > maxStorageBytes) {
+      return res.status(400).json({
+        code: 'STORAGE_QUOTA_EXCEEDED',
+        message: `Storage quota limit of ${maxStorageGb} GB reached for the ${subscription.plan.name}. Upgrade your plan to store more files.`
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('[MIDDLEWARE] Error in checkStorageQuota:', error);
+    next();
+  }
+}
+
 module.exports = {
   checkSubscriptionActive,
-  checkEmployeeQuota
+  checkEmployeeQuota,
+  checkStorageQuota
 };

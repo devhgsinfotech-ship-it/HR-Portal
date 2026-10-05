@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const employeeController = require('../controllers/employeeController');
 const { verifyToken, requireRole, requireCompanyRole } = require('../middleware/authMiddleware');
+const { checkEmployeeQuota } = require('../middleware/subscriptionMiddleware');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
@@ -64,7 +65,8 @@ router.get('/dashboard/next-holiday', employeeController.getNextHoliday);
 // HR and Company Admin management routes (specific paths)
 // SUPER_ADMIN has view/support access; employee CRUD is Company Admin/HR domain
 router.get('/check-email', requireCompanyRole('HR'),                                          employeeController.checkEmailAvailability);
-router.post('/',           requireCompanyRole('HR'), upload.single('profileImage'),           employeeController.createEmployee);
+router.get('/quota-status',                                                                   employeeController.getQuotaStatus);
+router.post('/',           requireCompanyRole('HR'), checkEmployeeQuota, upload.single('profileImage'), employeeController.createEmployee);
 router.get('/', employeeController.getEmployees);
 
 // Parametric /:id routes (MUST come after all specific endpoints)
