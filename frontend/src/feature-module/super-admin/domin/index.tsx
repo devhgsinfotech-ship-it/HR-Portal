@@ -21,6 +21,7 @@ const Domain = () => {
   const [domains, setDomains] = useState<DomainDetails[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDomain, setSelectedDomain] = useState<DomainDetails | null>(null);
+  const [editSubdomain, setEditSubdomain] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'success' | 'danger', text: string } | null>(null);
 
   const fetchDomains = async () => {
@@ -41,10 +42,23 @@ const Domain = () => {
     fetchDomains();
   }, []);
 
-  const handleUpdateStatus = async (domainId: number, newStatus: 'APPROVED' | 'REJECTED') => {
+  const handleSelectDomain = (domain: DomainDetails) => {
+    setSelectedDomain(domain);
+    const prefix = domain.subdomain || domain.domain.split('.')[0] || '';
+    setEditSubdomain(prefix);
+  };
+
+  const handleUpdateStatus = async (domainId: number, newStatus: 'APPROVED' | 'REJECTED' | 'UPDATE_ONLY', customSubdomain?: string) => {
     try {
-      const res = await apiClient.put(`/subscriptions/domains/${domainId}/status`, { status: newStatus });
-      setMessage({ type: 'success', text: res.data?.message || `Domain request ${newStatus.toLowerCase()} successfully!` });
+      const payload: any = {};
+      if (newStatus !== 'UPDATE_ONLY') {
+        payload.status = newStatus;
+      }
+      if (customSubdomain && customSubdomain.trim() !== '') {
+        payload.subdomain = customSubdomain.trim().toLowerCase();
+      }
+      const res = await apiClient.put(`/subscriptions/domains/${domainId}/status`, payload);
+      setMessage({ type: 'success', text: res.data?.message || `Domain request updated successfully!` });
       fetchDomains();
       // Close modal if open
       const closeBtn = document.getElementById('close-domain-modal');
@@ -69,7 +83,7 @@ const Domain = () => {
           </Link>
           <div>
             <h6 className="fw-medium mb-0">
-              <Link to="#" onClick={() => setSelectedDomain(record)} data-bs-toggle="modal" data-bs-target="#domain_detail">
+              <Link to="#" onClick={() => handleSelectDomain(record)} data-bs-toggle="modal" data-bs-target="#domain_detail">
                 {record.companyName}
               </Link>
             </h6>
@@ -99,11 +113,23 @@ const Domain = () => {
     {
       title: "Domain Status",
       dataIndex: "status",
-      render: (text: string, record: DomainDetails) => {
-        const badgeClass = text === 'APPROVED' ? 'badge-soft-success' : text === 'PENDING' ? 'badge-soft-info' : 'badge-soft-danger';
+      render: (text: string) => {
+        let badgeClass = "badge-soft-secondary";
+        let icon = "ti-clock";
+        if (text === 'APPROVED') {
+          badgeClass = "badge-soft-success";
+          icon = "ti-check";
+        } else if (text === 'PENDING') {
+          badgeClass = "badge-soft-warning";
+          icon = "ti-hourglass-low";
+        } else if (text === 'REJECTED') {
+          badgeClass = "badge-soft-danger";
+          icon = "ti-x";
+        }
+
         return (
-          <span className={`badge ${badgeClass} d-inline-flex align-items-center badge-xs`}>
-            <i className="ti ti-checks me-1" />
+          <span className={`badge ${badgeClass} d-inline-flex align-items-center px-2 py-1 fs-12 font-semibold`}>
+            <i className={`ti ${icon} me-1 fs-13`} />
             {text}
           </span>
         );
@@ -114,37 +140,51 @@ const Domain = () => {
       title: "Approval Action",
       dataIndex: "status",
       render: (text: string, record: DomainDetails) => (
-        <div className="action-icon d-inline-flex align-items-center">
+        <div className="d-flex align-items-center gap-2">
           <Link
             to="#"
-            className="me-2"
+            className="btn btn-icon btn-sm btn-light border rounded-circle d-inline-flex align-items-center justify-content-center shadow-xs"
+            style={{ width: "32px", height: "32px" }}
             data-bs-toggle="modal"
             data-bs-target="#domain_detail"
-            onClick={() => setSelectedDomain(record)}
+            onClick={() => handleSelectDomain(record)}
+            title="View Details"
           >
-            <i className="ti ti-eye fs-16" />
+            <i className="ti ti-eye fs-15 text-secondary" />
           </Link>
+
           {record.status === 'PENDING' && (
-            <>
+            <div className="d-inline-flex align-items-center gap-1">
               <button
-                className="btn btn-sm btn-success me-1 py-0 px-2"
+                type="button"
+                className="btn btn-sm btn-success d-inline-flex align-items-center px-2 py-1 rounded shadow-xs fs-12 fw-medium"
+                style={{ whiteSpace: "nowrap" }}
                 onClick={() => handleUpdateStatus(record.id, 'APPROVED')}
                 title="Approve Domain Request"
               >
-                <i className="ti ti-check me-1" /> Approve
+                <i className="ti ti-check me-1 fs-14" /> Approve
               </button>
               <button
-                className="btn btn-sm btn-outline-danger py-0 px-2"
+                type="button"
+                className="btn btn-sm btn-outline-danger d-inline-flex align-items-center px-2 py-1 rounded shadow-xs fs-12 fw-medium"
+                style={{ whiteSpace: "nowrap" }}
                 onClick={() => handleUpdateStatus(record.id, 'REJECTED')}
                 title="Reject Domain Request"
               >
-                <i className="ti ti-x me-1" /> Reject
+                <i className="ti ti-x me-1 fs-14" /> Reject
               </button>
-            </>
+            </div>
           )}
+
           {record.status === 'APPROVED' && (
-            <span className="text-success fs-12 fw-semibold">
-              <i className="ti ti-check" /> Active & Registered
+            <span className="text-success fs-12 fw-semibold d-inline-flex align-items-center gap-1">
+              <i className="ti ti-circle-check-filled fs-15" /> Active & Registered
+            </span>
+          )}
+
+          {record.status === 'REJECTED' && (
+            <span className="text-danger fs-12 fw-semibold d-inline-flex align-items-center gap-1">
+              <i className="ti ti-circle-x-filled fs-15" /> Request Rejected
             </span>
           )}
         </div>
@@ -210,7 +250,7 @@ const Domain = () => {
           <div className="modal-content">
             <div className="modal-header">
               <h4 className="modal-title d-flex align-items-center">
-                Domain Details
+                Domain Details & Approval
                 <span className={`badge ${selectedDomain?.status === 'APPROVED' ? 'bg-outline-success' : selectedDomain?.status === 'PENDING' ? 'bg-outline-skyblue' : 'bg-outline-danger'} ms-2`}>
                   {selectedDomain?.status}
                 </span>
@@ -234,38 +274,76 @@ const Domain = () => {
                       <p className="text-muted mb-0">{selectedDomain.email}</p>
                     </div>
                   </div>
-                  <div className="col-md-6 mb-3">
-                    <span className="fs-12 text-muted">Domain URL</span>
-                    <h6 className="fw-normal text-primary">{selectedDomain.domain}</h6>
+
+                  <div className="col-md-12 mb-3">
+                    <label className="form-label fw-bold text-dark fs-13 mb-1">
+                      Subdomain / Workspace URL <span className="text-muted fw-normal">(Super Admin can modify for host availability)</span>
+                    </label>
+                    <div className="input-group">
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editSubdomain}
+                        onChange={(e) => setEditSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                        placeholder="e.g. wipro"
+                      />
+                      <span className="input-group-text bg-light text-primary fw-medium">.yourhrms.com</span>
+                    </div>
+                    <div className="d-flex align-items-center justify-content-between mt-1">
+                      <small className="text-muted fs-11">
+                        Active Subdomain: <strong className="text-primary">{editSubdomain || 'subdomain'}.yourhrms.com</strong>
+                      </small>
+                      {editSubdomain !== (selectedDomain.subdomain || selectedDomain.domain.split('.')[0]) && (
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-outline-primary py-1 px-2 fs-11"
+                          onClick={() => handleUpdateStatus(selectedDomain.id, 'UPDATE_ONLY', editSubdomain)}
+                        >
+                          Save Subdomain Change
+                        </button>
+                      )}
+                    </div>
                   </div>
+
                   <div className="col-md-6 mb-3">
-                    <span className="fs-12 text-muted">Plan</span>
+                    <span className="fs-12 text-muted">Subscription Plan</span>
                     <h6 className="fw-normal">{selectedDomain.plan}</h6>
                   </div>
                   <div className="col-md-6 mb-3">
                     <span className="fs-12 text-muted">Created Date</span>
                     <h6 className="fw-normal">{new Date(selectedDomain.createdDate).toLocaleDateString()}</h6>
                   </div>
-                  <div className="col-md-6 mb-3">
-                    <span className="fs-12 text-muted">Domain Status</span>
+                  <div className="col-md-12 mb-3">
+                    <span className="fs-12 text-muted">Current Approval Status</span>
                     <h6 className="fw-normal">{selectedDomain.status}</h6>
                   </div>
-                  {selectedDomain.status === 'PENDING' && (
-                    <div className="col-md-12 mt-3 d-flex justify-content-end gap-2">
+
+                  <div className="col-md-12 mt-3 d-flex justify-content-end gap-2">
+                    {selectedDomain.status === 'PENDING' && (
+                      <>
+                        <button
+                          className="btn btn-outline-danger"
+                          onClick={() => handleUpdateStatus(selectedDomain.id, 'REJECTED')}
+                        >
+                          Reject Domain
+                        </button>
+                        <button
+                          className="btn btn-success"
+                          onClick={() => handleUpdateStatus(selectedDomain.id, 'APPROVED', editSubdomain)}
+                        >
+                          Approve & Activate Company
+                        </button>
+                      </>
+                    )}
+                    {selectedDomain.status === 'APPROVED' && (
                       <button
-                        className="btn btn-outline-danger"
-                        onClick={() => handleUpdateStatus(selectedDomain.id, 'REJECTED')}
+                        className="btn btn-primary"
+                        onClick={() => handleUpdateStatus(selectedDomain.id, 'APPROVED', editSubdomain)}
                       >
-                        Reject Domain
+                        Update Domain Configuration
                       </button>
-                      <button
-                        className="btn btn-success"
-                        onClick={() => handleUpdateStatus(selectedDomain.id, 'APPROVED')}
-                      >
-                        Approve & Activate Company
-                      </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               )}
             </div>

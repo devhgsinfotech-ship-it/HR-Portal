@@ -14,6 +14,7 @@ router.get('/plans', subscriptionController.getPlans);
 
 // Super Admin Only Routes
 router.use(requireRole('SUPER_ADMIN'));
+router.get('/dashboard-summary', subscriptionController.getDashboardSummary);
 router.post('/plans', subscriptionController.createPlan);
 router.put('/plans/:id', subscriptionController.updatePlan);
 router.delete('/plans/:id', subscriptionController.deletePlan);

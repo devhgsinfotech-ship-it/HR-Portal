@@ -1,6 +1,7 @@
 // backend/src/controllers/subscriptionController.js
 const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
+const { sendDomainApprovedEmail } = require('../utils/emailService');
 
 // Helper to resolve features map seamlessly
 function resolveFeatures(planFeatures, customFeatures) {
@@ -1067,15 +1068,12 @@ async function getSuperAdminDomains(req, res) {
 async function updateDomainStatus(req, res) {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, subdomain } = req.body;
 
     const companyId = parseInt(id, 10);
     if (isNaN(companyId)) {
       return res.status(400).json({ message: 'Invalid company ID' });
     }
-
-    const newStatus = status ? status.toUpperCase() : 'APPROVED';
-    const isApproved = newStatus === 'APPROVED';
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -1086,13 +1084,40 @@ async function updateDomainStatus(req, res) {
       return res.status(404).json({ message: 'Company not found' });
     }
 
+    const updateData = {};
+
+    if (status) {
+      const newStatus = status.toUpperCase();
+      updateData.domainStatus = newStatus;
+      updateData.isActive = (newStatus === 'APPROVED');
+    }
+
+    if (subdomain !== undefined && subdomain !== null && subdomain.trim() !== '') {
+      const cleanSubdomain = subdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+      if (!cleanSubdomain) {
+        return res.status(400).json({ message: 'Invalid subdomain format' });
+      }
+
+      // Check availability across other companies
+      const existing = await prisma.company.findFirst({
+        where: {
+          subdomain: cleanSubdomain,
+          NOT: { id: companyId }
+        }
+      });
+      if (existing) {
+        return res.status(400).json({ message: `Subdomain "${cleanSubdomain}" is already taken by another company (${existing.name}).` });
+      }
+
+      updateData.subdomain = cleanSubdomain;
+    }
+
     const updatedCompany = await prisma.company.update({
       where: { id: companyId },
-      data: {
-        domainStatus: newStatus,
-        isActive: isApproved
-      }
+      data: updateData
     });
+
+    const isApproved = updatedCompany.domainStatus === 'APPROVED';
 
     if (isApproved && !company.subscription) {
       let starterPlan = await prisma.subscriptionPlan.findFirst({ where: { code: 'STARTER' } });
@@ -1116,8 +1141,18 @@ async function updateDomainStatus(req, res) {
       }
     }
 
+    if (isApproved && (company.domainStatus !== 'APPROVED' || company.subdomain !== updatedCompany.subdomain)) {
+      const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
+      const baseDomain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
+      const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
+      const workspaceUrl = `${protocol}://${updatedCompany.subdomain}.${baseDomain}`;
+
+      sendDomainApprovedEmail(updatedCompany.email, updatedCompany.name, updatedCompany.subdomain, workspaceUrl)
+        .catch(err => console.warn('Domain approval email notice:', err.message));
+    }
+
     res.json({
-      message: `Domain request ${newStatus.toLowerCase()} successfully`,
+      message: `Domain request updated successfully. Subdomain: ${updatedCompany.subdomain}`,
       company: updatedCompany
     });
   } catch (error) {
