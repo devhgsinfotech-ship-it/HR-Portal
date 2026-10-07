@@ -838,7 +838,8 @@ async function createCompanyWithSubscription(req, res) {
           industry: industry || null,
           companySize: companySize || null,
           isActive: true,
-          isEmailVerified: true
+          isEmailVerified: true,
+          domainStatus: 'APPROVED'
         }
       });
 

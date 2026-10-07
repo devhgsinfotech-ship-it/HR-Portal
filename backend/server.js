@@ -240,10 +240,21 @@ app.get('/admin/db-push', async (req, res) => {
     }
 });
 
+async function ensureDbColumns() {
+    try {
+        const prisma = require('./src/config/prisma');
+        await prisma.$executeRawUnsafe("ALTER TABLE companies ADD COLUMN domainStatus VARCHAR(191) NOT NULL DEFAULT 'APPROVED';").catch(() => {});
+        await prisma.$executeRawUnsafe("ALTER TABLE companies ADD COLUMN emailDomain VARCHAR(191) NULL;").catch(() => {});
+        console.log('[DB] Self-healing database columns verified.');
+    } catch (e) {
+        console.warn('[DB] Column verification notice:', e.message);
+    }
+}
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
-    // Sync database schema after server starts
+    await ensureDbColumns();
     runDbPush();
     await seedDefaultPlans();
 });
