@@ -49,28 +49,23 @@ async function login(req, res) {
             }
         }
 
-        // 3. Domain Approval Check (for non-Super Admin users)
+        // 3. Check account status (Must be email verified)
+        if (user.accountStatus !== 'ACTIVE') {
+            return res.status(403).json({ message: 'Your account is pending verification. Please check your email to verify your account.' });
+        }
+
+        // 4. Domain Approval Check (for non-Super Admin users)
         if (user.role !== 'SUPER_ADMIN' && user.company) {
-            if (user.company.domainStatus === 'PENDING') {
-                return res.status(403).json({
-                    message: 'Your domain request is pending approval by Super Admin. You cannot log in until Super Admin approves your domain.'
-                });
-            }
             if (user.company.domainStatus === 'REJECTED') {
                 return res.status(403).json({
-                    message: 'Your company domain request has been rejected by Super Admin. Please contact support.'
+                    message: 'Your company domain request has been rejected. Please contact support.'
                 });
             }
             if (user.company.domainStatus !== 'APPROVED') {
                 return res.status(403).json({
-                    message: 'Your company domain is not approved by Super Admin.'
+                    message: 'Your company domain is not active. Please verify your account.'
                 });
             }
-        }
-
-        // 4. Check account status
-        if (user.accountStatus !== 'ACTIVE') {
-            return res.status(403).json({ message: 'Account is pending or disabled. Please verify your email.' });
         }
 
         // 4. Compare password
@@ -212,7 +207,7 @@ async function register(req, res) {
                     companySize: companySize || null,
                     address: address || null,
                     logoUrl: logoUrl || null,
-                    domainStatus: 'PENDING',          // ← Pending Super Admin Domain Approval
+                    domainStatus: 'PENDING',           // Auto-approved when account creator verifies email
                 },
             });
 
@@ -335,7 +330,10 @@ async function verifyEmail(req, res) {
             if (verifyRecord.user?.companyId) {
                 await tx.company.update({
                     where: { id: verifyRecord.user.companyId },
-                    data: { isEmailVerified: true },
+                    data: {
+                        isEmailVerified: true,
+                        domainStatus: 'APPROVED',
+                    },
                 });
             }
         });

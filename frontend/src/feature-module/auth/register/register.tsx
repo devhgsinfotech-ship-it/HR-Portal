@@ -146,7 +146,7 @@ const Register = () => {
         <div className="w-100 overflow-hidden position-relative flex-wrap d-block vh-100">
           <div className="row justify-content-center align-items-center vh-100">
             <div className="col-md-6 col-lg-5 mx-auto px-3">
-              <div className="card shadow-sm text-center p-4">
+              <div className="card shadow-sm text-center p-4 border-0">
                 <div className="mb-3">
                   <div className="mx-auto mb-3" style={{ maxWidth: 220, minHeight: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {logoUrl ? (
@@ -170,38 +170,42 @@ const Register = () => {
                     className="ti ti-circle-check text-success d-block mb-2"
                     style={{ fontSize: 56 }}
                   />
-                  <h3 className="mb-2">Company Registered!</h3>
-                  <p className="text-muted mb-3">
-                    We've sent a verification email to{" "}
-                    <strong>{registeredEmail}</strong>.<br />
-                    Please verify your email to activate your workspace.
-                  </p>
+                  <h3 className="mb-1 fw-bold">Company Registered Successfully!</h3>
                 </div>
 
-                <div className="card bg-light mb-3 p-3 text-start">
-                  <p className="mb-1 fw-semibold">
+                {/* Email Verification Alert Banner */}
+                <div className="alert alert-warning text-start d-flex align-items-start gap-2 mb-3 p-3 rounded-3" style={{ backgroundColor: '#fff8dd', borderColor: '#ffeab6' }}>
+                  <i className="ti ti-mail-forward fs-20 text-warning flex-shrink-0 mt-1" />
+                  <div>
+                    <strong className="d-block text-dark mb-1">Check your email to verify your account</strong>
+                    <span className="text-secondary small">
+                      We sent a verification link to <strong>{registeredEmail}</strong>. Please check your inbox (and spam folder) and click the link to verify your account.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="card bg-light mb-3 p-3 text-start border">
+                  <p className="mb-1 fw-semibold text-muted small">
                     <i className="ti ti-world me-1" /> Your Workspace URL:
                   </p>
-                  <p className="text-primary mb-0 fw-semibold">{workspaceUrl}</p>
+                  <p className="text-primary mb-0 fw-semibold fs-15">{workspaceUrl}</p>
                 </div>
 
-
-
-                <a href={`${workspaceUrl}/login`} className="btn btn-primary w-100 mb-2">
+                <a href={`${workspaceUrl}/login`} className="btn btn-primary w-100 mb-3 py-2 fw-medium">
                   Go to Login
                 </a>
                 <p className="text-muted small mb-0">
                   Didn't receive the email?{" "}
                   <Link
                     to="#"
-                    className={`hover-a ${resendCooldown > 0 || isResending ? 'text-muted pe-none' : ''}`}
+                    className={`hover-a fw-medium ${resendCooldown > 0 || isResending ? 'text-muted pe-none' : 'text-primary'}`}
                     onClick={handleResend}
                   >
-                    {isResending ? 'Sending...' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend'}
+                    {isResending ? 'Sending...' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Email'}
                   </Link>
                 </p>
                 {resendMessage && (
-                  <div className={`alert mt-2 p-2 small ${resendMessage.startsWith('✅') ? 'alert-success' : 'alert-danger'}`}>
+                  <div className={`alert mt-3 p-2 small text-start ${resendMessage.startsWith('✅') ? 'alert-success' : 'alert-danger'}`}>
                     {resendMessage}
                   </div>
                 )}
