@@ -49,7 +49,26 @@ async function login(req, res) {
             }
         }
 
-        // 3. Check account status
+        // 3. Domain Approval Check (for non-Super Admin users)
+        if (user.role !== 'SUPER_ADMIN' && user.company) {
+            if (user.company.domainStatus === 'PENDING') {
+                return res.status(403).json({
+                    message: 'Your domain request is pending approval by Super Admin. You cannot log in until Super Admin approves your domain.'
+                });
+            }
+            if (user.company.domainStatus === 'REJECTED') {
+                return res.status(403).json({
+                    message: 'Your company domain request has been rejected by Super Admin. Please contact support.'
+                });
+            }
+            if (user.company.domainStatus !== 'APPROVED') {
+                return res.status(403).json({
+                    message: 'Your company domain is not approved by Super Admin.'
+                });
+            }
+        }
+
+        // 4. Check account status
         if (user.accountStatus !== 'ACTIVE') {
             return res.status(403).json({ message: 'Account is pending or disabled. Please verify your email.' });
         }
@@ -193,6 +212,7 @@ async function register(req, res) {
                     companySize: companySize || null,
                     address: address || null,
                     logoUrl: logoUrl || null,
+                    domainStatus: 'PENDING',          // ← Pending Super Admin Domain Approval
                 },
             });
 
@@ -492,6 +512,15 @@ async function acceptInvite(req, res) {
             where: { id: targetUserId },
             include: { company: true, employee: true }
         });
+
+        // Check if company domain is approved by Super Admin
+        if (updatedUser.role !== 'SUPER_ADMIN' && updatedUser.company && updatedUser.company.domainStatus !== 'APPROVED') {
+            return res.json({
+                success: true,
+                domainPending: true,
+                message: 'Your email has been verified successfully! However, your company domain approval is pending review by Super Admin. You can log in once Super Admin approves your domain.'
+            });
+        }
 
         const jwtToken = jwt.sign(
             {

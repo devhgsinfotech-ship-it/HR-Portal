@@ -1080,6 +1080,16 @@ export const publicRoutes = [
     route: Route,
   },
   {
+    path: "/website-settings/localization",
+    element: <Localizationsettings />,
+    route: Route,
+  },
+  {
+    path: "/localization-settings",
+    element: <Localizationsettings />,
+    route: Route,
+  },
+  {
     path: routes.prefixes,
     element: <Prefixes />,
     route: Route,

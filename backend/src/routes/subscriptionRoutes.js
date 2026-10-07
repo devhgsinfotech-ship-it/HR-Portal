@@ -14,11 +14,22 @@ router.get('/plans', subscriptionController.getPlans);
 
 // Super Admin Only Routes
 router.use(requireRole('SUPER_ADMIN'));
+router.get('/dashboard-summary', subscriptionController.getDashboardSummary);
 router.post('/plans', subscriptionController.createPlan);
 router.put('/plans/:id', subscriptionController.updatePlan);
 router.delete('/plans/:id', subscriptionController.deletePlan);
 
 // Tenant Subscriptions Management
+router.get('/companies', subscriptionController.getSuperAdminCompanies);
+router.post('/companies', subscriptionController.createCompanyWithSubscription);
+router.put('/companies/:id', subscriptionController.updateSuperAdminCompany);
+router.delete('/companies/:id', subscriptionController.deleteSuperAdminCompany);
+router.post('/companies/:companyId/change-plan', subscriptionController.changeCompanyPlan);
+
+// Domain Management
+router.get('/domains', subscriptionController.getSuperAdminDomains);
+router.put('/domains/:id/status', subscriptionController.updateDomainStatus);
+
 router.get('/subscriptions', subscriptionController.getSubscriptions);
 router.put('/subscriptions/:companyId', subscriptionController.updateCompanySubscription);
 router.put('/subscriptions/:companyId/features', subscriptionController.updateCompanyFeatures);

@@ -1,121 +1,63 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { all_routes } from '../../../router/all_routes'
-import PredefinedDateRanges from '../../../core/common/datePicker'
-import { companies_details } from '../../../core/data/json/companiesdetails'
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { all_routes } from '../../../router/all_routes';
 import ImageWithBasePath from '../../../core/common/imageWithBasePath';
 import Table from "../../../core/common/dataTable/index";
-import CommonSelect from '../../../core/common/commonSelect'
-import { DatePicker } from 'antd'
-import ReactApexChart from 'react-apexcharts'
-import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
-import React from 'react'
+import ReactApexChart from 'react-apexcharts';
+import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
+import React from 'react';
+import apiClient from '../../../core/utils/apiClient';
+
 type PasswordField = "password" | "confirmPassword";
 
 const Companies = () => {
-  const data = companies_details;
-  const columns = [
-    {
-      title: "Company Name",
-      dataIndex: "CompanyName",
-      render: (_text: String, record: any) => (
-        <div className="d-flex align-items-center file-name-icon">
-          <Link to="#" className="avatar avatar-md border rounded-circle">
-            <ImageWithBasePath
-              src={`assets/img/company/${record.Image}`}
-              className="img-fluid"
-              alt="img"
-            />
-          </Link>
-          <div className="ms-2">
-            <h6 className="fw-medium">
-              <Link to="#">{record.CompanyName}</Link>
-            </h6>
-          </div>
-        </div>
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [stats, setStats] = useState({
+    totalCompanies: 0,
+    activeCompanies: 0,
+    inactiveCompanies: 0,
+    pendingDomains: 0
+  });
+  const [plans, setPlans] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'danger', text: string } | null>(null);
 
-      ),
-      sorter: (a: any, b: any) => a.CompanyName.length - b.CompanyName.length,
-    },
-    {
-      title: "Email",
-      dataIndex: "Email",
-      sorter: (a: any, b: any) => a.Email.length - b.Email.length,
-    },
-    {
-      title: "Account URL",
-      dataIndex: "AccountURL",
-      sorter: (a: any, b: any) => a.AccountURL.length - b.AccountURL.length,
-    },
-    {
-      title: "Plan",
-      dataIndex: "Plan",
-      render: (_text: String, record: any) => (
-        <div className="d-flex align-items-center justify-content-between">
-          <p className="mb-0 me-2">{record.Plan}</p>
-          <Link
-            to="#"
-            data-bs-toggle="modal"
-            className="badge badge-purple badge-xs"
-            data-bs-target="#upgrade_info"
-          >
-            Upgrade
-          </Link>
-        </div>
+  // Modal selections
+  const [selectedCompany, setSelectedCompany] = useState<any>(null);
 
-      ),
-      sorter: (a: any, b: any) => a.Plan.length - b.Plan.length,
-    },
-    {
-      title: "Created Date",
-      dataIndex: "CreatedDate",
-      sorter: (a: any, b: any) => a.CreatedDate.length - b.CreatedDate.length,
-    },
-    {
-      title: "Status",
-      dataIndex: "Status",
-      render: (text: string, _record: any) => (
-        <span className={`badge ${text === 'Active' ? 'badge-success' : 'badge-danger'} d-inline-flex align-items-center badge-xs`}>
-          <i className="ti ti-point-filled me-1" />
-          {text}
-        </span>
+  // Forms
+  const [addForm, setAddForm] = useState({
+    name: '',
+    email: '',
+    subdomain: '',
+    phone: '',
+    password: '',
+    confirmPassword: '',
+    address: '',
+    planId: '',
+    billingCycle: 'MONTHLY',
+    status: 'ACTIVE'
+  });
 
-      ),
-      sorter: (a: any, b: any) => a.Status.length - b.Status.length,
-    },
-    {
-      title: "",
-      dataIndex: "actions",
-      render: () => (
-        <div className="action-icon d-inline-flex">
-          <Link
-            to="#"
-            className="me-2"
-            data-bs-toggle="modal"
-            data-bs-target="#company_detail"
-          >
-            <i className="ti ti-eye" />
-          </Link>
-          <Link
-            to="#"
-            className="me-2"
-            data-bs-toggle="modal"
-            data-bs-target="#edit_company"
-          >
-            <i className="ti ti-edit" />
-          </Link>
-          <Link
-            to="#"
-            data-bs-toggle="modal"
-            data-bs-target="#delete_modal"
-          >
-            <i className="ti ti-trash" />
-          </Link>
-        </div>
+  const [editForm, setEditForm] = useState({
+    id: 0,
+    name: '',
+    email: '',
+    subdomain: '',
+    phone: '',
+    address: '',
+    isActive: true
+  });
 
-      ),
-    },
-  ]
+  const [upgradeForm, setUpgradeForm] = useState({
+    companyId: 0,
+    companyName: '',
+    currentPlanName: '',
+    planId: '',
+    billingCycle: 'MONTHLY',
+    amount: '0'
+  });
+
   const [passwordVisibility, setPasswordVisibility] = useState({
     password: false,
     confirmPassword: false,
@@ -128,367 +70,256 @@ const Companies = () => {
     }));
   };
 
-  const planName = [
-    { value: "Advanced", label: "Advanced" },
-    { value: "Basic", label: "Basic" },
-    { value: "Enterprise", label: "Enterprise" },
-  ];
-  const planType = [
-    { value: "Monthly", label: "Monthly" },
-    { value: "Yearly", label: "Yearly" },
-  ];
-  const currency = [
-    { value: "USD", label: "USD" },
-    { value: "Euro", label: "Euro" },
-  ];
-  const language = [
-    { value: "English", label: "English" },
-    { value: "Arabic", label: "Arabic" },
-  ];
-  const statusChoose = [
-    { value: "Active", label: "Active" },
-    { value: "Inactive", label: "Inactive" },
-  ];
-
-  const getModalContainer = () => {
-    const modalElement = document.getElementById('modal-datepicker');
-    return modalElement ? modalElement : document.body; // Fallback to document.body if modalElement is null
+  const fetchCompanies = async () => {
+    try {
+      setLoading(true);
+      const res = await apiClient.get('/subscriptions/companies');
+      if (res.data) {
+        setCompanies(res.data.companies || []);
+        if (res.data.stats) {
+          setStats(res.data.stats);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to load companies:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const [totalChart] = React.useState<any>({
-    series: [{
-      name: "Messages",
-      data: [25, 66, 41, 12, 36, 9, 21]
-    }],
-    fill: {
-      type: 'gradient',
-      gradient: {
-        opacityFrom: 0, // Start with 0 opacity (transparent)
-        opacityTo: 0    // End with 0 opacity (transparent)
+  const fetchPlans = async () => {
+    try {
+      const res = await apiClient.get('/subscriptions/plans');
+      if (res.data && Array.isArray(res.data)) {
+        setPlans(res.data);
       }
-    },
-    chart: {
-      foreColor: '#fff',
-      type: "area",
-      width: 50,
-      toolbar: {
-        show: !1
-      },
-      zoom: {
-        enabled: !1
-      },
-      dropShadow: {
-        enabled: 0,
-        top: 3,
-        left: 14,
-        blur: 4,
-        opacity: .12,
-        color: "#fff"
-      },
-      sparkline: {
-        enabled: !0
-      }
-    },
-    markers: {
-      size: 0,
-      colors: ["#F26522"],
-      strokeColors: "#fff",
-      strokeWidth: 2,
-      hover: {
-        size: 7
-      }
-    },
-    plotOptions: {
-      bar: {
-        horizontal: !1,
-        columnWidth: "35%",
-        endingShape: "rounded"
-      }
-    },
-    dataLabels: {
-      enabled: !1
-    },
-    stroke: {
-      show: !0,
-      width: 2.5,
-      curve: "smooth"
-    },
-    colors: ["#F26522"],
-    xaxis: {
-      categories: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"]
-    },
-    tooltip: {
-      theme: "dark",
-      fixed: {
-        enabled: !1
-      },
-      x: {
-        show: !1
-      },
-      y: {
-        title: {
-          formatter: function () {
-            return ""
-          }
-        }
-      },
-      marker: {
-        show: !1
-      }
+    } catch (err) {
+      console.error('Failed to load plans:', err);
     }
-  })
-  const [activeChart] = React.useState<any>({
-    series: [{
-      name: "Active Company",
-      data: [25, 40, 35, 20, 36, 9, 21]
-    }],
-    fill: {
-      type: 'gradient',
-      gradient: {
-        opacityFrom: 0, // Start with 0 opacity (transparent)
-        opacityTo: 0    // End with 0 opacity (transparent)
-      }
-    },
-    chart: {
-      foreColor: '#fff',
-      type: "area",
-      width: 50,
-      toolbar: {
-        show: !1
-      },
-      zoom: {
-        enabled: !1
-      },
-      dropShadow: {
-        enabled: 0,
-        top: 3,
-        left: 14,
-        blur: 4,
-        opacity: .12,
-        color: "#fff"
-      },
-      sparkline: {
-        enabled: !0
-      }
-    },
-    markers: {
-      size: 0,
-      colors: ["#F26522"],
-      strokeColors: "#fff",
-      strokeWidth: 2,
-      hover: {
-        size: 7
-      }
-    },
-    plotOptions: {
-      bar: {
-        horizontal: !1,
-        columnWidth: "35%",
-        endingShape: "rounded"
-      }
-    },
-    dataLabels: {
-      enabled: !1
-    },
-    stroke: {
-      show: !0,
-      width: 2.5,
-      curve: "smooth"
-    },
-    colors: ["#F26522"],
-    xaxis: {
-      categories: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"]
-    },
-    tooltip: {
-      theme: "dark",
-      fixed: {
-        enabled: !1
-      },
-      x: {
-        show: !1
-      },
-      y: {
-        title: {
-          formatter: function () {
-            return ""
-          }
-        }
-      },
-      marker: {
-        show: !1
-      }
+  };
+
+  useEffect(() => {
+    fetchCompanies();
+    fetchPlans();
+  }, []);
+
+  const handleAddCompanySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (addForm.password && addForm.password !== addForm.confirmPassword) {
+      setMessage({ type: 'danger', text: 'Passwords do not match!' });
+      return;
     }
-  })
-  const [inactiveChart] = React.useState<any>({
-    series: [{
-      name: "Inactive Company",
-      data: [25, 10, 35, 5, 25, 28, 21]
-    }],
-    fill: {
-      type: 'gradient',
-      gradient: {
-        opacityFrom: 0, // Start with 0 opacity (transparent)
-        opacityTo: 0    // End with 0 opacity (transparent)
-      }
-    },
-    chart: {
-      foreColor: '#fff',
-      type: "area",
-      width: 50,
-      toolbar: {
-        show: !1
-      },
-      zoom: {
-        enabled: !1
-      },
-      dropShadow: {
-        enabled: 0,
-        top: 3,
-        left: 14,
-        blur: 4,
-        opacity: .12,
-        color: "#fff"
-      },
-      sparkline: {
-        enabled: !0
-      }
-    },
-    markers: {
-      size: 0,
-      colors: ["#F26522"],
-      strokeColors: "#fff",
-      strokeWidth: 2,
-      hover: {
-        size: 7
-      }
-    },
-    plotOptions: {
-      bar: {
-        horizontal: !1,
-        columnWidth: "35%",
-        endingShape: "rounded"
-      }
-    },
-    dataLabels: {
-      enabled: !1
-    },
-    stroke: {
-      show: !0,
-      width: 2.5,
-      curve: "smooth"
-    },
-    colors: ["#F26522"],
-    xaxis: {
-      categories: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"]
-    },
-    tooltip: {
-      theme: "dark",
-      fixed: {
-        enabled: !1
-      },
-      x: {
-        show: !1
-      },
-      y: {
-        title: {
-          formatter: function () {
-            return ""
-          }
-        }
-      },
-      marker: {
-        show: !1
-      }
+    try {
+      const res = await apiClient.post('/subscriptions/companies', addForm);
+      setMessage({ type: 'success', text: res.data?.message || 'Company created successfully!' });
+      fetchCompanies();
+      setAddForm({
+        name: '', email: '', subdomain: '', phone: '', password: '', confirmPassword: '', address: '', planId: '', billingCycle: 'MONTHLY', status: 'ACTIVE'
+      });
+      // Close modal programmatically
+      const closeBtn = document.getElementById('close-add-modal');
+      if (closeBtn) closeBtn.click();
+    } catch (err: any) {
+      setMessage({ type: 'danger', text: err.response?.data?.message || 'Failed to create company' });
     }
-  })
-  const [locationChart] = React.useState<any>({
-    series: [{
-      name: "Inactive Company",
-      data: [30, 40, 15, 23, 20, 23, 25]
-    }],
-    fill: {
-      type: 'gradient',
-      gradient: {
-        opacityFrom: 0, // Start with 0 opacity (transparent)
-        opacityTo: 0    // End with 0 opacity (transparent)
-      }
-    },
-    chart: {
-      foreColor: '#fff',
-      type: "area",
-      width: 50,
-      toolbar: {
-        show: !1
-      },
-      zoom: {
-        enabled: !1
-      },
-      dropShadow: {
-        enabled: 0,
-        top: 3,
-        left: 14,
-        blur: 4,
-        opacity: .12,
-        color: "#fff"
-      },
-      sparkline: {
-        enabled: !0
-      }
-    },
-    markers: {
-      size: 0,
-      colors: ["#F26522"],
-      strokeColors: "#fff",
-      strokeWidth: 2,
-      hover: {
-        size: 7
-      }
-    },
-    plotOptions: {
-      bar: {
-        horizontal: !1,
-        columnWidth: "35%",
-        endingShape: "rounded"
-      }
-    },
-    dataLabels: {
-      enabled: !1
-    },
-    stroke: {
-      show: !0,
-      width: 2.5,
-      curve: "smooth"
-    },
-    colors: ["#F26522"],
-    xaxis: {
-      categories: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"]
-    },
-    tooltip: {
-      theme: "dark",
-      fixed: {
-        enabled: !1
-      },
-      x: {
-        show: !1
-      },
-      y: {
-        title: {
-          formatter: function () {
-            return ""
-          }
-        }
-      },
-      marker: {
-        show: !1
-      }
+  };
+
+  const handleEditCompanySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await apiClient.put(`/subscriptions/companies/${editForm.id}`, editForm);
+      setMessage({ type: 'success', text: res.data?.message || 'Company updated successfully!' });
+      fetchCompanies();
+      const closeBtn = document.getElementById('close-edit-modal');
+      if (closeBtn) closeBtn.click();
+    } catch (err: any) {
+      setMessage({ type: 'danger', text: err.response?.data?.message || 'Failed to update company' });
     }
-  })
+  };
+
+  const handleUpgradeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const targetPlanId = upgradeForm.planId || (plans[0]?.id ? String(plans[0].id) : '');
+      const res = await apiClient.post(`/subscriptions/companies/${upgradeForm.companyId}/change-plan`, {
+        planId: targetPlanId,
+        billingCycle: upgradeForm.billingCycle
+      });
+      setMessage({ type: 'success', text: res.data?.message || 'Plan upgraded successfully!' });
+      fetchCompanies();
+      const closeBtn = document.getElementById('close-upgrade-modal');
+      if (closeBtn) closeBtn.click();
+    } catch (err: any) {
+      setMessage({ type: 'danger', text: err.response?.data?.message || 'Failed to upgrade plan' });
+    }
+  };
+
+  const handleDeleteSubmit = async () => {
+    if (!selectedCompany) return;
+    try {
+      const res = await apiClient.delete(`/subscriptions/companies/${selectedCompany.id}`);
+      setMessage({ type: 'success', text: res.data?.message || 'Company deactivated successfully!' });
+      fetchCompanies();
+      const closeBtn = document.getElementById('close-delete-modal');
+      if (closeBtn) closeBtn.click();
+    } catch (err: any) {
+      setMessage({ type: 'danger', text: err.response?.data?.message || 'Failed to delete company' });
+    }
+  };
+
+  const openUpgradeModal = (record: any) => {
+    setSelectedCompany(record);
+    setUpgradeForm({
+      companyId: record.id,
+      companyName: record.name,
+      currentPlanName: record.planName || 'Starter',
+      planId: record.planId ? String(record.planId) : (plans[0]?.id ? String(plans[0].id) : ''),
+      billingCycle: record.billingCycle || 'MONTHLY',
+      amount: '200'
+    });
+  };
+
+  const openEditModal = (record: any) => {
+    setSelectedCompany(record);
+    setEditForm({
+      id: record.id,
+      name: record.name,
+      email: record.email,
+      subdomain: record.subdomain,
+      phone: record.phone || '',
+      address: record.address || '',
+      isActive: record.isActive
+    });
+  };
+
+  const columns = [
+    {
+      title: "Company Name",
+      dataIndex: "name",
+      render: (_text: String, record: any) => (
+        <div className="d-flex align-items-center file-name-icon">
+          <Link to="#" className="avatar avatar-md border rounded-circle">
+            <ImageWithBasePath
+              src={record.logoUrl || "assets/img/company/company-01.svg"}
+              className="img-fluid"
+              alt="img"
+            />
+          </Link>
+          <div className="ms-2">
+            <h6 className="fw-medium">
+              <Link to="#" onClick={() => setSelectedCompany(record)} data-bs-toggle="modal" data-bs-target="#company_detail">
+                {record.name}
+              </Link>
+            </h6>
+          </div>
+        </div>
+      ),
+      sorter: (a: any, b: any) => a.name.localeCompare(b.name),
+    },
+    {
+      title: "Email",
+      dataIndex: "email",
+      sorter: (a: any, b: any) => a.email.localeCompare(b.email),
+    },
+    {
+      title: "Subdomain URL",
+      dataIndex: "accountUrl",
+      render: (text: string) => (
+        <span className="text-primary">{text}</span>
+      ),
+      sorter: (a: any, b: any) => (a.accountUrl || '').localeCompare(b.accountUrl || ''),
+    },
+    {
+      title: "Plan",
+      dataIndex: "plan",
+      render: (_text: String, record: any) => (
+        <div className="d-flex align-items-center justify-content-between">
+          <p className="mb-0 me-2">{record.plan}</p>
+          <button
+            type="button"
+            className="btn badge badge-purple badge-xs border-0"
+            data-bs-toggle="modal"
+            data-bs-target="#upgrade_info"
+            onClick={() => openUpgradeModal(record)}
+          >
+            Upgrade
+          </button>
+        </div>
+      ),
+      sorter: (a: any, b: any) => a.plan.localeCompare(b.plan),
+    },
+    {
+      title: "Created At",
+      dataIndex: "createdAt",
+      render: (text: string) => text ? new Date(text).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A',
+      sorter: (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      render: (text: string) => (
+        <span className={`badge ${text === 'Active' ? 'badge-success' : 'badge-danger'} d-inline-flex align-items-center badge-xs`}>
+          <i className="ti ti-point-filled me-1" />
+          {text}
+        </span>
+      ),
+      sorter: (a: any, b: any) => a.status.localeCompare(b.status),
+    },
+    {
+      title: "Actions",
+      dataIndex: "actions",
+      render: (_: any, record: any) => (
+        <div className="action-icon d-inline-flex">
+          <Link
+            to="#"
+            className="me-2"
+            data-bs-toggle="modal"
+            data-bs-target="#company_detail"
+            onClick={() => setSelectedCompany(record)}
+          >
+            <i className="ti ti-eye" />
+          </Link>
+          <Link
+            to="#"
+            className="me-2"
+            data-bs-toggle="modal"
+            data-bs-target="#edit_company"
+            onClick={() => openEditModal(record)}
+          >
+            <i className="ti ti-edit" />
+          </Link>
+          <Link
+            to="#"
+            data-bs-toggle="modal"
+            data-bs-target="#delete_modal"
+            onClick={() => setSelectedCompany(record)}
+          >
+            <i className="ti ti-trash" />
+          </Link>
+        </div>
+      ),
+    },
+  ];
+
+  const chartConfig = {
+    series: [{ name: "Companies", data: [25, 40, 35, 50, 60, 75, 90] }],
+    fill: { type: 'gradient', gradient: { opacityFrom: 0, opacityTo: 0 } },
+    chart: { foreColor: '#fff', type: "area", width: 50, sparkline: { enabled: true } },
+    stroke: { show: true, width: 2.5, curve: "smooth" },
+    colors: ["#F26522"]
+  };
 
   return (
     <>
-      {/* Page Wrapper */}
       <div className="page-wrapper">
         <div className="content">
+          {message && (
+            <div className={`alert alert-${message.type} alert-dismissible fade show`} role="alert">
+              {message.text}
+              <button type="button" className="btn-close" onClick={() => setMessage(null)}></button>
+            </div>
+          )}
+
           {/* Breadcrumb */}
           <div className="d-md-flex d-block align-items-center justify-content-between page-breadcrumb mb-3">
             <div className="my-auto mb-2">
@@ -508,38 +339,6 @@ const Companies = () => {
               </nav>
             </div>
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
-              <div className="me-2 mb-2">
-                <div className="dropdown">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    <i className="ti ti-file-export me-1" />
-                    Export
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        <i className="ti ti-file-type-pdf me-1" />
-                        Export as PDF
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        <i className="ti ti-file-type-xls me-1" />
-                        Export as Excel{" "}
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
               <div className="mb-2">
                 <Link
                   to="#"
@@ -557,6 +356,7 @@ const Companies = () => {
             </div>
           </div>
           {/* /Breadcrumb */}
+
           <div className="row">
             {/* Total Companies */}
             <div className="col-lg-3 col-md-6 d-flex">
@@ -567,245 +367,93 @@ const Companies = () => {
                       <i className="ti ti-building fs-16" />
                     </span>
                     <div className="ms-2 overflow-hidden">
-                      <p className="fs-12 fw-medium mb-1 text-truncate">
-                        Total Companies
-                      </p>
-                      <h4>950</h4>
+                      <p className="fs-12 fw-medium mb-1 text-truncate">Total Companies</p>
+                      <h4>{stats.totalCompanies}</h4>
                     </div>
                   </div>
-                  <ReactApexChart
-                    options={totalChart}
-                    series={totalChart.series}
-                    type="area"
-                    width={50}
-                  />
+                  <ReactApexChart options={chartConfig as any} series={chartConfig.series} type="area" width={50} />
                 </div>
               </div>
             </div>
-            {/* /Total Companies */}
-            {/* Total Companies */}
+
+            {/* Active Companies */}
             <div className="col-lg-3 col-md-6 d-flex">
               <div className="card flex-fill">
                 <div className="card-body d-flex align-items-center justify-content-between">
                   <div className="d-flex align-items-center overflow-hidden">
                     <span className="avatar avatar-lg bg-success flex-shrink-0">
-                      <i className="ti ti-building fs-16" />
+                      <i className="ti ti-building-check fs-16" />
                     </span>
                     <div className="ms-2 overflow-hidden">
-                      <p className="fs-12 fw-medium mb-1 text-truncate">
-                        Active Companies
-                      </p>
-                      <h4>920</h4>
+                      <p className="fs-12 fw-medium mb-1 text-truncate">Active Companies</p>
+                      <h4>{stats.activeCompanies}</h4>
                     </div>
                   </div>
-                  <ReactApexChart
-                    options={activeChart}
-                    series={activeChart.series}
-                    type="area"
-                    width={50}
-                  />
+                  <ReactApexChart options={chartConfig as any} series={chartConfig.series} type="area" width={50} />
                 </div>
               </div>
             </div>
-            {/* /Total Companies */}
+
             {/* Inactive Companies */}
             <div className="col-lg-3 col-md-6 d-flex">
               <div className="card flex-fill">
                 <div className="card-body d-flex align-items-center justify-content-between">
                   <div className="d-flex align-items-center overflow-hidden">
                     <span className="avatar avatar-lg bg-danger flex-shrink-0">
-                      <i className="ti ti-building fs-16" />
+                      <i className="ti ti-building-x fs-16" />
                     </span>
                     <div className="ms-2 overflow-hidden">
-                      <p className="fs-12 fw-medium mb-1 text-truncate">
-                        Inactive Companies
-                      </p>
-                      <h4>30</h4>
+                      <p className="fs-12 fw-medium mb-1 text-truncate">Inactive Companies</p>
+                      <h4>{stats.inactiveCompanies}</h4>
                     </div>
                   </div>
-                  <ReactApexChart
-                    options={inactiveChart}
-                    series={inactiveChart.series}
-                    type="area"
-                    width={50}
-                  />
+                  <ReactApexChart options={chartConfig as any} series={chartConfig.series} type="area" width={50} />
                 </div>
               </div>
             </div>
-            {/* /Inactive Companies */}
-            {/* Company Location */}
+
+            {/* Pending Domains */}
             <div className="col-lg-3 col-md-6 d-flex">
               <div className="card flex-fill">
                 <div className="card-body d-flex align-items-center justify-content-between">
                   <div className="d-flex align-items-center overflow-hidden">
-                    <span className="avatar avatar-lg bg-skyblue flex-shrink-0">
-                      <i className="ti ti-map-pin-check fs-16" />
+                    <span className="avatar avatar-lg bg-info flex-shrink-0">
+                      <i className="ti ti-world fs-16" />
                     </span>
                     <div className="ms-2 overflow-hidden">
-                      <p className="fs-12 fw-medium mb-1 text-truncate">
-                        Company Location
-                      </p>
-                      <h4>180</h4>
+                      <p className="fs-12 fw-medium mb-1 text-truncate">Pending Domains</p>
+                      <h4>{stats.pendingDomains}</h4>
                     </div>
                   </div>
-                  <ReactApexChart
-                    options={locationChart}
-                    series={locationChart.series}
-                    type="area"
-                    width={50}
-                  />
+                  <ReactApexChart options={chartConfig as any} series={chartConfig.series} type="area" width={50} />
                 </div>
               </div>
             </div>
-            {/* /Company Location */}
           </div>
+
           <div className="card">
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
               <h5>Companies List</h5>
-              <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-                <div className="me-3">
-                  <div className="input-icon position-relative">
-                    <PredefinedDateRanges />
-                  </div>
-                </div>
-                <div className="dropdown me-3">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Select Plan
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Advanced
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Basic
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Enterprise
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-                <div className="dropdown me-3">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Select Status
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Active
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Inactive
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-                <div className="dropdown">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                    data-bs-toggle="dropdown"
-                  >
-                    Sort By : Last 7 Days
-                  </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Recently Added
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Ascending
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Descending
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Last Month
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
-                      >
-                        Last 7 Days
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
             </div>
             <div className="card-body p-0">
-              <Table dataSource={data} columns={columns} Selection={true} />
+              {loading ? (
+                <div className="p-4 text-center">Loading companies...</div>
+              ) : (
+                <Table dataSource={companies} columns={columns} Selection={true} />
+              )}
             </div>
           </div>
         </div>
-        <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-          <p className="mb-0">2014 - 2026 © SmartHR.</p>
-          <p>
-            Designed &amp; Developed By{" "}
-            <Link to="#" className="text-primary">
-              Dreams
-            </Link>
-          </p>
-        </div>
       </div>
-      {/* /Page Wrapper */}
-      {/* Add Company */}
+
+      {/* Add Company Modal */}
       <div className="modal fade" id="add_company">
         <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
               <h4 className="modal-title">Add New Company</h4>
               <button
+                id="close-add-modal"
                 type="button"
                 className="btn-close custom-btn-close"
                 data-bs-dismiss="modal"
@@ -814,218 +462,152 @@ const Companies = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form>
+            <form onSubmit={handleAddCompanySubmit}>
               <div className="modal-body pb-0">
                 <div className="row">
-                  <div className="col-md-12">
-                    <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
-                      <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-30.jpg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </div>
-                      <div className="profile-upload">
-                        <div className="mb-2">
-                          <h6 className="mb-1">Upload Profile Image</h6>
-                          <p className="fs-12">Image should be below 4 mb</p>
-                        </div>
-                        <div className="profile-uploader d-flex align-items-center">
-                          <div className="drag-upload-btn btn btn-sm btn-primary me-2">
-                            Upload
-                            <input
-                              type="file"
-                              className="form-control image-sign"
-                              multiple
-                            />
-                          </div>
-                          <Link
-                            to="#"
-                            className="btn btn-light btn-sm"
-                          >
-                            Cancel
-                          </Link>
-                        </div>
-                      </div>
+                  <div className="col-md-6">
+                    <div className="mb-3">
+                      <label className="form-label">
+                        Company Name <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        required
+                        value={addForm.name}
+                        onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                      />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label">
-                        Name <span className="text-danger"> *</span>
+                        Email Address <span className="text-danger">*</span>
                       </label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Email Address</label>
-                      <input type="email" className="form-control" />
+                      <input
+                        type="email"
+                        className="form-control"
+                        required
+                        value={addForm.email}
+                        onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
+                      />
                     </div>
                   </div>
                   <div className="col-md-12">
                     <div className="mb-3">
-                      <label className="form-label">Account URL</label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Subdomain (e.g. 'mycompany')</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Leave blank to auto-generate"
+                        value={addForm.subdomain}
+                        onChange={(e) => setAddForm({ ...addForm, subdomain: e.target.value })}
+                      />
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Phone Number <span className="text-danger"> *</span>
-                      </label>
-                      <input type="text" className="form-control" />
+                      <label className="form-label">Phone Number</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={addForm.phone}
+                        onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
+                      />
                     </div>
                   </div>
                   <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Website</label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Password <span className="text-danger"> *</span>
-                      </label>
-                      <div className="pass-group">
-                        <input
-                          type={
-                            passwordVisibility.password
-                              ? "text"
-                              : "password"
-                          }
-                          className="pass-input form-control"
-                        />
-                        <span
-                          className={`ti toggle-passwords ${passwordVisibility.password
-                            ? "ti-eye"
-                            : "ti-eye-off"
-                            }`}
-                          onClick={() =>
-                            togglePasswordVisibility("password")
-                          }
-                        ></span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Confirm Password <span className="text-danger"> *</span>
-                      </label>
-                      <div className="pass-group">
-                        <input
-                          type={
-                            passwordVisibility.confirmPassword
-                              ? "text"
-                              : "password"
-                          }
-                          className="pass-input form-control"
-                        />
-                        <span
-                          className={`ti toggle-passwords ${passwordVisibility.confirmPassword
-                            ? "ti-eye"
-                            : "ti-eye-off"
-                            }`}
-                          onClick={() =>
-                            togglePasswordVisibility("confirmPassword")
-                          }
-                        ></span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-12">
                     <div className="mb-3">
                       <label className="form-label">Address</label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Plan Name <span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={planName}
-                        defaultValue={planName[0]}
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={addForm.address}
+                        onChange={(e) => setAddForm({ ...addForm, address: e.target.value })}
                       />
                     </div>
                   </div>
                   <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Plan Type <span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={planType}
-                        defaultValue={planType[0]}
-                      />
+                    <div className="mb-3">
+                      <label className="form-label">Password</label>
+                      <div className="pass-group">
+                        <input
+                          type={passwordVisibility.password ? "text" : "password"}
+                          className="pass-input form-control"
+                          value={addForm.password}
+                          onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
+                        />
+                        <span
+                          className={`ti toggle-passwords ${passwordVisibility.password ? "ti-eye" : "ti-eye-off"}`}
+                          onClick={() => togglePasswordVisibility("password")}
+                        ></span>
+                      </div>
                     </div>
                   </div>
-                  <div className="col-md-4">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Currency <span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={currency}
-                        defaultValue={currency[0]}
-                      />
+                  <div className="col-md-6">
+                    <div className="mb-3">
+                      <label className="form-label">Confirm Password</label>
+                      <div className="pass-group">
+                        <input
+                          type={passwordVisibility.confirmPassword ? "text" : "password"}
+                          className="pass-input form-control"
+                          value={addForm.confirmPassword}
+                          onChange={(e) => setAddForm({ ...addForm, confirmPassword: e.target.value })}
+                        />
+                        <span
+                          className={`ti toggle-passwords ${passwordVisibility.confirmPassword ? "ti-eye" : "ti-eye-off"}`}
+                          onClick={() => togglePasswordVisibility("confirmPassword")}
+                        ></span>
+                      </div>
                     </div>
                   </div>
-                  <div className="col-md-4">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Language <span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={language}
-                        defaultValue={language[0]}
-                      />
+                  <div className="col-md-6">
+                    <div className="mb-3">
+                      <label className="form-label">Subscription Plan</label>
+                      <select
+                        className="form-select"
+                        value={addForm.planId}
+                        onChange={(e) => setAddForm({ ...addForm, planId: e.target.value })}
+                      >
+                        <option value="">Default (Starter Plan)</option>
+                        {plans.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
-                  <div className="col-md-4">
-                    <div className="mb-3 ">
-                      <label className="form-label">Status</label>
-                      <CommonSelect
-                        className='select'
-                        options={statusChoose}
-                        defaultValue={statusChoose[0]}
-                      />
+                  <div className="col-md-6">
+                    <div className="mb-3">
+                      <label className="form-label">Billing Cycle</label>
+                      <select
+                        className="form-select"
+                        value={addForm.billingCycle}
+                        onChange={(e) => setAddForm({ ...addForm, billingCycle: e.target.value })}
+                      >
+                        <option value="MONTHLY">Monthly</option>
+                        <option value="YEARLY">Yearly</option>
+                      </select>
                     </div>
                   </div>
                 </div>
               </div>
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-light me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                  Add Company
-                </button>
+                <button type="button" className="btn btn-light me-2" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" className="btn btn-primary">Add Company</button>
               </div>
             </form>
           </div>
         </div>
       </div>
-      {/* /Add Company */}
-      {/* Edit Company */}
+
+      {/* Edit Company Modal */}
       <div className="modal fade" id="edit_company">
         <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
               <h4 className="modal-title">Edit Company</h4>
               <button
+                id="close-edit-modal"
                 type="button"
                 className="btn-close custom-btn-close"
                 data-bs-dismiss="modal"
@@ -1034,51 +616,18 @@ const Companies = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form >
+            <form onSubmit={handleEditCompanySubmit}>
               <div className="modal-body pb-0">
                 <div className="row">
-                  <div className="col-md-12">
-                    <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
-                      <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-30.jpg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </div>
-                      <div className="profile-upload">
-                        <div className="mb-2">
-                          <h6 className="mb-1">Upload Profile Image</h6>
-                          <p className="fs-12">Image should be below 4 mb</p>
-                        </div>
-                        <div className="profile-uploader d-flex align-items-center">
-                          <div className="drag-upload-btn btn btn-sm btn-primary me-2">
-                            Upload
-                            <input
-                              type="file"
-                              className="form-control image-sign"
-                              multiple
-                            />
-                          </div>
-                          <Link
-                            to="#"
-                            className="btn btn-light btn-sm"
-                          >
-                            Cancel
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Name <span className="text-danger"> *</span>
-                      </label>
+                      <label className="form-label">Company Name</label>
                       <input
                         type="text"
                         className="form-control"
-                        defaultValue="Stellar Dynamics"
+                        required
+                        value={editForm.name}
+                        onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                       />
                     </div>
                   </div>
@@ -1088,184 +637,66 @@ const Companies = () => {
                       <input
                         type="email"
                         className="form-control"
-                        defaultValue="sophie@example.com"
+                        required
+                        value={editForm.email}
+                        onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="mb-3">
+                      <label className="form-label">Subdomain</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editForm.subdomain}
+                        onChange={(e) => setEditForm({ ...editForm, subdomain: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="mb-3">
+                      <label className="form-label">Phone</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editForm.phone}
+                        onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
                       />
                     </div>
                   </div>
                   <div className="col-md-12">
                     <div className="mb-3">
-                      <label className="form-label">Account URL</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue="sd.example.com"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Phone Number <span className="text-danger"> *</span>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue="+1 895455450"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Website</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        defaultValue="Admin Website"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Password <span className="text-danger"> *</span>
-                      </label>
-                      <div className="pass-group">
-                        <input
-                          type={
-                            passwordVisibility.password
-                              ? "text"
-                              : "password"
-                          }
-                          className="pass-input form-control"
-                        />
-                        <span
-                          className={`ti toggle-passwords ${passwordVisibility.password
-                            ? "ti-eye"
-                            : "ti-eye-off"
-                            }`}
-                          onClick={() =>
-                            togglePasswordVisibility("password")
-                          }
-                        ></span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Confirm Password <span className="text-danger"> *</span>
-                      </label>
-                      <div className="pass-group">
-                        <input
-                          type={
-                            passwordVisibility.confirmPassword
-                              ? "text"
-                              : "password"
-                          }
-                          className="pass-input form-control"
-                        />
-                        <span
-                          className={`ti toggle-passwords ${passwordVisibility.confirmPassword
-                            ? "ti-eye"
-                            : "ti-eye-off"
-                            }`}
-                          onClick={() =>
-                            togglePasswordVisibility("confirmPassword")
-                          }
-                        ></span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label">Address</label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Plan Name <span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={planName}
-                        defaultValue={planName[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Plan Type <span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={planType}
-                        defaultValue={planType[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Currency <span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={currency}
-                        defaultValue={currency[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Language <span className="text-danger"> *</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={language}
-                        defaultValue={language[1]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3 ">
                       <label className="form-label">Status</label>
-                      <CommonSelect
-                        className='select'
-                        options={statusChoose}
-                        defaultValue={statusChoose[1]}
-                      />
+                      <select
+                        className="form-select"
+                        value={editForm.isActive ? 'active' : 'inactive'}
+                        onChange={(e) => setEditForm({ ...editForm, isActive: e.target.value === 'active' })}
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
                     </div>
                   </div>
                 </div>
               </div>
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-light me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                  Save Changes
-                </button>
+                <button type="button" className="btn btn-light me-2" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Changes</button>
               </div>
             </form>
           </div>
         </div>
       </div>
-      {/* /Edit Company */}
-      {/* Upgrade Information */}
+
+      {/* Upgrade Package Modal */}
       <div className="modal fade" id="upgrade_info">
         <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
-              <h4 className="modal-title">Upgrade Package</h4>
+              <h4 className="modal-title">Upgrade Company Plan</h4>
               <button
+                id="close-upgrade-modal"
                 type="button"
                 className="btn-close custom-btn-close"
                 data-bs-dismiss="modal"
@@ -1276,302 +707,134 @@ const Companies = () => {
             </div>
             <div className="p-3 mb-1">
               <div className="rounded bg-light p-3">
-                <h5 className="mb-3">Current Plan Details</h5>
+                <h5 className="mb-3">Current Company</h5>
                 <div className="row align-items-center">
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <p className="fs-12 mb-0">Company Name</p>
-                      <p className="text-gray-9">BrightWave Innovations</p>
-                    </div>
+                  <div className="col-md-6">
+                    <p className="fs-12 mb-0">Company Name</p>
+                    <p className="text-gray-9 fw-semibold">{upgradeForm.companyName || selectedCompany?.name}</p>
                   </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <p className="fs-12 mb-0">Plan Name</p>
-                      <p className="text-gray-9">Advanced</p>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <p className="fs-12 mb-0">Plan Type</p>
-                      <p className="text-gray-9">Monthly</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="row align-items-center">
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <p className="fs-12 mb-0">Price</p>
-                      <p className="text-gray-9">200</p>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <p className="fs-12 mb-0">Register Date</p>
-                      <p className="text-gray-9">12 Sep 2024</p>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <p className="fs-12 mb-0">Expiring On</p>
-                      <p className="text-gray-9">11 Oct 2024</p>
-                    </div>
+                  <div className="col-md-6">
+                    <p className="fs-12 mb-0">Current Plan</p>
+                    <p className="text-gray-9 fw-semibold">{selectedCompany?.plan || upgradeForm.currentPlanName}</p>
                   </div>
                 </div>
               </div>
             </div>
-            <form >
+            <form onSubmit={handleUpgradeSubmit}>
               <div className="modal-body pb-0">
-                <h5 className="mb-4">Change Plan</h5>
+                <h5 className="mb-4">Select New Plan</h5>
                 <div className="row">
                   <div className="col-md-6">
-                    <div className="mb-3 ">
+                    <div className="mb-3">
                       <label className="form-label">
-                        Plan Name <span className="text-danger">*</span>
+                        Target Plan <span className="text-danger">*</span>
                       </label>
-                      <CommonSelect
-                        className='select'
-                        options={planName}
-                        defaultValue={planName[0]}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3 ">
-                      <label className="form-label">
-                        Plan Type <span className="text-danger">*</span>
-                      </label>
-                      <CommonSelect
-                        className='select'
-                        options={planType}
-                        defaultValue={planType[0]}
-                      />
+                      <select
+                        className="form-select"
+                        value={upgradeForm.planId}
+                        onChange={(e) => setUpgradeForm({ ...upgradeForm, planId: e.target.value })}
+                        required
+                      >
+                        {plans.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label">
-                        Ammount<span className="text-danger">*</span>
+                        Billing Cycle <span className="text-danger">*</span>
                       </label>
-                      <input type="text" className="form-control" />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Payment Date <span className="text-danger">*</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Next Payment Date <span className="text-danger">*</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Expiring On <span className="text-danger">*</span>
-                      </label>
-                      <div className="input-icon-end position-relative">
-                        <DatePicker
-                          className="form-control datetimepicker"
-                          format={{
-                            format: "DD-MM-YYYY",
-                            type: "mask",
-                          }}
-                          getPopupContainer={getModalContainer}
-                          placeholder="DD-MM-YYYY"
-                        />
-                        <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                      </div>
+                      <select
+                        className="form-select"
+                        value={upgradeForm.billingCycle}
+                        onChange={(e) => setUpgradeForm({ ...upgradeForm, billingCycle: e.target.value })}
+                      >
+                        <option value="MONTHLY">Monthly</option>
+                        <option value="YEARLY">Yearly</option>
+                      </select>
                     </div>
                   </div>
                 </div>
               </div>
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-light me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                  Save Changes
-                </button>
+                <button type="button" className="btn btn-light me-2" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Changes</button>
               </div>
             </form>
           </div>
         </div>
       </div>
-      {/* /Upgrade Information */}
-      {/* Company Detail */}
+
+      {/* Company Detail Modal */}
       <div className="modal fade" id="company_detail">
         <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
               <h4 className="modal-title">Company Detail</h4>
-              <button
-                type="button"
-                className="btn-close custom-btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
+              <button type="button" className="btn-close custom-btn-close" data-bs-dismiss="modal" aria-label="Close">
                 <i className="ti ti-x" />
               </button>
             </div>
-            <div className="moday-body">
-              <div className="p-3">
-                <div className="d-flex justify-content-between align-items-center rounded bg-light p-3">
-                  <div className="file-name-icon d-flex align-items-center">
-                    <Link
-                      to="#"
-                      className="avatar avatar-md border rounded-circle flex-shrink-0 me-2"
-                    >
-                      <ImageWithBasePath
-                        src="assets/img/company/company-01.svg"
-                        className="img-fluid"
-                        alt="img"
-                      />
-                    </Link>
+            <div className="modal-body">
+              {selectedCompany ? (
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <strong>Company Name:</strong>
+                    <div>{selectedCompany.name}</div>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <strong>Email:</strong>
+                    <div>{selectedCompany.email}</div>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <strong>Account Subdomain URL:</strong>
+                    <div className="text-primary">{selectedCompany.accountUrl}</div>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <strong>Subscription Plan:</strong>
+                    <div>{selectedCompany.plan}</div>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <strong>Status:</strong>
                     <div>
-                      <p className="text-gray-9 fw-medium mb-0">
-                        BrightWave Innovations
-                      </p>
-                      <p>michael@example.com</p>
+                      <span className={`badge ${selectedCompany.status === 'Active' ? 'badge-success' : 'badge-danger'}`}>
+                        {selectedCompany.status}
+                      </span>
                     </div>
                   </div>
-                  <span className="badge badge-success">
-                    <i className="ti ti-point-filled" />
-                    Active
-                  </span>
-                </div>
-              </div>
-              <div className="p-3">
-                <p className="text-gray-9 fw-medium">Basic Info</p>
-                <div className="pb-1 border-bottom mb-4">
-                  <div className="row align-items-center">
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Account URL</p>
-                        <p className="text-gray-9">bwi.example.com</p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Phone Number</p>
-                        <p className="text-gray-9">(163) 2459 315</p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Website</p>
-                        <p className="text-gray-9">www.exmple.com</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="row align-items-center">
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Currency</p>
-                        <p className="text-gray-9">United Stated Dollar (USD)</p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Language</p>
-                        <p className="text-gray-9">English</p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Addresss</p>
-                        <p className="text-gray-9">
-                          3705 Lynn Avenue, Phelps, WI 54554
-                        </p>
-                      </div>
-                    </div>
+                  <div className="col-md-6 mb-3">
+                    <strong>Created At:</strong>
+                    <div>{new Date(selectedCompany.createdAt).toLocaleString()}</div>
                   </div>
                 </div>
-                <p className="text-gray-9 fw-medium">Plan Details</p>
-                <div>
-                  <div className="row align-items-center">
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Plan Name</p>
-                        <p className="text-gray-9">Advanced</p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Plan Type</p>
-                        <p className="text-gray-9">Monthly</p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Price</p>
-                        <p className="text-gray-9">$200</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="row align-items-center">
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Register Date</p>
-                        <p className="text-gray-9">12 Sep 2024</p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Expiring On</p>
-                        <p className="text-gray-9">11 Oct 2024</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              ) : (
+                <div>No company selected</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete / Deactivate Modal */}
+      <div className="modal fade" id="delete_modal">
+        <div className="modal-dialog modal-dialog-centered modal-sm">
+          <div className="modal-content">
+            <div className="modal-body text-center p-4">
+              <i className="ti ti-trash fs-48 text-danger mb-3" />
+              <h5>Deactivate Company?</h5>
+              <p className="text-muted">Are you sure you want to deactivate "{selectedCompany?.name}"?</p>
+              <div className="d-flex justify-content-center mt-3">
+                <button id="close-delete-modal" type="button" className="btn btn-light me-2" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" className="btn btn-danger" onClick={handleDeleteSubmit}>Deactivate</button>
               </div>
             </div>
           </div>
         </div>
       </div>
-      {/* /Company Detail */}
     </>
+  );
+};
 
-
-  )
-}
-
-export default Companies
+export default Companies;
