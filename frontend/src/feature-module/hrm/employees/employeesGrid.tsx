@@ -13,12 +13,37 @@ import VerifyEmployeeModal from './VerifyEmployeeModal';
 type PasswordField = "password" | "confirmPassword";
 
 const EmployeesGrid = () => {
+    const currentUser = (() => { try { return JSON.parse(localStorage.getItem('authUser') || '{}'); } catch { return {}; } })();
+    const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'COMPANY_ADMIN';
+    const employeePermissions = currentUser?.permissions?.find((p: any) => p.module === 'EMPLOYEES') || {
+      canRead: false,
+      canWrite: false,
+      canCreate: false,
+      canDelete: false
+    };
+    const canAdd = isSuperAdmin || employeePermissions.canCreate;
+    const canEdit = isSuperAdmin || employeePermissions.canWrite;
+    const canDelete = isSuperAdmin || employeePermissions.canDelete;
+
     const [dbEmployees, setDbEmployees] = useState<any[]>([]);
     const [verifyEmp, setVerifyEmp] = useState<any>(null);
     const [dbDepartments, setDbDepartments] = useState<any[]>([]);
     const [dbDesignations, setDbDesignations] = useState<any[]>([]);
     const [selectedDesignation, setSelectedDesignation] = useState<string>('All');
     const [loading, setLoading] = useState<boolean>(true);
+    const [quotaInfo, setQuotaInfo] = useState<{
+      currentCount: number;
+      maxEmployees: number;
+      slotsLeft: number;
+      isLimitReached: boolean;
+      planName: string;
+    } | null>(null);
+
+    useEffect(() => {
+      apiClient.get('/employees/quota-status')
+        .then(res => setQuotaInfo(res.data))
+        .catch(err => console.error('Error fetching quota status:', err));
+    }, []);
 
     const [passwordVisibility, setPasswordVisibility] = useState({
         password: false,
@@ -38,7 +63,7 @@ const EmployeesGrid = () => {
     };
 
     const [newEmp, setNewEmp] = useState({ 
-        firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '', 
+        firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', companyRoleId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '', 
         basic: 0, hra: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0, bonus: 0, pfDeduction: 0, pfEmployer: 0, professionalTax: 0, tdsDeduction: 0, otherDeductions: 0, grossSalary: 0, netSalary: 0
     });
     const [editEmp, setEditEmp] = useState<any>({ 
@@ -102,8 +127,8 @@ const EmployeesGrid = () => {
                 apiClient.get('/designations')
             ]);
             setDbEmployees(empRes.data);
-            setDbDepartments(deptRes.data.map((d: any) => ({ value: d.id, label: d.name })));
-            setDbDesignations(desigRes.data.map((d: any) => ({ value: d.id, label: d.name })));
+            setDbDepartments(deptRes.data.map((d: any) => ({ value: String(d.id), label: d.name })));
+            setDbDesignations(desigRes.data.map((d: any) => ({ value: String(d.id), label: d.name })));
             setLoading(false);
         } catch (err) {
             console.error('Error fetching grid data:', err);
@@ -165,7 +190,7 @@ const EmployeesGrid = () => {
             }
             fetchData();
             setNewEmp({ 
-                firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '',
+                firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', companyRoleId: '', dateOfJoining: '', role: 'EMPLOYEE', reportingManagerId: '',
                 basic: 0, hra: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0, bonus: 0, pfDeduction: 0, pfEmployer: 0, professionalTax: 0, tdsDeduction: 0, otherDeductions: 0, grossSalary: 0, netSalary: 0
             });
             setNewEmpFile(null);
@@ -374,23 +399,59 @@ const EmployeesGrid = () => {
                                     </ul>
                                 </div>
                             </div>
-                            <div className="mb-2">
-                                <Link
-                                    to="#"
-                                    data-bs-toggle="modal" data-inert={true}
-                                    data-bs-target="#add_employee"
-                                    className="btn btn-primary d-flex align-items-center"
-                                >
-                                    <i className="ti ti-circle-plus me-2" />
-                                    Add Employee
-                                </Link>
-                            </div>
+                            {canAdd && (
+                                <div className="mb-2">
+                                    <Link
+                                        to="#"
+                                        data-bs-toggle={quotaInfo?.isLimitReached ? "" : "modal"}
+                                        data-inert={true}
+                                        data-bs-target={quotaInfo?.isLimitReached ? "" : "#add_employee"}
+                                        className={`btn ${quotaInfo?.isLimitReached ? 'btn-secondary disabled' : 'btn-primary'} d-flex align-items-center`}
+                                        onClick={(e) => {
+                                          if (quotaInfo?.isLimitReached) {
+                                            e.preventDefault();
+                                            alert(`Employee quota limit reached (${quotaInfo.maxEmployees}/${quotaInfo.maxEmployees}). Please upgrade your plan to add more employees.`);
+                                          }
+                                        }}
+                                    >
+                                        <i className="ti ti-circle-plus me-2" />
+                                        Add Employee
+                                    </Link>
+                                </div>
+                            )}
                             <div className="head-icons ms-2">
                                 <CollapseHeader />
                             </div>
                         </div>
                     </div>
                     {/* /Breadcrumb */}
+
+                    {/* Employee Quota Banner */}
+                    {quotaInfo && (
+                      <div className={`alert ${quotaInfo.isLimitReached ? 'alert-danger border-danger' : quotaInfo.slotsLeft <= 3 ? 'alert-warning border-warning' : 'alert-info border-info'} d-flex align-items-center justify-content-between rounded-3 p-3 mb-3`}>
+                        <div className="d-flex align-items-center">
+                          <i className={`ti ${quotaInfo.isLimitReached ? 'ti-alert-octagon-filled fs-24 me-2 text-danger' : 'ti-info-circle-filled fs-24 me-2 text-info'}`} />
+                          <div>
+                            <h6 className="mb-0 fw-semibold">
+                              {quotaInfo.isLimitReached
+                                ? `Employee Quota Limit Reached (${quotaInfo.currentCount} / ${quotaInfo.maxEmployees})`
+                                : `Employee Quota: ${quotaInfo.currentCount} / ${quotaInfo.maxEmployees} Employees (${quotaInfo.slotsLeft} ${quotaInfo.slotsLeft === 1 ? 'Slot' : 'Slots'} Remaining)`
+                              }
+                            </h6>
+                            <span className="fs-12">
+                              {quotaInfo.isLimitReached
+                                ? `Your company has filled all available slots on the ${quotaInfo.planName}. Please upgrade your plan to add more team members.`
+                                : `Current Subscription Plan: ${quotaInfo.planName}`
+                              }
+                            </span>
+                          </div>
+                        </div>
+                        <Link to={all_routes.membershipplan} className="btn btn-sm btn-dark ms-3 flex-shrink-0">
+                          <i className="ti ti-arrow-up-right-circle me-1" />
+                          Upgrade Plan
+                        </Link>
+                      </div>
+                    )}
 
                     {/* Stats Row */}
                     <div className="row">
@@ -606,11 +667,12 @@ const EmployeesGrid = () => {
                                                         <i className="ti ti-dots-vertical" />
                                                     </button>
                                                     <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                        <li>
-                                                            <Link
-                                                                className="dropdown-item rounded-1"
-                                                                to="#"
-                                                                data-bs-toggle="modal" data-inert={true}
+                                                        {canEdit && (
+                                                            <li>
+                                                                <Link
+                                                                    className="dropdown-item rounded-1"
+                                                                    to="#"
+                                                                    data-bs-toggle="modal" data-inert={true}
                                                                 data-bs-target="#edit_employee"
                                                                 onClick={() => {
                                                                     setEditEmp({
@@ -627,7 +689,8 @@ const EmployeesGrid = () => {
                                                                         username: emp.user?.name || '',
                                                                         company: emp.user?.company?.name || '',
                                                                         role: emp.user?.role || 'EMPLOYEE',
-                                                                        reportingManagerId: emp.reportingManagerId || '',
+                                                                        companyRoleId: emp.companyRoleId || '',
+                                                                        reportingManagerId: emp.reportingManagerId || (emp.companyRole?.name === 'HR Manager' ? String(dbEmployees.find((e: any) => e.user?.role === 'COMPANY_ADMIN')?.id || '') : ''),
                                                                         password: '',
                                                                         confirmPassword: '',
                                                                         basic: emp.salaryStructure?.basic || 0,
@@ -649,7 +712,9 @@ const EmployeesGrid = () => {
                                                                 Edit
                                                             </Link>
                                                         </li>
-                                                        {['DOCS_SUBMITTED', 'CORRECTION_REQUESTED'].includes(emp.onboardingStatus || '') && (
+                                                        )}
+                                                        {['DOCS_SUBMITTED', 'CORRECTION_REQUESTED', 'PROFILE_SUBMITTED'].includes(emp.onboardingStatus || '') &&
+                                                         (!(emp.user?.role === 'HR') || ['SUPER_ADMIN', 'COMPANY_ADMIN'].includes(currentUser?.role)) && (
                                                             <li>
                                                                 <Link
                                                                     className="dropdown-item rounded-1 text-warning"
@@ -676,7 +741,7 @@ const EmployeesGrid = () => {
                                                                 </Link>
                                                             </li>
                                                         )}
-                                                        {emp.onboardingStatus === 'INVITED' && (
+                                                        {emp.onboardingStatus === 'INVITED' && (!(emp.user?.role === 'HR') || ['SUPER_ADMIN', 'COMPANY_ADMIN'].includes(currentUser?.role)) && (
                                                             <li>
                                                                 <Link
                                                                     className="dropdown-item rounded-1 text-info"
@@ -696,18 +761,20 @@ const EmployeesGrid = () => {
                                                                 </Link>
                                                             </li>
                                                         )}
-                                                        <li>
-                                                            <Link
-                                                                className="dropdown-item rounded-1 text-danger"
-                                                                to="#"
-                                                                data-bs-toggle="modal" data-inert={true}
-                                                                data-bs-target="#delete_modal"
-                                                                onClick={() => setDeleteEmpId(emp.id)}
-                                                            >
-                                                                <i className="ti ti-trash me-1" />
-                                                                Delete
-                                                            </Link>
-                                                        </li>
+                                                        {canDelete && (
+                                                            <li>
+                                                                <Link
+                                                                    className="dropdown-item rounded-1 text-danger"
+                                                                    to="#"
+                                                                    data-bs-toggle="modal" data-inert={true}
+                                                                    data-bs-target="#delete_modal"
+                                                                    onClick={() => setDeleteEmpId(emp.id)}
+                                                                >
+                                                                    <i className="ti ti-trash me-1" />
+                                                                    Delete
+                                                                </Link>
+                                                            </li>
+                                                        )}
                                                     </ul>
                                                 </div>
                                             </div>
@@ -715,8 +782,11 @@ const EmployeesGrid = () => {
                                                 <h6 className="mb-1">
                                                     <Link to={`${all_routes.employeedetails}?id=${emp.id}`}>{`${emp.firstName || ''} ${emp.lastName || ''}`.trim()}</Link>
                                                 </h6>
-                                                <span className="badge bg-pink-transparent fs-10 fw-medium">
+                                                <span className="badge bg-pink-transparent fs-10 fw-medium me-1">
                                                     {emp.designation?.name || 'N/A'}
+                                                </span>
+                                                <span className="badge bg-info-transparent fs-10 fw-medium">
+                                                    {emp.employmentType?.replace('_', ' ') || 'FULL TIME'}
                                                 </span>
                                             </div>
                                             <div className="row text-center">
@@ -1067,7 +1137,15 @@ const EmployeesGrid = () => {
                                                             { value: 'HR', label: 'HR' },
                                                             { value: 'SUPER_ADMIN', label: 'Super Admin' }
                                                         ]}
-                                                        onChange={(opt) => setNewEmp({...newEmp, role: opt?.value || 'EMPLOYEE'})}
+                                                        onChange={(opt) => {
+                                                            const selectedRole = opt?.value || 'EMPLOYEE';
+                                                            const updates: any = { role: selectedRole };
+                                                            if (selectedRole === 'HR') {
+                                                                const adminEmp = dbEmployees.find((e: any) => e.user?.role === 'COMPANY_ADMIN');
+                                                                if (adminEmp) updates.reportingManagerId = String(adminEmp.id);
+                                                            }
+                                                            setNewEmp({...newEmp, ...updates});
+                                                        }}
                                                     />
                                                 </div>
                                             </div>
@@ -1075,9 +1153,11 @@ const EmployeesGrid = () => {
                                                 <div className="mb-3">
                                                     <label className="form-label">Reporting Manager</label>
                                                     <CommonSelect
+                                                        key={`rm-new-${newEmp.reportingManagerId}-${newEmp.companyRoleId}-${newEmp.role}`}
                                                         className="select"
-                                                        options={[{ value: '', label: '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() }))]}
+                                                        options={[{ value: '', label: newEmp.role === 'HR' ? 'Company Admin' : '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed' }))]}
                                                         onChange={(opt) => setNewEmp({...newEmp, reportingManagerId: opt?.value || ''})}
+                                                        isDisabled={newEmp.role === 'HR'}
                                                     />
                                                 </div>
                                             </div>
@@ -1523,8 +1603,11 @@ const EmployeesGrid = () => {
                                                     <label className="form-label">Department</label>
                                                     <CommonSelect
                                                         className="select"
-                                                        options={dbDepartments}
-                                                        defaultValue={dbDepartments.find(d => d.value === editEmp.departmentId)}
+                                                        options={[{ value: '', label: '-- None --' }, ...dbDepartments]}
+                                                        defaultValue={(() => {
+                                                            const allOptions = [{ value: '', label: '-- None --' }, ...dbDepartments];
+                                                            return allOptions.find(d => d.value === String(editEmp.departmentId)) || allOptions[0];
+                                                        })()}
                                                         onChange={(opt) => setEditEmp({...editEmp, departmentId: opt?.value || ''})}
                                                     />
                                                 </div>
@@ -1534,8 +1617,11 @@ const EmployeesGrid = () => {
                                                     <label className="form-label">Designation</label>
                                                     <CommonSelect
                                                         className="select"
-                                                        options={dbDesignations}
-                                                        defaultValue={dbDesignations.find(d => d.value === editEmp.designationId)}
+                                                        options={[{ value: '', label: '-- None --' }, ...dbDesignations]}
+                                                        defaultValue={(() => {
+                                                            const allOptions = [{ value: '', label: '-- None --' }, ...dbDesignations];
+                                                            return allOptions.find(d => d.value === String(editEmp.designationId)) || allOptions[0];
+                                                        })()}
                                                         onChange={(opt) => setEditEmp({...editEmp, designationId: opt?.value || ''})}
                                                     />
                                                 </div>
@@ -1560,10 +1646,15 @@ const EmployeesGrid = () => {
                                                 <div className="mb-3">
                                                     <label className="form-label">Reporting Manager</label>
                                                     <CommonSelect
+                                                        key={`rm-${editEmp.id}-${editEmp.reportingManagerId}-${editEmp.companyRoleId}-${editEmp.role}`}
                                                         className="select"
-                                                        options={[{ value: '', label: '-- None --' }, ...dbEmployees.filter(e => e.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() }))]}
-                                                        defaultValue={{ value: String(editEmp.reportingManagerId || ''), label: editEmp.reportingManagerId ? (dbEmployees.find(e => e.id === editEmp.reportingManagerId)?.Name || 'Selected Manager') : '-- None --' }}
+                                                        options={[{ value: '', label: editEmp.role === 'HR' ? 'Company Admin' : '-- None --' }, ...dbEmployees.filter((e: any) => e.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed' }))]}
+                                                        defaultValue={(() => {
+                                                            const isHR = editEmp.role === 'HR';
+                                                            return { value: String(editEmp.reportingManagerId || ''), label: editEmp.reportingManagerId ? (dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.firstName ? `${dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.firstName} ${dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.lastName}`.trim() : 'Selected Manager') : (isHR ? 'Company Admin' : '-- None --') };
+                                                        })()}
                                                         onChange={(opt) => setEditEmp({...editEmp, reportingManagerId: opt?.value || ''})}
+                                                        isDisabled={editEmp.role === 'HR'}
                                                     />
                                                 </div>
                                             </div>

@@ -5,7 +5,11 @@ import ImageWithBasePath from '../imageWithBasePath';
 import { all_routes } from '../../../router/all_routes';
 import PerfectScrollbar from "react-perfect-scrollbar";
 import "../../../../node_modules/react-perfect-scrollbar/dist/css/styles.css";
+import { useAppSelector } from '../../data/redux/store';
+
 const TwoColumnSidebar = () => {
+    const user = useAppSelector((state) => state.auth.user) as any;
+    const role = user?.role;
     const routes = all_routes
     const Location = useLocation();
     const [showSubMenusTab,] = useState(true);
@@ -411,15 +415,17 @@ const TwoColumnSidebar = () => {
                                             <li><Link to={all_routes.activity}>Activities</Link></li>
                                         </ul>
                                     </li>
-                                    <li className="submenu">
-                                        <Link to="#"><span>User Management</span>
-                                            <span className="menu-arrow"></span>
-                                        </Link>
-                                        <ul>
-                                            <li><Link to={all_routes.users}>Users</Link></li>
-                                            <li><Link to={all_routes.rolesPermissions}>Roles & Permissions</Link></li>
-                                        </ul>
-                                    </li>
+                                    {role !== 'SUPER_ADMIN' && (
+                                        <li className="submenu">
+                                            <Link to="#"><span>User Management</span>
+                                                <span className="menu-arrow"></span>
+                                            </Link>
+                                            <ul>
+                                                <li><Link to={all_routes.users}>Users</Link></li>
+                                                <li><Link to={all_routes.rolesPermissions}>Roles & Permissions</Link></li>
+                                            </ul>
+                                        </li>
+                                    )}
                                     <li className="submenu">
                                         <Link to="#"><span>Reports</span>
                                             <span className="menu-arrow"></span>

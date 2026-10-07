@@ -109,10 +109,10 @@ async function getHrDashboardSummary(req, res) {
             const cIn = new Date(record.checkIn);
             let cInHours, cInMins;
             try {
-                const timeStr = cIn.toLocaleTimeString('en-US', { timeZone: companyTimezone, hour12: false });
-                const parts = timeStr.split(':');
-                cInHours = parseInt(parts[0], 10);
-                cInMins = parseInt(parts[1], 10);
+                // Use formatToParts to get hour/minute in the company timezone — no locale needed
+                const parts = new Intl.DateTimeFormat([], { timeZone: companyTimezone, hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(cIn);
+                cInHours = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+                cInMins = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
                 if (cInHours === 24) cInHours = 0;
             } catch (tzErr) {
                 cInHours = cIn.getHours();
@@ -128,8 +128,39 @@ async function getHrDashboardSummary(req, res) {
             return false;
         };
 
-        const lateThresholdToday = new Date();
-        lateThresholdToday.setHours(officeStartHour, officeStartMin + gracePeriod, 0, 0);
+        // Build late threshold correctly in the company timezone.
+        // Strategy: get the "today" date string in the company TZ, then construct
+        // the threshold time as a UTC Date by reverse-calculating the TZ offset.
+        let lateThresholdToday;
+        try {
+            // Use Intl.DateTimeFormat formatToParts to get year/month/day in company TZ — no locale needed
+            const dtParts = new Intl.DateTimeFormat([], { timeZone: companyTimezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(rangeStart);
+            const year  = dtParts.find(p => p.type === 'year')?.value;
+            const month = dtParts.find(p => p.type === 'month')?.value;
+            const day   = dtParts.find(p => p.type === 'day')?.value;
+            const dateStr = `${year}-${month}-${day}`;
+            const thresholdHour = officeStartHour + Math.floor((officeStartMin + gracePeriod) / 60);
+            const thresholdMin = (officeStartMin + gracePeriod) % 60;
+
+            // Calculate TZ offset using formatToParts — no locale assumption
+            const nowUtc = new Date();
+            const tzParts = new Intl.DateTimeFormat([], { timeZone: companyTimezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(nowUtc);
+            const tzYear  = parseInt(tzParts.find(p => p.type === 'year')?.value   || '0', 10);
+            const tzMonth = parseInt(tzParts.find(p => p.type === 'month')?.value  || '0', 10) - 1;
+            const tzDay   = parseInt(tzParts.find(p => p.type === 'day')?.value    || '0', 10);
+            const tzHour  = parseInt(tzParts.find(p => p.type === 'hour')?.value   || '0', 10);
+            const tzMin   = parseInt(tzParts.find(p => p.type === 'minute')?.value || '0', 10);
+            const tzSec   = parseInt(tzParts.find(p => p.type === 'second')?.value || '0', 10);
+            const tzLocalMs = Date.UTC(tzYear, tzMonth, tzDay, tzHour === 24 ? 0 : tzHour, tzMin, tzSec);
+            const tzOffsetMs = tzLocalMs - nowUtc.getTime(); // e.g. +19800000 for IST
+
+            const isoStr = `${dateStr}T${String(thresholdHour).padStart(2, '0')}:${String(thresholdMin).padStart(2, '0')}:00.000Z`;
+            lateThresholdToday = new Date(new Date(isoStr).getTime() - tzOffsetMs);
+        } catch (tzBuildErr) {
+            // Fallback: use rangeStart with local hours
+            lateThresholdToday = new Date(rangeStart);
+            lateThresholdToday.setHours(officeStartHour, officeStartMin + gracePeriod, 0, 0);
+        }
 
         const todayRecords = await prisma.attendanceRecord.findMany({
             where: {
@@ -163,7 +194,7 @@ async function getHrDashboardSummary(req, res) {
                         || record.employee?.user?.name || 'Employee',
                     department: record.employee?.department?.name || record.employee?.designation?.name || '—',
                     photo: record.employee?.profilePhotoUrl || null,
-                    checkIn: checkIn.toLocaleTimeString('en-US', { timeZone: companyTimezone, hour: '2-digit', minute: '2-digit', hour12: true }),
+                    checkIn: new Intl.DateTimeFormat([], { timeZone: companyTimezone, hour: '2-digit', minute: '2-digit', hour12: true }).format(checkIn),
                     delayMinutes
                 });
             } else {
@@ -775,23 +806,53 @@ async function getAdminDashboardSummary(req, res) {
 
         let presentCount = 0, lateCount = 0, absentCount = 0, permissionCount = 0;
         
-        // Let's determine office start & grace period
+        // Let's determine office start & grace period & timezone
         let officeStartHour = 9, officeStartMin = 0, gracePeriod = 15;
+        let companyTimezone = 'Asia/Kolkata';
         try {
             if (companyId) {
                 const policy = await prisma.attendancePolicy.findUnique({ where: { companyId } });
                 if (policy) gracePeriod = policy.lateGracePeriod || 15;
                 const setting = await prisma.companySetting.findUnique({ where: { companyId } });
-                if (setting && setting.officeStartTime) {
-                    const parts = setting.officeStartTime.split(':');
-                    officeStartHour = parseInt(parts[0], 10);
-                    officeStartMin = parseInt(parts[1], 10);
+                if (setting) {
+                    if (setting.timezone) companyTimezone = setting.timezone;
+                    if (setting.officeStartTime) {
+                        const parts = setting.officeStartTime.split(':');
+                        officeStartHour = parseInt(parts[0], 10);
+                        officeStartMin = parseInt(parts[1], 10);
+                    }
                 }
             }
         } catch (e) {}
 
-        const lateThresholdToday = new Date(todayStart);
-        lateThresholdToday.setHours(officeStartHour, officeStartMin + gracePeriod, 0, 0);
+        // Build late threshold correctly in the company timezone
+        let lateThresholdToday;
+        try {
+            const dtParts = new Intl.DateTimeFormat([], { timeZone: companyTimezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(todayStart);
+            const year  = dtParts.find(p => p.type === 'year')?.value;
+            const month = dtParts.find(p => p.type === 'month')?.value;
+            const day   = dtParts.find(p => p.type === 'day')?.value;
+            const dateStr = `${year}-${month}-${day}`;
+            const thresholdHour = officeStartHour + Math.floor((officeStartMin + gracePeriod) / 60);
+            const thresholdMin = (officeStartMin + gracePeriod) % 60;
+
+            const nowUtc = new Date();
+            const tzParts = new Intl.DateTimeFormat([], { timeZone: companyTimezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(nowUtc);
+            const tzYear  = parseInt(tzParts.find(p => p.type === 'year')?.value   || '0', 10);
+            const tzMonth = parseInt(tzParts.find(p => p.type === 'month')?.value  || '0', 10) - 1;
+            const tzDay   = parseInt(tzParts.find(p => p.type === 'day')?.value    || '0', 10);
+            const tzHour  = parseInt(tzParts.find(p => p.type === 'hour')?.value   || '0', 10);
+            const tzMin   = parseInt(tzParts.find(p => p.type === 'minute')?.value || '0', 10);
+            const tzSec   = parseInt(tzParts.find(p => p.type === 'second')?.value || '0', 10);
+            const tzLocalMs = Date.UTC(tzYear, tzMonth, tzDay, tzHour === 24 ? 0 : tzHour, tzMin, tzSec);
+            const tzOffsetMs = tzLocalMs - nowUtc.getTime();
+
+            const isoStr = `${dateStr}T${String(thresholdHour).padStart(2, '0')}:${String(thresholdMin).padStart(2, '0')}:00.000Z`;
+            lateThresholdToday = new Date(new Date(isoStr).getTime() - tzOffsetMs);
+        } catch (tzBuildErr) {
+            lateThresholdToday = new Date(todayStart);
+            lateThresholdToday.setHours(officeStartHour, officeStartMin + gracePeriod, 0, 0);
+        }
 
         todayRecords.forEach(record => {
             if (record.status === 'ABSENT') {
@@ -856,8 +917,8 @@ async function getAdminDashboardSummary(req, res) {
                     const checkInTime = att.checkIn ? new Date(att.checkIn) : null;
                     const checkOutTime = att.checkOut ? new Date(att.checkOut) : null;
 
-                    const formattedCheckIn = checkInTime ? checkInTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
-                    const formattedCheckOut = checkOutTime ? checkOutTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+                    const formattedCheckIn = checkInTime ? checkInTime.toISOString() : '—';
+                    const formattedCheckOut = checkOutTime ? checkOutTime.toISOString() : '—';
 
                     let production = '—';
                     if (checkInTime && checkOutTime) {
@@ -924,10 +985,10 @@ async function getAdminDashboardSummary(req, res) {
             });
 
             if (minCheckIn) {
-                firstCheckIn = minCheckIn.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                firstCheckIn = minCheckIn.toISOString();
             }
             if (maxCheckOut) {
-                lastCheckOut = maxCheckOut.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                lastCheckOut = maxCheckOut.toISOString();
             }
             if (sumMs > 0) {
                 const diffHrs = Math.floor(sumMs / 3600000);

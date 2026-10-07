@@ -407,12 +407,105 @@ async function sendOfferLetterEmail({ toEmail, candidateName, jobTitle, annualCt
     }
 }
 
+async function sendCorrectionRequestEmail(toEmail, employeeName, companyName, workspaceUrl, reason) {
+    try {
+        const transporter = await getTransporter();
+        const mailOptions = {
+            from: `"HR Portal" <no-reply@hgs-hrms.local>`,
+            to: toEmail,
+            subject: 'Action Required: Update Your Profile / Documents',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+                    <h2 style="color: #ea580c; border-bottom: 2px solid #ea580c; padding-bottom: 10px;">Action Required</h2>
+                    <p style="color: #333; font-size: 16px;">Dear ${employeeName},</p>
+                    <p style="color: #555; font-size: 14px; line-height: 1.5;">
+                        During the review of your onboarding profile and documents for <strong>${companyName}</strong>, our HR team has requested some corrections.
+                    </p>
+                    <div style="background-color: #fff7ed; border-left: 4px solid #ea580c; padding: 15px; margin: 20px 0;">
+                        <h4 style="margin-top: 0; color: #9a3412;">Reason / Comments from HR:</h4>
+                        <p style="color: #444; font-size: 14px; margin-bottom: 0;">${reason}</p>
+                    </div>
+                    <p style="color: #555; font-size: 14px; line-height: 1.5;">
+                        Please log in to your employee portal and update your details or re-upload the requested documents as soon as possible to complete your onboarding process.
+                    </p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${workspaceUrl}/login" style="background-color: #ea580c; color: white; text-decoration: none; padding: 12px 25px; border-radius: 5px; font-weight: bold; display: inline-block;">Login to Portal</a>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                    <p style="color: #999; font-size: 12px; text-align: center;">
+                        Best regards,<br/>
+                        <strong>${companyName} HR Team</strong>
+                    </p>
+                </div>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('--------------------------------------------------');
+        console.log('[Correction Request Email] Sent to: %s (Message ID: %s)', toEmail, info.messageId);
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('--------------------------------------------------');
+        return info;
+    } catch (error) {
+        console.error('Error sending correction request email:', error);
+    }
+}
+
+async function sendDomainApprovedEmail(toEmail, companyName, subdomain, workspaceUrl) {
+    try {
+        const transporter = await getTransporter();
+        const loginUrl = `${workspaceUrl}/login`;
+
+        const mailOptions = {
+            from: `"SmartHR Support" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
+            to: toEmail,
+            subject: `Domain Approved & Activated: Access your ${companyName} Workspace`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                    <h2 style="color: #28a745; text-align: center;">Domain Approved & Activated!</h2>
+                    <p style="color: #333; font-size: 16px;">Hello Admin,</p>
+                    <p style="color: #555; font-size: 16px; line-height: 1.5;">
+                        Great news! The Super Admin has approved and activated your workspace domain for <strong>${companyName}</strong>.
+                    </p>
+                    <div style="background-color: #f4fdf7; padding: 18px; border-left: 4px solid #28a745; border-radius: 6px; margin: 20px 0;">
+                        <h4 style="margin-top: 0; color: #222;">Your Active Workspace Access Details:</h4>
+                        <ul style="color: #444; line-height: 1.8; padding-left: 20px; font-size: 14px; margin-bottom: 0;">
+                            <li><strong>Subdomain Prefix:</strong> ${subdomain}</li>
+                            <li><strong>Workspace Access URL:</strong> <a href="${loginUrl}" target="_blank" style="color: #ff5722; font-weight: bold;">${loginUrl}</a></li>
+                        </ul>
+                    </div>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${loginUrl}" style="background-color: #28a745; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+                            Log In to Workspace
+                        </a>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                    <p style="color: #999; font-size: 12px; text-align: center;">
+                        Best regards,<br/>
+                        <strong>SmartHR Super Admin Team</strong>
+                    </p>
+                </div>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('--------------------------------------------------');
+        console.log('[Domain Approval Email] Sent to: %s', toEmail);
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('--------------------------------------------------');
+        return info;
+    } catch (error) {
+        console.error('Error sending domain approved email:', error);
+    }
+}
+
 module.exports = {
     sendVerificationEmail,
     sendEmployeeInviteEmail,
     sendPasswordResetEmail,
     sendJobApplicationNotificationEmail,
     sendInterviewScheduleEmail,
-    sendOfferLetterEmail
+    sendOfferLetterEmail,
+    sendCorrectionRequestEmail,
+    sendDomainApprovedEmail
 };
-

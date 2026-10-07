@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/authMiddleware');
-const { requireProjectAdmin, requireFinanceAccess, requireProjectAccess } = require('../middleware/projectPermission');
+const { requireProjectAdmin, requireFinanceAccess, requireProjectAccess, checkModulePermission, checkProjectModulePermission } = require('../middleware/projectPermission');
 const {
   getProjects,
   getProjectById,
@@ -47,12 +47,12 @@ const upload = multer({ storage });
 // ── Project CRUD ──────────────────────────────────────────────────────────────
 router.get('/',       verifyToken, requireProjectAccess, getProjects);
 router.get('/:id',    verifyToken, requireProjectAccess, getProjectById);
-router.post('/',      verifyToken, requireProjectAdmin,  createProject);
-router.put('/:id',    verifyToken, requireProjectAdmin,  updateProject);
-router.delete('/:id', verifyToken, requireProjectAdmin,  deleteProject);
+router.post('/',      verifyToken, checkProjectModulePermission('PROJECTS', 'create'),  createProject);
+router.put('/:id',    verifyToken, checkProjectModulePermission('PROJECTS', 'write'),  updateProject);
+router.delete('/:id', verifyToken, checkProjectModulePermission('PROJECTS', 'delete'),  deleteProject);
 
 // Legacy single-file upload (kept for backward compat)
-router.post('/upload', verifyToken, requireProjectAdmin, upload.single('file'), (req, res) => {
+router.post('/upload', verifyToken, checkProjectModulePermission('PROJECTS', 'write'), upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
   const fileUrl = `/uploads/documents/${req.file.filename}`;
   res.json({ success: true, url: fileUrl });
@@ -63,12 +63,12 @@ router.put('/:id/budget',     verifyToken, requireFinanceAccess, updateProjectBu
 router.get('/:id/financials', verifyToken, requireFinanceAccess, getProjectFinancials);
 
 // ── Team Members (Admin/PM only) ──────────────────────────────────────────────
-router.post('/:id/members',             verifyToken, requireProjectAdmin, addProjectMembers);
-router.delete('/:id/members/:memberId', verifyToken, requireProjectAdmin, removeProjectMember);
+router.post('/:id/members',             verifyToken, checkProjectModulePermission('PROJECTS', 'write'), addProjectMembers);
+router.delete('/:id/members/:memberId', verifyToken, checkProjectModulePermission('PROJECTS', 'write'), removeProjectMember);
 
 // ── Milestones (Admin/PM only) ────────────────────────────────────────────────
-router.post('/:id/milestones',         verifyToken, requireProjectAdmin, addMilestone);
-router.put('/milestones/:milestoneId', verifyToken, requireProjectAdmin, updateMilestone);
+router.post('/:id/milestones',         verifyToken, checkProjectModulePermission('PROJECTS', 'write'), addMilestone);
+router.put('/milestones/:milestoneId', verifyToken, checkProjectModulePermission('PROJECTS', 'write'), updateMilestone);
 
 // ── Notes (all project members) ───────────────────────────────────────────────
 router.get('/:id/notes',        verifyToken, requireProjectAccess, getNotes);

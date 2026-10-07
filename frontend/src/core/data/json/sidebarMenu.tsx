@@ -918,6 +918,14 @@ export const SidebarDataTest = [
     separateRoute: false,
     submenuItems: [
       {
+        label: 'Membership Plans',
+        link: routes.membershipplan,
+        base: 'membership-plans',
+        icon: 'license',
+        submenu: false,
+        showSubRoute: false,
+      },
+      {
         label: 'Assets',
         base: 'assets',
         submenu: true,
@@ -1093,6 +1101,11 @@ export const SidebarDataTest = [
                 label: 'Company Settings',
                 link: routes.companySettings,
                 base: 'company-settings',
+              },
+              {
+                label: 'Membership Plans',
+                link: routes.membershipplan,
+                base: 'membership-plans',
               },
               {
                 label: 'Business Settings',

@@ -65,7 +65,7 @@ const requireCompanyRole = (...roles) => {
             return res.status(401).json({ message: 'Unauthorized' });
         }
         // Only COMPANY_ADMIN gets automatic bypass for company-level operations
-        if (req.user.role === 'COMPANY_ADMIN') {
+        if (req.user.role === 'COMPANY_ADMIN' || req.user.role === 'SUPER_ADMIN') {
             return next();
         }
         if (!roles.includes(req.user.role)) {

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import PredefinedDateRanges from '../../../core/common/datePicker';
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
 import apiClient from '../../../core/utils/apiClient';
+import { useAppSelector } from '../../../core/data/redux/store';
 
 interface Job {
   id?: number;
@@ -33,6 +34,7 @@ const JobGrid = () => {
   const [newTitle, setNewTitle] = useState('');
   const [newJobCode, setNewJobCode] = useState('');
   const [newLocation, setNewLocation] = useState('Onsite');
+  const [newEmploymentType, setNewEmploymentType] = useState('FULL_TIME');
   const [newVacancies, setNewVacancies] = useState('1');
   const [newMinSalary, setNewMinSalary] = useState('');
   const [newMaxSalary, setNewMaxSalary] = useState('');
@@ -144,6 +146,7 @@ const JobGrid = () => {
       formData.append('title', newTitle.trim());
       if (newJobCode.trim()) formData.append('jobCode', newJobCode.trim());
       formData.append('location', newLocation);
+      formData.append('employmentType', newEmploymentType);
       formData.append('vacancies', newVacancies);
       if (newMinSalary) formData.append('minSalary', newMinSalary);
       if (newMaxSalary) formData.append('maxSalary', newMaxSalary);
@@ -161,6 +164,7 @@ const JobGrid = () => {
       
       setNewTitle('');
       setNewJobCode('');
+      setNewEmploymentType('FULL_TIME');
       setNewMinSalary('');
       setNewMaxSalary('');
       setNewDescription('');
@@ -186,8 +190,10 @@ const JobGrid = () => {
       return {};
     }
   })();
-  const userRole = userObj?.role || '';
-  const canManageJobs = ['COMPANY_ADMIN', 'HR', 'MANAGER'].includes(userRole);
+  const currentUser = useAppSelector((state: any) => state.auth.user);
+  const userRole = currentUser?.role || userObj?.role || '';
+  const canManageJobs = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR', 'MANAGER'].includes(userRole) ||
+    currentUser?.permissions?.some((p: any) => p.module === 'RECRUITMENT' && (p.canWrite || p.canCreate));
 
   const handleOpenApplyModal = (job: Job) => {
     setApplyJobId(job.id || null);
@@ -376,7 +382,10 @@ const JobGrid = () => {
 
                     <div className="card-body">
                       <div className="d-flex align-items-center justify-content-between mb-2">
-                        <span className="badge bg-light text-dark border">{job.departmentName}</span>
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="badge bg-light text-dark border">{job.departmentName}</span>
+                          <span className="badge bg-info-transparent text-info border border-info">{job.employmentType}</span>
+                        </div>
                         <span className="fs-12 text-muted">{job.postedDate}</span>
                       </div>
 
@@ -546,7 +555,7 @@ const JobGrid = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-6">
+                  <div className="col-md-4">
                     <div className="mb-3">
                       <label className="form-label">
                         Vacancies <span className="text-danger"> *</span>
@@ -561,7 +570,7 @@ const JobGrid = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-6">
+                  <div className="col-md-4">
                     <div className="mb-3">
                       <label className="form-label">
                         Location <span className="text-danger"> *</span>
@@ -573,6 +582,24 @@ const JobGrid = () => {
                         onChange={(e) => setNewLocation(e.target.value)}
                         placeholder="e.g. Mumbai / Remote / Hybrid"
                       />
+                    </div>
+                  </div>
+
+                  <div className="col-md-4">
+                    <div className="mb-3">
+                      <label className="form-label">
+                        Job Type / Employment Type <span className="text-danger"> *</span>
+                      </label>
+                      <select
+                        className="form-select"
+                        value={newEmploymentType}
+                        onChange={(e) => setNewEmploymentType(e.target.value)}
+                      >
+                        <option value="FULL_TIME">Full Time (FULL_TIME)</option>
+                        <option value="PART_TIME">Part Time (PART_TIME)</option>
+                        <option value="CONTRACT">Contract (CONTRACT)</option>
+                        <option value="INTERN">Intern (INTERN)</option>
+                      </select>
                     </div>
                   </div>
 

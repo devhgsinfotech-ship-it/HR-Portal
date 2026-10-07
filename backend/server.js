@@ -95,6 +95,7 @@ const taskRoutes = require('./src/routes/taskRoutes');
 const timesheetRoutes = require('./src/routes/timesheetRoutes');
 const roleRoutes = require('./src/routes/roleRoutes');
 const payrollRoutes = require('./src/routes/payrollRoutes');
+const userRoutes = require('./src/routes/userRoutes');
 
 // SaaS Subscription Billing Routes & Seeder
 const subscriptionRoutes = require('./src/routes/subscriptionRoutes');
@@ -140,10 +141,13 @@ app.use('/roles', roleRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/payroll', payrollRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/users', userRoutes);
 
 // SaaS Subscriptions & Plans
 app.use('/super-admin', subscriptionRoutes);
 app.use('/api/super-admin', subscriptionRoutes);
+app.use('/subscriptions', subscriptionRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 
 // Phase 4 APIs
@@ -177,69 +181,9 @@ app.get('/health', async (req, res) => {
     }
 });
 
-// Auto-run prisma db push on startup to sync schema with database
-const { execSync } = require('child_process');
-const fs = require('fs');
-
-function getPrismaSyncConfig() {
-    // Dynamically locate schema.prisma file (checks backend/prisma or root prisma)
-    let schemaPath = path.join(__dirname, 'prisma', 'schema.prisma');
-    if (!fs.existsSync(schemaPath)) {
-        const altPath = path.join(__dirname, '..', 'prisma', 'schema.prisma');
-        if (fs.existsSync(altPath)) {
-            schemaPath = altPath;
-        }
-    }
-
-    const prismaCli = require.resolve('prisma/build/index.js');
-    const cmd = `"${process.execPath}" "${prismaCli}" db push --schema="${schemaPath}" --accept-data-loss`;
-
-    return { cmd, env: { ...process.env } };
-}
-
-function runDbPush() {
-    // On production servers, spawning child process CLI tasks on every HTTP startup is disabled for security.
-    // Database sync runs via build step or when ENABLE_AUTO_DB_PUSH=true is set.
-    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_AUTO_DB_PUSH !== 'true') {
-        console.log('[DB] Production mode active: Database connected cleanly.');
-        return;
-    }
-    try {
-        console.log('[DB] Running prisma db push to sync schema...');
-        const { cmd, env } = getPrismaSyncConfig();
-        const output = execSync(cmd, {
-            cwd: __dirname,
-            timeout: 60000,
-            stdio: 'pipe',
-            env
-        }).toString();
-        console.log('[DB] Schema sync complete:', output.trim());
-    } catch (err) {
-        const stdErrOutput = err.stderr ? err.stderr.toString() : err.message;
-        console.warn('[DB] Schema sync notice:', stdErrOutput);
-    }
-}
-
-// Admin endpoint to manually trigger database sync
-app.get('/admin/db-push', async (req, res) => {
-    try {
-        const { cmd, env } = getPrismaSyncConfig();
-        const output = execSync(cmd, {
-            cwd: __dirname,
-            timeout: 60000,
-            env
-        }).toString();
-        res.json({ success: true, output });
-    } catch (err) {
-        const stdErrOutput = err.stderr ? err.stderr.toString() : '';
-        res.status(500).json({ success: false, error: err.message, stderr: stdErrOutput });
-    }
-});
-
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
-    // Sync database schema after server starts
-    runDbPush();
     await seedDefaultPlans();
 });

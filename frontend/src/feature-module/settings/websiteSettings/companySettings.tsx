@@ -14,6 +14,15 @@ const resolveImageUrl = (url: string | null | undefined) => {
   return `${backendBase.replace(/\/$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
+const getFeatureList = (features: any): string[] => {
+  if (!features) return [];
+  if (Array.isArray(features)) return features;
+  if (typeof features === 'object') {
+    return Object.keys(features).filter(k => features[k] === true);
+  }
+  return [];
+};
+
 const CompanySettings = () => {
   const routes = all_routes;
   const [loading, setLoading] = useState(true);
@@ -92,15 +101,15 @@ const CompanySettings = () => {
   const handleUpgradePlan = async (targetPlanId: number) => {
     try {
       setUpgradingPlanId(targetPlanId);
-      const res = await apiClient.post('/api/subscription/company/change-plan', {
+      const res = await apiClient.post('/subscriptions/company/change-plan', {
         planId: targetPlanId,
         billingCycle: billingCycleToggle
       });
-      alert(res.data?.message || 'Plan upgraded successfully!');
-      const subRes = await apiClient.get('/api/subscription/company');
+      alert(res.data?.message || 'Plan updated successfully!');
+      const subRes = await apiClient.get('/subscriptions/company');
       if (subRes.data) setSubscriptionData(subRes.data);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to upgrade plan');
+      alert(err.response?.data?.message || 'Failed to update plan');
     } finally {
       setUpgradingPlanId(null);
     }
@@ -214,7 +223,7 @@ const CompanySettings = () => {
                   >
                     Company Settings
                   </Link>
-                  <Link to={routes.localization} className="d-block rounded p-2">
+                  <Link to={routes.localizationSettings} className="d-block rounded p-2">
                     Localization
                   </Link>
                   <Link to={routes.prefixes} className="d-block rounded p-2">
@@ -442,7 +451,7 @@ const CompanySettings = () => {
                               <div className="border-top pt-2 mb-3">
                                 <h6 className="fs-12 text-muted mb-2">Included Features:</h6>
                                 <ul className="list-unstyled mb-0 fs-12">
-                                  {subscriptionData.plan?.features?.map((feat: string, idx: number) => (
+                                  {getFeatureList(subscriptionData.plan?.features).map((feat: string, idx: number) => (
                                     <li key={idx} className="mb-1 d-flex align-items-center">
                                       <i className="ti ti-circle-check text-success me-2 fs-14" />
                                       {feat}
@@ -530,7 +539,7 @@ const CompanySettings = () => {
                             <div className="border-top pt-3 mb-4 flex-grow-1">
                               <h6 className="fs-12 text-dark mb-2">Features Included:</h6>
                               <ul className="list-unstyled fs-12 mb-0">
-                                {(Array.isArray(p.features) ? p.features : []).map((f: string, i: number) => (
+                                {(getFeatureList(p.features)).map((f: string, i: number) => (
                                   <li key={i} className="mb-2 d-flex align-items-center">
                                     <i className="ti ti-check text-success me-2" />
                                     {f}

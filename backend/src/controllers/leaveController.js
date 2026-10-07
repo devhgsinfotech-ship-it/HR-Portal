@@ -108,12 +108,15 @@ async function applyLeave(req, res) {
         let targetEmployeeId;
         if (employeeId) {
             // HR/Admin applying on behalf of employee
-            if (req.user.role !== 'HR' && req.user.role !== 'SUPER_ADMIN') {
+            if (req.user.role !== 'HR' && req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'COMPANY_ADMIN') {
                 return res.status(403).json({ message: 'Only HR or Admins can apply leave for other employees' });
             }
             targetEmployeeId = parseInt(employeeId, 10);
         } else {
             // Employee applying for themselves
+            if (req.user.role === 'COMPANY_ADMIN' || req.user.role === 'SUPER_ADMIN') {
+                return res.status(403).json({ message: 'Company Admins cannot apply for leave for themselves. Please select an employee.' });
+            }
             let employee = await prisma.employee.findUnique({ where: { userId } });
             
             // Auto-create employee profile for HR/Admin if it doesn't exist yet

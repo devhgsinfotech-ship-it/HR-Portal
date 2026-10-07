@@ -86,15 +86,17 @@ const Login = () => {
       // With this:
       dispatch(setCredentials({ token, user }));
 
-      // Redirect based on role
-      if (user.role === "SUPER_ADMIN") {
-        navigation(routes.superAdminDashboard);
-      } else if (user.role === "COMPANY_ADMIN" || user.role === "HR") {
-        navigation(routes.adminDashboard || routes.hrDashboard);
+      // Check onboarding status first
+      const onboardingStatus = user.onboardingStatus || 'INVITED';
+      
+      if (user.role !== 'SUPER_ADMIN' && user.role !== 'COMPANY_ADMIN' && onboardingStatus !== 'COMPLETED') {
+        navigation('/onboarding');
       } else {
-        const onboardingStatus = user.onboardingStatus || 'INVITED';
-        if (onboardingStatus !== 'COMPLETED') {
-          navigation('/onboarding');
+        // Redirect based on role if onboarding is completed or user is SUPER_ADMIN
+        if (user.role === "SUPER_ADMIN") {
+          navigation(routes.superAdminDashboard);
+        } else if (user.role === "COMPANY_ADMIN" || user.role === "HR") {
+          navigation(routes.adminDashboard || routes.hrDashboard);
         } else {
           navigation(routes.employeeDashboard);
         }
@@ -119,33 +121,17 @@ const Login = () => {
   return (
     <div className="container-fuild">
       <div className="w-100 overflow-hidden position-relative flex-wrap d-block vh-100">
-        <div className="row">
-          <div className="col-lg-5">
-            <div className="login-background position-relative d-lg-flex align-items-center justify-content-center d-none flex-wrap vh-100">
-              <div className="bg-overlay-img">
-                <ImageWithBasePath src="assets/img/bg/bg-01.png" className="bg-1" alt="Background pattern 1" />
-                <ImageWithBasePath src="assets/img/bg/bg-02.png" className="bg-2" alt="Background pattern 2" />
-                <ImageWithBasePath src="assets/img/bg/bg-03.png" className="bg-3" alt="Background pattern 3" />
-              </div>
-              <div className="authentication-card w-100">
-                <div className="authen-overlay-item border w-100">
-                  <h1 className="text-white display-1">
-                    Empowering people <br /> through seamless HR <br /> management.
-                  </h1>
-                  <div className="my-4 mx-auto authen-overlay-img">
-                    <ImageWithBasePath src="assets/img/bg/authentication-bg-01.png" alt="Authentication illustration" />
-                  </div>
-                  <div>
-                    <p className="text-white fs-20 fw-semibold text-center">
-                      Efficiently manage your workforce, streamline <br />{" "}
-                      operations effortlessly.
-                    </p>
-                  </div>
-                </div>
-              </div>
+        <div className="row g-0">
+          <div className="col-lg-6 p-0 d-none d-lg-block" style={{ backgroundColor: "#f2f7fc" }}>
+            <div className="vh-100 w-100 d-flex align-items-center justify-content-center p-5">
+              <ImageWithBasePath 
+                src="assets/img/bg/Hr-login-banner.png" 
+                alt="HR Management Illustration" 
+                className="mw-100 mh-100 object-fit-contain"
+              />
             </div>
           </div>
-          <div className="col-lg-7 col-md-12 col-sm-12">
+          <div className="col-lg-6 col-md-12 col-sm-12 p-0" style={{ background: "linear-gradient(135deg, #ffffff 0%, #f4f9ff 100%)" }}>
             <div className="row justify-content-center align-items-center vh-100 overflow-auto flex-wrap">
               <div className="col-md-7 mx-auto vh-100">
                 <form className="vh-100" onSubmit={handleLogin}>
@@ -183,38 +169,38 @@ const Login = () => {
                       </div>
                       <div className="mb-3">
                         {error && <div className="alert alert-danger p-2">{error}</div>}
-                        <label className="form-label">Email Address</label>
+                        <label className="form-label fw-bold text-dark fs-14">Email Address</label>
                         <div className="input-group">
                           <input
                             type="email"
-                            className="form-control border-end-0"
+                            className="form-control border-end-0 shadow-none"
+                            style={{ backgroundColor: "#f0f6ff", borderColor: "#dbeafe", padding: "12px" }}
                             required
                             autoComplete="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             onBlur={handleEmailBlur}
                           />
-                          <span className="input-group-text border-start-0">
-                            <i className="ti ti-mail" />
+                          <span className="input-group-text border-start-0" style={{ backgroundColor: "#f0f6ff", borderColor: "#dbeafe" }}>
+                            <i className="ti ti-mail text-secondary" />
                           </span>
                         </div>
                       </div>
                       <div className="mb-3">
-                        <label className="form-label">Password</label>
-                        <div className="pass-group">
+                        <label className="form-label fw-bold text-dark fs-14">Password</label>
+                        <div className="pass-group input-group">
                           <input
                             type={passwordVisibility.password ? "text" : "password"}
-                            className="pass-input form-control"
+                            className="pass-input form-control border-end-0 shadow-none"
+                            style={{ backgroundColor: "#f0f6ff", borderColor: "#dbeafe", padding: "12px" }}
                             required
                             autoComplete="current-password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                           />
                           <span
-                            className={`ti toggle-passwords ${passwordVisibility.password
-                              ? "ti-eye"
-                              : "ti-eye-off"
-                              }`}
+                            className={`input-group-text border-start-0 ti toggle-passwords ${passwordVisibility.password ? "ti-eye" : "ti-eye-off"} text-secondary`}
+                            style={{ backgroundColor: "#f0f6ff", borderColor: "#dbeafe", cursor: "pointer" }}
                             onClick={() => togglePasswordVisibility("password")}
                             role="button"
                             tabIndex={0}
@@ -239,7 +225,7 @@ const Login = () => {
                           </div>
                         </div>
                         <div className="text-end">
-                          <Link to={all_routes.forgotPassword} className="link-danger">
+                          <Link to={all_routes.forgotPassword} className="fw-medium" style={{ color: "#f97316" }}>
                             Forgot Password?
                           </Link>
                         </div>
@@ -247,7 +233,8 @@ const Login = () => {
                       <div className="mb-3">
                         <button
                           type="submit"
-                          className="btn btn-primary w-100"
+                          className="btn w-100 text-white fw-bold shadow-sm"
+                          style={{ backgroundColor: "#f97316", borderColor: "#f97316", padding: "12px", fontSize: "16px" }}
                         >
                           Sign In
                         </button>
@@ -255,8 +242,7 @@ const Login = () => {
                       <div className="text-center">
                         <h6 className="fw-normal text-dark mb-0">
                           Don’t have an account?
-                          <Link to={all_routes.register} className="hover-a">
-                            {" "}
+                          <Link to={all_routes.register} className="fw-bold ms-1" style={{ color: "#f97316" }}>
                             Create Account
                           </Link>
                         </h6>
@@ -264,44 +250,44 @@ const Login = () => {
                       <div className="login-or">
                         <span className="span-or">Or</span>
                       </div>
-                      <div className="mt-2">
-                        <div className="d-flex align-items-center justify-content-center flex-wrap">
-                          <div className="text-center me-2 flex-fill">
-                            <Link
-                              to="#"
-                              className="br-10 p-2 btn btn-info d-flex align-items-center justify-content-center"
-                            >
-                              <ImageWithBasePath
-                                className="img-fluid m-1"
-                                src="assets/img/icons/facebook-logo.svg"
-                                alt="Facebook"
-                              />
-                            </Link>
-                          </div>
-                          <div className="text-center me-2 flex-fill">
-                            <Link
-                              to="#"
-                              className="br-10 p-2 btn btn-outline-light border d-flex align-items-center justify-content-center"
-                            >
-                              <ImageWithBasePath
-                                className="img-fluid m-1"
-                                src="assets/img/icons/google-logo.svg"
-                                alt="Google"
-                              />
-                            </Link>
-                          </div>
-                          <div className="text-center flex-fill">
-                            <Link
-                              to="#"
-                              className="bg-dark br-10 p-2 btn btn-dark d-flex align-items-center justify-content-center"
-                            >
-                              <ImageWithBasePath
-                                className="img-fluid m-1"
-                                src="assets/img/icons/apple-logo.svg"
-                                alt="Apple"
-                              />
-                            </Link>
-                          </div>
+                      <div className="mt-4">
+                        <div className="d-flex align-items-center justify-content-between gap-3 flex-wrap">
+                          <Link
+                            to="#"
+                            className="btn btn-outline-light border d-flex align-items-center justify-content-center text-dark fw-medium flex-fill p-2 bg-white shadow-sm rounded-pill"
+                          >
+                            <ImageWithBasePath
+                              className="img-fluid"
+                              src="assets/img/icons/facebook-logo.svg"
+                              alt="Facebook"
+                              width={20}
+                            />
+                            <span className="ms-2 fs-14">Continue with Facebook</span>
+                          </Link>
+                          <Link
+                            to="#"
+                            className="btn btn-outline-light border d-flex align-items-center justify-content-center text-dark fw-medium flex-fill p-2 bg-white shadow-sm rounded-pill"
+                          >
+                            <ImageWithBasePath
+                              className="img-fluid"
+                              src="assets/img/icons/google-logo.svg"
+                              alt="Google"
+                              width={20}
+                            />
+                            <span className="ms-2 fs-14">Continue with Google</span>
+                          </Link>
+                          <Link
+                            to="#"
+                            className="bg-dark btn btn-dark d-flex align-items-center justify-content-center text-white fw-medium flex-fill p-2 shadow-sm rounded-pill"
+                          >
+                            <ImageWithBasePath
+                              className="img-fluid"
+                              src="assets/img/icons/apple-logo.svg"
+                              alt="Apple"
+                              width={20}
+                            />
+                            <span className="ms-2 fs-14">Continue with Apple</span>
+                          </Link>
                         </div>
                       </div>
                     </div>

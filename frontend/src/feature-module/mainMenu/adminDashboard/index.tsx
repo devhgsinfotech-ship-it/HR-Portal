@@ -92,8 +92,15 @@ const AdminDashboard = () => {
     const ssWithAmPm = parts[2];
     return { hhmm: `${hh}:${mm}`, ssAmPm: `:${ssWithAmPm}` };
   };
-
   const { hhmm, ssAmPm } = getFormattedTimeParts();
+
+  const formatTimeStr = (val: string) => {
+    if (!val || val === '—') return '—';
+    if (val.includes('T') || val.includes('-')) {
+      return new Date(val).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    }
+    return val;
+  };
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -1257,7 +1264,7 @@ const AdminDashboard = () => {
                             </Link>
                             <span className="fs-10 fw-medium d-inline-flex align-items-center badge badge-success">
                               <i className="ti ti-circle-filled fs-5 me-1" />
-                              {item.checkIn}
+                              {formatTimeStr(item.checkIn)}
                             </span>
                           </div>
                         </div>
@@ -1271,14 +1278,14 @@ const AdminDashboard = () => {
                           <i className="ti ti-circle-filled text-success fs-5 me-1" />
                           Clock In
                         </p>
-                        <h6 className="fs-13 fw-normal mb-2">{loading ? '—' : data.firstCheckIn}</h6>
+                        <h6 className="fs-13 fw-normal mb-2">{loading ? '—' : formatTimeStr(data.firstCheckIn)}</h6>
                       </div>
                       <div>
                         <p className="mb-1 d-inline-flex align-items-center">
                           <i className="ti ti-circle-filled text-danger fs-5 me-1" />
                           Clock Out
                         </p>
-                        <h6 className="fs-13 fw-normal mb-2">{loading ? '—' : data.lastCheckOut}</h6>
+                        <h6 className="fs-13 fw-normal mb-2">{loading ? '—' : formatTimeStr(data.lastCheckOut)}</h6>
                       </div>
                       <div>
                         <p className="mb-1 d-inline-flex align-items-center">
@@ -1325,7 +1332,7 @@ const AdminDashboard = () => {
                           </Link>
                           <span className="fs-10 fw-medium d-inline-flex align-items-center badge badge-success">
                             <i className="ti ti-circle-filled fs-5 me-1" />
-                            {item.checkIn}
+                            {formatTimeStr(item.checkIn)}
                           </span>
                         </div>
                       </div>

@@ -34,15 +34,12 @@ const DEFAULT_COMPANY_ROLES = [
     },
   },
   {
-    name: 'Manager / Team Lead',
-    description: 'Manages team members, attendance approvals, leave requests & tasks',
+    name: 'Manager',
+    description: 'Manages team members, attendance approvals and leave requests',
     permissions: {
       EMPLOYEES:  { canRead: true, canWrite: false, canCreate: false, canDelete: false, canImport: false, canExport: false },
       ATTENDANCE: { canRead: true, canWrite: true, canCreate: true, canDelete: false, canImport: false, canExport: true },
       LEAVES:     { canRead: true, canWrite: true, canCreate: true, canDelete: false, canImport: false, canExport: true },
-      PROJECTS:   { canRead: true, canWrite: true, canCreate: true, canDelete: false, canImport: false, canExport: true },
-      TASKS:      { canRead: true, canWrite: true, canCreate: true, canDelete: false, canImport: false, canExport: true },
-      TIMESHEETS: { canRead: true, canWrite: true, canCreate: true, canDelete: false, canImport: false, canExport: true },
     },
   },
   {
@@ -93,6 +90,17 @@ const DEFAULT_COMPANY_ROLES = [
       LEAVES:     { canRead: true, canWrite: true, canCreate: true, canDelete: false, canImport: false, canExport: false },
       PAYROLL:    { canRead: true, canWrite: false, canCreate: false, canDelete: false, canImport: false, canExport: false },
       DOCUMENTS:  { canRead: true, canWrite: true, canCreate: true, canDelete: false, canImport: false, canExport: false },
+    },
+  },
+  {
+    name: 'Project Manager & Team Lead',
+    description: 'Assigns projects, manages project lifecycle, clients, team leads and members',
+    permissions: {
+      PROJECTS:   { canRead: true, canWrite: true, canCreate: true, canDelete: true, canImport: false, canExport: true },
+      TASKS:      { canRead: true, canWrite: true, canCreate: true, canDelete: true, canImport: false, canExport: true },
+      CLIENTS:    { canRead: true, canWrite: true, canCreate: true, canDelete: false, canImport: false, canExport: true },
+      TIMESHEETS: { canRead: true, canWrite: true, canCreate: false, canDelete: false, canImport: false, canExport: true },
+      EMPLOYEES:  { canRead: true, canWrite: false, canCreate: false, canDelete: false, canImport: false, canExport: false },
     },
   },
 ];

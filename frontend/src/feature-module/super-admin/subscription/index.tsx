@@ -22,6 +22,7 @@ interface SubscriptionDetails {
   Status: string;
   trialDaysLeft: number;
   adminEmail: string;
+  features: any;
 }
 
 const Subscription = () => {
@@ -30,6 +31,20 @@ const Subscription = () => {
   const [totalSubsCount, setTotalSubsCount] = useState<number>(0);
   const [activeSubsCount, setActiveSubsCount] = useState<number>(0);
   const [expiredSubsCount, setExpiredSubsCount] = useState<number>(0);
+
+  const [selectedCompanyFeatures, setSelectedCompanyFeatures] = useState<{
+    companyId: number;
+    companyName: string;
+    features: string[];
+  } | null>(null);
+
+  const availableModules = [
+    'Employees', 'Invoices', 'Reports', 'Contacts',
+    'Clients', 'Estimates', 'Goals', 'Deals',
+    'Projects', 'Payments', 'Assets', 'Leads',
+    'Tickets', 'Taxes', 'Activities', 'Pipelines',
+    'Attendance', 'Payroll'
+  ];
 
   const fetchSubscriptions = async () => {
     try {
@@ -57,7 +72,8 @@ const Subscription = () => {
             ExpiringDate: sub.trialEndsAt ? new Date(sub.trialEndsAt).toLocaleDateString() : 'N/A',
             Status: sub.status,
             trialDaysLeft: sub.trialDaysLeft,
-            adminEmail: sub.adminEmail
+            adminEmail: sub.adminEmail,
+            features: sub.features || {}
           };
         });
 
@@ -76,6 +92,62 @@ const Subscription = () => {
   useEffect(() => {
     fetchSubscriptions();
   }, []);
+
+  const openManageFeaturesModal = (sub: SubscriptionDetails) => {
+    let activeFeats: string[] = [];
+    if (Array.isArray(sub.features)) {
+      activeFeats = sub.features;
+    } else if (sub.features && typeof sub.features === 'object') {
+      activeFeats = Object.keys(sub.features).filter(k => sub.features[k] === true);
+    }
+
+    setSelectedCompanyFeatures({
+      companyId: sub.companyId,
+      companyName: sub.CompanyName,
+      features: activeFeats
+    });
+  };
+
+  const handleToggleCompanyModule = (moduleName: string) => {
+    if (!selectedCompanyFeatures) return;
+    const exists = selectedCompanyFeatures.features.includes(moduleName);
+    const updated = exists
+      ? selectedCompanyFeatures.features.filter(f => f !== moduleName)
+      : [...selectedCompanyFeatures.features, moduleName];
+    setSelectedCompanyFeatures({ ...selectedCompanyFeatures, features: updated });
+  };
+
+  const handleSelectAllCompanyModules = (checked: boolean) => {
+    if (!selectedCompanyFeatures) return;
+    setSelectedCompanyFeatures({
+      ...selectedCompanyFeatures,
+      features: checked ? [...availableModules] : []
+    });
+  };
+
+  const handleSaveCompanyFeatures = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCompanyFeatures) return;
+
+    try {
+      const featMap: Record<string, boolean> = {};
+      availableModules.forEach(mod => {
+        featMap[mod] = selectedCompanyFeatures.features.includes(mod);
+      });
+
+      await apiClient.put(`/super-admin/subscriptions/${selectedCompanyFeatures.companyId}/features`, {
+        customFeatures: featMap
+      });
+
+      alert(`Custom features updated successfully for ${selectedCompanyFeatures.companyName}!`);
+      fetchSubscriptions();
+
+      const closeBtn = document.getElementById('close_manage_company_features_modal');
+      if (closeBtn) closeBtn.click();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update company features');
+    }
+  };
 
   const handleExtendTrial = async (companyId: number) => {
     try {
@@ -161,12 +233,23 @@ const Subscription = () => {
       title: "Action",
       dataIndex: "actions",
       render: (_text: string, record: SubscriptionDetails) => (
-        <div className="action-icon d-inline-flex align-items-center">
+        <div className="d-flex align-items-center gap-2">
           <button
-            className="btn btn-xs btn-outline-primary me-2"
+            className="btn btn-sm btn-outline-primary d-inline-flex align-items-center rounded-2 px-2 py-1 fs-12 fw-medium"
+            data-bs-toggle="modal"
+            data-bs-target="#manage_company_features"
+            onClick={() => openManageFeaturesModal(record)}
+            title="Manage Enabled Features for Company"
+          >
+            <i className="ti ti-adjustments-horizontal me-1 fs-14" />
+            Features
+          </button>
+          <button
+            className="btn btn-sm btn-outline-warning d-inline-flex align-items-center rounded-2 px-2 py-1 fs-12 fw-medium"
             onClick={() => handleExtendTrial(record.companyId)}
             title="Extend Trial (+14 Days)"
           >
+            <i className="ti ti-calendar-plus me-1 fs-14" />
             +14d Trial
           </button>
         </div>
@@ -835,9 +918,85 @@ const Subscription = () => {
         </div>
       </div>
       {/* /View Invoice */}
+
+      {/* Manage Company Features Modal */}
+      <div className="modal fade" id="manage_company_features">
+        <div className="modal-dialog modal-dialog-centered modal-lg">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h4 className="modal-title">
+                Manage Features — <span className="text-primary">{selectedCompanyFeatures?.companyName || 'Company'}</span>
+              </h4>
+              <button
+                type="button"
+                id="close_manage_company_features_modal"
+                className="btn-close custom-btn-close"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+              >
+                <i className="ti ti-x" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveCompanyFeatures}>
+              <div className="modal-body pb-0">
+                <p className="text-muted fs-13 mb-3">
+                  Enable or disable specific modules for <strong>{selectedCompanyFeatures?.companyName}</strong>. 
+                  These settings override their default subscription plan features.
+                </p>
+
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <h6 className="mb-0">Active Company Modules</h6>
+                  <div className="form-check d-flex align-items-center">
+                    <input
+                      className="form-check-input me-1"
+                      type="checkbox"
+                      id="compSelectAllModulesCheck"
+                      checked={selectedCompanyFeatures?.features.length === availableModules.length}
+                      onChange={(e) => handleSelectAllCompanyModules(e.target.checked)}
+                    />
+                    <label className="form-check-label text-dark fw-medium" htmlFor="compSelectAllModulesCheck">
+                      Select All
+                    </label>
+                  </div>
+                </div>
+
+                <div className="row bg-light rounded p-3 mb-3">
+                  {availableModules.map((mod) => (
+                    <div className="col-lg-3 col-sm-6 mb-2" key={mod}>
+                      <div className="form-check">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id={`comp_mod_${mod}`}
+                          checked={selectedCompanyFeatures?.features.includes(mod) || false}
+                          onChange={() => handleToggleCompanyModule(mod)}
+                        />
+                        <label className="form-check-label text-dark" htmlFor={`comp_mod_${mod}`}>
+                          {mod}
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-light me-2"
+                  data-bs-dismiss="modal"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save Features
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      {/* /Manage Company Features Modal */}
     </>
-
-
   )
 }
 
