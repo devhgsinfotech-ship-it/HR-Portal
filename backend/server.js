@@ -181,80 +181,9 @@ app.get('/health', async (req, res) => {
     }
 });
 
-// Auto-run prisma db push on startup to sync schema with database
-const { execSync } = require('child_process');
-const fs = require('fs');
-
-function getPrismaSyncConfig() {
-    // Dynamically locate schema.prisma file (checks backend/prisma or root prisma)
-    let schemaPath = path.join(__dirname, 'prisma', 'schema.prisma');
-    if (!fs.existsSync(schemaPath)) {
-        const altPath = path.join(__dirname, '..', 'prisma', 'schema.prisma');
-        if (fs.existsSync(altPath)) {
-            schemaPath = altPath;
-        }
-    }
-
-    const prismaCli = require.resolve('prisma/build/index.js');
-    const cmd = `"${process.execPath}" "${prismaCli}" db push --schema="${schemaPath}" --accept-data-loss`;
-
-    return { cmd, env: { ...process.env } };
-}
-
-function runDbPush() {
-    // On production servers, spawning child process CLI tasks on every HTTP startup is disabled for security.
-    // Database sync runs via build step or when ENABLE_AUTO_DB_PUSH=true is set.
-    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_AUTO_DB_PUSH !== 'true') {
-        console.log('[DB] Production mode active: Database connected cleanly.');
-        return;
-    }
-    try {
-        console.log('[DB] Running prisma db push to sync schema...');
-        const { cmd, env } = getPrismaSyncConfig();
-        const output = execSync(cmd, {
-            cwd: __dirname,
-            timeout: 60000,
-            stdio: 'pipe',
-            env
-        }).toString();
-        console.log('[DB] Schema sync complete:', output.trim());
-    } catch (err) {
-        const stdErrOutput = err.stderr ? err.stderr.toString() : err.message;
-        console.warn('[DB] Schema sync notice:', stdErrOutput);
-    }
-}
-
-// Admin endpoint to manually trigger database sync
-app.get('/admin/db-push', async (req, res) => {
-    try {
-        const { cmd, env } = getPrismaSyncConfig();
-        const output = execSync(cmd, {
-            cwd: __dirname,
-            timeout: 60000,
-            env
-        }).toString();
-        res.json({ success: true, output });
-    } catch (err) {
-        const stdErrOutput = err.stderr ? err.stderr.toString() : '';
-        res.status(500).json({ success: false, error: err.message, stderr: stdErrOutput });
-    }
-});
-
-async function ensureDbColumns() {
-    try {
-        const prisma = require('./src/config/prisma');
-        await prisma.$executeRawUnsafe("ALTER TABLE companies ADD COLUMN domainStatus VARCHAR(191) NOT NULL DEFAULT 'APPROVED';").catch(() => {});
-        await prisma.$executeRawUnsafe("ALTER TABLE companies ADD COLUMN emailDomain VARCHAR(191) NULL;").catch(() => {});
-        console.log('[DB] Self-healing database columns verified.');
-    } catch (e) {
-        console.warn('[DB] Column verification notice:', e.message);
-    }
-}
-
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
-    await ensureDbColumns();
-    runDbPush();
     await seedDefaultPlans();
 });
