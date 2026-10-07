@@ -220,46 +220,18 @@ const Register = () => {
         <div className="row">
 
           {/* Left panel */}
-          <div className="col-lg-5">
-            <div className="login-background position-relative d-lg-flex align-items-center justify-content-center d-none flex-wrap vh-100">
-              <div className="bg-overlay-img">
-                <ImageWithBasePath
-                  src="assets/img/bg/bg-01.png"
-                  className="bg-1"
-                  alt="Background pattern 1"
-                />
-                <ImageWithBasePath
-                  src="assets/img/bg/bg-02.png"
-                  className="bg-2"
-                  alt="Background pattern 2"
-                />
-                <ImageWithBasePath
-                  src="assets/img/bg/bg-03.png"
-                  className="bg-3"
-                  alt="Background pattern 3"
-                />
-              </div>
-              <div className="authentication-card w-100">
-                <div className="authen-overlay-item border w-100">
-                  <h1 className="text-white display-1">
-                    Start managing <br /> your workforce <br /> smarter.
-                  </h1>
-                  <div className="my-4 mx-auto authen-overlay-img">
-                    <ImageWithBasePath
-                      src="assets/img/bg/authentication-bg-01.png"
-                      alt="Authentication illustration"
-                    />
-                  </div>
-                  <p className="text-white fs-20 fw-semibold text-center">
-                    Join thousands of companies <br /> using our HRMS platform.
-                  </p>
-                </div>
-              </div>
+          <div className="col-lg-6 p-0 d-none d-lg-block" style={{ backgroundColor: 'rgb(242, 247, 252)' }}>
+            <div className="vh-100 w-100 d-flex align-items-center justify-content-center p-5">
+              <img 
+                src="/assets/img/bg/Hr-login-banner.png" 
+                className="mw-100 mh-100 object-fit-contain" 
+                alt="HR Management Illustration" 
+              />
             </div>
           </div>
 
           {/* Right panel — Form */}
-          <div className="col-lg-7 col-md-12 col-sm-12">
+          <div className="col-lg-6 col-md-12 col-sm-12 p-0" style={{ background: 'linear-gradient(135deg, rgb(255, 255, 255) 0%, rgb(244, 249, 255) 100%)' }}>
             <div className="row justify-content-center align-items-center vh-100 overflow-auto flex-wrap">
               <div className="col-md-8 mx-auto py-4 px-3">
 
