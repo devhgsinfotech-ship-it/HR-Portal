@@ -1009,12 +1009,11 @@ async function deleteSuperAdminCompany(req, res) {
       return res.status(400).json({ message: 'Invalid company ID' });
     }
 
-    await prisma.company.update({
-      where: { id: companyId },
-      data: { isActive: false }
+    await prisma.company.delete({
+      where: { id: companyId }
     });
 
-    res.json({ message: 'Company deactivated successfully' });
+    res.json({ message: 'Company and all associated data deleted successfully' });
   } catch (error) {
     console.error('Error deleting company:', error);
     res.status(500).json({ message: error.message || 'Failed to delete company' });
