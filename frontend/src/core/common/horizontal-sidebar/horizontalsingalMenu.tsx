@@ -2,6 +2,7 @@ import React, { useState, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { HorizontalSidebarData } from "../../data/json/horizontalSidebar";
 import ImageWithBasePath from "../imageWithBasePath";
+import { useAppSelector } from "../../data/redux/store";
 
 // Types for menu items
 interface SubMenuThree {
@@ -63,6 +64,8 @@ const getAllRoutes = (item: SubMenu | SubMenuTwo | SubMenuThree): string[] => {
 const HorizontalSignalSidebar: React.FC = () => {
   const location = useLocation();
   const currentPath = location.pathname;
+  const user = useAppSelector((state) => state.auth.user) as any;
+  const currentRole = user?.role || "EMPLOYEE";
 
   // State for open menus at different levels (only opens on click, not auto-open)
   const [openMenus, setOpenMenus] = useState<Set<string>>(new Set());
@@ -183,7 +186,12 @@ const HorizontalSignalSidebar: React.FC = () => {
                     {/* Level 1 Submenu */}
                     {hasSubmenu && (
                       <ul style={{ display: isOpen ? "block" : "none" }}>
-                        {menuItem.subMenus?.map((subItem, j) => {
+                        {menuItem.subMenus?.filter(subItem => {
+                          if (currentRole === "EMPLOYEE" && menuItem.menuValue === "Dashboard") {
+                            return subItem.menuValue === "Employee Dashboard";
+                          }
+                          return true;
+                        }).map((subItem, j) => {
                           const hasSubTwo =
                             subItem.customSubmenuTwo &&
                             subItem.subMenusTwo &&

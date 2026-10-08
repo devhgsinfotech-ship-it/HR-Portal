@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const emailService = require('../utils/emailService');
 const { seedDefaultCompanyRoles } = require('../utils/seedDefaultRoles');
+const { generateCompanyCode, autoAssignEmployeeDefaults } = require('../utils/codeGenerator');
 
 async function login(req, res) {
     try {
@@ -35,17 +36,10 @@ async function login(req, res) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // 2. Subdomain & Role Validation
+        // 2. Subdomain & Role Validation (Optional validation if subdomain provided)
         if (subdomain) {
-            // Trying to login to a specific workspace (e.g. hgsinfotech.yourhrms.com)
-            if (!user.company || user.company.subdomain !== subdomain) {
+            if (user.company && user.company.subdomain !== subdomain && user.role !== 'SUPER_ADMIN') {
                 return res.status(403).json({ message: 'You do not have access to this workspace' });
-            }
-        } else {
-            // Trying to login to the main domain (e.g. yourhrms.com or localhost)
-            // ONLY Super Admins are allowed here.
-            if (user.role !== 'SUPER_ADMIN') {
-                return res.status(403).json({ message: 'Please log in through your company\'s specific workspace URL.' });
             }
         }
 
@@ -62,9 +56,12 @@ async function login(req, res) {
                 });
             }
             if (user.company.domainStatus !== 'APPROVED') {
-                return res.status(403).json({
-                    message: 'Your company domain is not active. Please verify your account.'
-                });
+                // Auto-approve company domain so verified users can log in directly without requiring Company Admin approval
+                await prisma.company.update({
+                    where: { id: user.company.id },
+                    data: { domainStatus: 'APPROVED', isEmailVerified: true }
+                }).catch(err => console.warn('Auto domain approval notice:', err.message));
+                user.company.domainStatus = 'APPROVED';
             }
         }
 
@@ -74,13 +71,14 @@ async function login(req, res) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // 5. Generate JWT — include companyId and subdomain in token
+        // 5. Generate JWT — include companyId, companyCode, and subdomain in token
         const token = jwt.sign(
             {
                 id: user.id,
                 role: user.role,
                 email: user.email,
                 companyId: user.companyId,
+                companyCode: user.company?.companyCode || null,
                 subdomain: user.company?.subdomain || null,
             },
             process.env.JWT_SECRET || 'fallback_secret_key',
@@ -88,7 +86,30 @@ async function login(req, res) {
         );
 
         // Map permission matrix for easy frontend consumption
-        const permissions = user.employee?.companyRole?.permissions || [];
+        let companyRole = user.employee?.companyRole;
+        if (!companyRole && user.companyId && user.employee?.id) {
+            const roleNameMap = { HR: 'HR Manager', MANAGER: 'Manager', EMPLOYEE: 'Employee' };
+            const targetRoleName = roleNameMap[user.role] || user.role;
+            let foundRole = await prisma.companyRole.findFirst({
+                where: { companyId: user.companyId, name: targetRoleName },
+                include: { permissions: true }
+            });
+            if (!foundRole) {
+                await seedDefaultCompanyRoles(prisma, user.companyId);
+                foundRole = await prisma.companyRole.findFirst({
+                    where: { companyId: user.companyId, name: targetRoleName },
+                    include: { permissions: true }
+                });
+            }
+            if (foundRole) {
+                companyRole = foundRole;
+                await prisma.employee.update({
+                    where: { id: user.employee.id },
+                    data: { companyRoleId: foundRole.id }
+                }).catch(err => console.warn('Failed to auto-link companyRoleId in login:', err.message));
+            }
+        }
+        const permissions = companyRole?.permissions || [];
 
         res.json({
             message: 'Login successful',
@@ -99,11 +120,13 @@ async function login(req, res) {
                 email: user.email,
                 role: user.role,
                 companyId: user.companyId,
+                companyCode: user.company?.companyCode || null,
+                companyName: user.company?.name || null,
                 subdomain: user.company?.subdomain || null,
                 companyLogoUrl: user.company?.logoUrl || null,
                 profilePhotoUrl: user.employee?.profilePhotoUrl || null,
                 onboardingStatus: (user.role === 'SUPER_ADMIN' || user.role === 'COMPANY_ADMIN') ? 'COMPLETED' : (user.employee?.onboardingStatus || 'INVITED'),
-                companyRoleName: user.employee?.companyRole?.name || null,
+                companyRoleName: companyRole?.name || user.employee?.companyRole?.name || null,
                 permissions: permissions
             },
         });
@@ -185,10 +208,15 @@ async function register(req, res) {
             counter++;
         }
 
-        // Check if email already exists
+        // Check if email already exists in User or Company
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
-            return res.status(409).json({ message: 'An account with this email already exists' });
+            return res.status(409).json({ message: 'An account with this email address already exists. Please log in or use a different email.' });
+        }
+
+        const existingCompany = await prisma.company.findUnique({ where: { email } });
+        if (existingCompany) {
+            return res.status(409).json({ message: 'A company with this email address already exists. Please log in or use a different email.' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -196,11 +224,14 @@ async function register(req, res) {
         const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
         const result = await prisma.$transaction(async (tx) => {
+            const companyCode = await generateCompanyCode(tx, companyName);
+
             const company = await tx.company.create({
                 data: {
                     name: companyName,
                     email,
                     emailDomain,                     // ← Store the corporate domain
+                    companyCode,                     // ← Store unique company code (e.g. HGS-342)
                     subdomain: generatedSubdomain,   // ← Store the subdomain
                     phone: phone || null,
                     industry: industry || null,
@@ -252,15 +283,16 @@ async function register(req, res) {
             return { company, user };
         });
 
-        // Dynamically generate the workspace URL based on the environment
+        // Dynamically generate base URL based on the environment
         const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
         const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
         const protocol = domain.includes('localhost') ? 'http' : 'https';
-        const workspaceUrl = `${protocol}://${result.company.subdomain}.${domain}`;
+        const baseUrl = `${protocol}://${domain}`;
+        const workspaceUrl = baseUrl;
 
         // Send real email instead of just logging token
         try {
-            await emailService.sendVerificationEmail(email, verifyToken, companyName, workspaceUrl);
+            await emailService.sendVerificationEmail(email, verifyToken, companyName, baseUrl);
         } catch (emailError) {
             console.error('Failed to send verification email:', emailError);
             // We still return 201 because the user was created, but we could warn them.
@@ -271,6 +303,7 @@ async function register(req, res) {
             company: {
                 id: result.company.id,
                 name: result.company.name,
+                companyCode: result.company.companyCode,
                 subdomain: result.company.subdomain,
                 workspaceUrl: workspaceUrl,
             }
@@ -278,7 +311,13 @@ async function register(req, res) {
 
     } catch (error) {
         console.error('Register Error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        if (error.code === 'P2002') {
+            const field = Array.isArray(error.meta?.target) ? error.meta.target.join(', ') : (error.meta?.target || 'email');
+            return res.status(409).json({ 
+                message: `An account or company with this ${field} already exists. Please log in or use a different value.` 
+            });
+        }
+        res.status(500).json({ message: error.message || 'Internal server error' });
     }
 }
 
@@ -335,6 +374,10 @@ async function verifyEmail(req, res) {
                         domainStatus: 'APPROVED',
                     },
                 });
+            }
+            // Auto approve employee onboarding, generate employee code, username, department & designation automatically
+            if (verifyRecord.userId && verifyRecord.user?.companyId) {
+                await autoAssignEmployeeDefaults(tx, verifyRecord.userId, verifyRecord.user.companyId);
             }
         });
 
@@ -595,7 +638,7 @@ async function resendVerification(req, res) {
         const isProduction = process.env.NODE_ENV === 'production';
         const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
         const protocol = domain.includes('localhost') ? 'http' : 'https';
-        const workspaceUrl = `${protocol}://${user.company.subdomain}.${domain}`;
+        const workspaceUrl = `${protocol}://${domain}`;
 
         await emailService.sendVerificationEmail(email, verifyToken, user.company.name, workspaceUrl);
 
@@ -721,11 +764,6 @@ async function resetPassword(req, res) {
                 where: { id: resetRecord.id },
                 data: { used: true }
             }).catch(e => console.warn('Mark token used notice:', e.message));
-
-            await prisma.employee.updateMany({
-                where: { userId: resetRecord.userId },
-                data: { onboardingStatus: 'COMPLETED' }
-            }).catch(e => console.warn('Employee status update notice:', e.message));
         } catch (secondaryErr) {
             console.warn('Secondary cleanup error in resetPassword ignored:', secondaryErr.message);
         }

@@ -73,10 +73,7 @@ const checkModulePermission = (module, action) => async (req, res, next) => {
       });
     }
 
-    // HR always has access to project ops (but not budget)
-    if (user.role === 'HR' && action !== 'budget') return next();
-
-    // Check CompanyRole permissions
+    // Check CompanyRole permissions first
     const employee = await prisma.employee.findUnique({
       where: { userId: user.id },
       include: {
@@ -87,26 +84,29 @@ const checkModulePermission = (module, action) => async (req, res, next) => {
     });
 
     const perm = employee?.companyRole?.permissions?.[0];
-    if (!perm) {
-      return res.status(403).json({ message: `No permission for module: ${module}` });
+    if (perm) {
+      const actionMap = {
+        read:   perm.canRead,
+        write:  perm.canWrite,
+        create: perm.canCreate,
+        delete: perm.canDelete,
+        import: perm.canImport,
+        export: perm.canExport,
+      };
+
+      const targetAction = effectiveAction;
+      if (!actionMap[targetAction]) {
+        return res.status(403).json({ message: `Permission denied: cannot ${targetAction} ${module}` });
+      }
+
+      req.modulePermission = perm;
+      return next();
     }
 
-    const actionMap = {
-      read:   perm.canRead,
-      write:  perm.canWrite,
-      create: perm.canCreate,
-      delete: perm.canDelete,
-      import: perm.canImport,
-      export: perm.canExport,
-    };
+    // Fallback: HR default access if no dynamic permission record exists yet
+    if (user.role === 'HR' && action !== 'budget') return next();
 
-    if (!actionMap[action]) {
-      return res.status(403).json({ message: `Permission denied: cannot ${action} ${module}` });
-    }
-
-    // Attach permission object to request for downstream use
-    req.modulePermission = perm;
-    next();
+    return res.status(403).json({ message: `No permission for module: ${module}` });
   } catch (err) {
     console.error('Permission check error:', err);
     res.status(500).json({ message: 'Internal server error during permission check.' });

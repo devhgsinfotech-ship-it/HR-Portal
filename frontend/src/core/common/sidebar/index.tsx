@@ -69,9 +69,34 @@ const getRouteRoles = (path: string | undefined): Role[] => {
   ];
   const isSuperAdminRoute = superAdminAllowed.some(kw => p.includes(kw));
 
-  // --- 2. HIDE DASHBOARD ---
-  if (p === "/index" || p.includes("dashboard")) {
-    return ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  // --- 2. DASHBOARD ROUTES ---
+  if (p === "/employee-dashboard" || p.includes("employee-dashboard")) {
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+  if (p.includes("hr-dashboard")) {
+    return ["COMPANY_ADMIN", "HR"];
+  }
+  if (
+    p.includes("payroll-dashboard") ||
+    p.includes("finance-dashboard") ||
+    p.includes("asset-dashboard") ||
+    p.includes("help-desk-dashboard")
+  ) {
+    return ["COMPANY_ADMIN", "HR"];
+  }
+  if (
+    p.includes("recruitment-dashboard") ||
+    p.includes("attendance-dashboard") ||
+    p.includes("deals-dashboard") ||
+    p.includes("leads-dashboard")
+  ) {
+    return ["COMPANY_ADMIN", "HR", "MANAGER"];
+  }
+  if (p.includes("it-admin-dashboard")) {
+    return ["COMPANY_ADMIN"];
+  }
+  if (p === "/index" || p.includes("admin-dashboard") || p.includes("dashboard")) {
+    return ["COMPANY_ADMIN", "SUPER_ADMIN"];
   }
 
   // --- 3. EXISTING COMPANY-LEVEL FILTERS ---
@@ -138,6 +163,26 @@ const filterMenu = (items: SidebarMenuItem[] | undefined, role: Role): SidebarMe
       const baseLower = (item.base || "").toLowerCase();
       if (labelLower === "user management" || baseLower === "user-management") {
         return false;
+      }
+    }
+
+    // Explicitly for EMPLOYEE role: under Dashboard menu, ONLY "Employee Dashboard" is visible.
+    // Hide all other dashboard sub-routes!
+    if (role === "EMPLOYEE") {
+      const labelLower = (item.label || "").toLowerCase();
+      const linkLower = (item.link || "").toLowerCase();
+      const baseLower = (item.base || "").toLowerCase();
+      if (
+        (labelLower.includes("dashboard") || linkLower.includes("dashboard") || baseLower.includes("dashboard")) &&
+        labelLower !== "dashboard" && item.link !== "index"
+      ) {
+        if (
+          labelLower !== "employee dashboard" &&
+          !linkLower.includes("employee-dashboard") &&
+          !baseLower.includes("employee-dashboard")
+        ) {
+          return false;
+        }
       }
     }
 

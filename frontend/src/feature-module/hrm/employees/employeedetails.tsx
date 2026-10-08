@@ -1110,19 +1110,6 @@ const EmployeeDetails = () => {
                       Basic Information
                     </button>
                   </li>
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link"
-                      id="address-tab3"
-                      data-bs-toggle="tab"
-                      data-bs-target="#address3"
-                      type="button"
-                      role="tab"
-                      aria-selected="false"
-                    >
-                      Permissions
-                    </button>
-                  </li>
                 </ul>
               </div>
               <div className="tab-content" id="myTabContent2">

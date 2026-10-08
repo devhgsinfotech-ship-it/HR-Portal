@@ -499,6 +499,52 @@ async function sendDomainApprovedEmail(toEmail, companyName, subdomain, workspac
     }
 }
 
+async function sendHRManagerOnboardingEmail({ toEmail, hrName, companyName, verifyUrl }) {
+    try {
+        const transporter = await getTransporter();
+
+        const mailOptions = {
+            from: `"${companyName} HR Portal" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
+            to: toEmail,
+            subject: `Welcome to ${companyName} - Verify Account & Create Password`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 25px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
+                    <h2 style="color: #ff5722; text-align: center; margin-bottom: 20px;">${companyName}</h2>
+                    <h3 style="color: #333;">Welcome, ${hrName}!</h3>
+                    <p style="color: #555; font-size: 16px; line-height: 1.5;">
+                        You have been added as an <strong>HR Manager</strong> for <strong>${companyName}</strong>.
+                    </p>
+                    <p style="color: #555; font-size: 15px; line-height: 1.5;">
+                        To activate your account and log in, please verify your email address and set your password by clicking the button below:
+                    </p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${verifyUrl}" style="background-color: #ff5722; color: #fff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                            Verify Account &amp; Create Password
+                        </a>
+                    </div>
+                    <p style="color: #555; font-size: 14px;">
+                        Direct link:<br/>
+                        <a href="${verifyUrl}" style="color: #ff5722; word-break: break-all;">${verifyUrl}</a>
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;" />
+                    <p style="color: #777; font-size: 13px; text-align: center;">
+                        After creating your password, log in to complete your onboarding details (Phone, Date of Joining, Profile Photo, Bank &amp; Documents).
+                    </p>
+                </div>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('--------------------------------------------------');
+        console.log('[HR Manager Onboarding Email] Sent to: %s', toEmail);
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('--------------------------------------------------');
+        return info;
+    } catch (error) {
+        console.error('Error sending HR Manager onboarding email:', error);
+    }
+}
+
 module.exports = {
     sendVerificationEmail,
     sendEmployeeInviteEmail,
@@ -507,5 +553,6 @@ module.exports = {
     sendInterviewScheduleEmail,
     sendOfferLetterEmail,
     sendCorrectionRequestEmail,
-    sendDomainApprovedEmail
+    sendDomainApprovedEmail,
+    sendHRManagerOnboardingEmail
 };

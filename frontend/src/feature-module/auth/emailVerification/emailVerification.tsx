@@ -107,18 +107,7 @@ const EmailVerification = () => {
                   </div>
                   <h3 className="mb-2 text-success">Email Verified!</h3>
                   <p className="text-muted mb-4">{message}</p>
-                  {subdomain && (
-                    <div className="alert alert-info mb-3 text-start">
-                      <p className="mb-1"><strong>Your workspace is ready:</strong></p>
-                      <a 
-                        href={`${APP_CONFIG.getBackendUrl().startsWith('https') ? 'https' : 'http'}://${subdomain}.${APP_CONFIG.getFrontendDomain()}/login`} 
-                        className="fw-semibold"
-                      >
-                        {subdomain}.{APP_CONFIG.getFrontendDomain()}/login →
-                      </a>
-                    </div>
-                  )}
-                  <Link to={routes.login} className="btn btn-primary w-100">
+                  <Link to={routes.login} className="btn btn-primary w-100 py-2 fw-medium">
                     <i className="ti ti-login me-2" />Go to Login
                   </Link>
                 </>

@@ -10,6 +10,8 @@ import TwoColumnSidebar from "../core/common/two-column";
 import StackedSidebar from "../core/common/stacked-sidebar";
 import DeleteModal from "../core/modals/deleteModal";
 import { setResetMobileSidebar } from "../core/data/redux/sidebarSlice";
+import { updateUser } from "../core/data/redux/authSlice";
+import apiClient from "../core/utils/apiClient";
 import React from "react";
 import type {
   AppRootState as RootState,
@@ -55,6 +57,22 @@ const Feature = React.memo(() => {
   );
   const location = useLocation();
   const dispatch = useDispatch<AppDispatch>();
+
+  // Sync latest profile info & permissions from server on layout load
+  useEffect(() => {
+    apiClient.get('/employees/me')
+      .then((res) => {
+        if (res.data) {
+          dispatch(updateUser({
+            permissions: res.data.permissions,
+            companyRoleName: res.data.companyRoleName,
+            profilePhotoUrl: res.data.profilePhotoUrl || undefined,
+            name: res.data.user?.name || `${res.data.firstName || ''} ${res.data.lastName || ''}`.trim() || undefined
+          }));
+        }
+      })
+      .catch((err) => console.warn('Failed to sync user profile in layout:', err.message));
+  }, [dispatch]);
 
   // Memoize the CSS variables string
   const cssVariablesString = useMemo(

@@ -170,6 +170,14 @@ app.use('/referrals', referralRoutes);
 app.use('/api/referrals', referralRoutes);
 
 
+const { getDynamicFrontendUrl } = require('./src/utils/urlHelper');
+
+// Safety redirect for backend /login requests to dynamic frontend app (local or production)
+app.get('/login', (req, res) => {
+    const frontendUrl = getDynamicFrontendUrl(req);
+    res.redirect(`${frontendUrl}/login`);
+});
+
 const prisma = require('./src/config/prisma');
 app.get('/health', async (req, res) => {
     try {

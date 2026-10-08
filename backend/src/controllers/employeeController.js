@@ -4,6 +4,9 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const emailService = require('../utils/emailService');
 const cache = require('../config/cache');
+const { generateEmployeeCode, autoAssignEmployeeDefaults } = require('../utils/codeGenerator');
+const { getDynamicFrontendUrl } = require('../utils/urlHelper');
+const { seedDefaultCompanyRoles } = require('../utils/seedDefaultRoles');
 
 function getCompanyPrefix(companyName) {
     if (!companyName) return 'EMP';
@@ -87,24 +90,18 @@ async function createEmployee(req, res) {
         const inviteToken = crypto.randomBytes(32).toString('hex');
         const tokenExpiry = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
 
-        // Auto-assign Company Admin as reporting manager if role is 'HR Manager'
-        let finalReportingManagerId = (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null') ? parseInt(reportingManagerId, 10) : null;
-
-        let isHrManagerRole = false;
-        if (companyRoleId && companyRoleId !== 'undefined' && companyRoleId !== 'null') {
-            const cRole = await prisma.companyRole.findUnique({ where: { id: parseInt(companyRoleId, 10) } });
-            if (cRole && cRole.name === 'HR Manager') {
-                isHrManagerRole = true;
-            }
-        }
-
-        if (isHrManagerRole) {
-            const companyAdmin = await prisma.user.findFirst({
-                where: { companyId, role: 'COMPANY_ADMIN' },
-                include: { employee: true }
-            });
-            if (companyAdmin && companyAdmin.employee) {
-                finalReportingManagerId = companyAdmin.employee.id;
+        let finalReportingManagerId = null;
+        if (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null' && reportingManagerId !== '') {
+            if (reportingManagerId === 'COMPANY_ADMIN') {
+                const companyAdmin = await prisma.user.findFirst({
+                    where: { companyId, role: 'COMPANY_ADMIN' },
+                    include: { employee: true }
+                });
+                if (companyAdmin && companyAdmin.employee) {
+                    finalReportingManagerId = companyAdmin.employee.id;
+                }
+            } else if (!isNaN(parseInt(reportingManagerId, 10))) {
+                finalReportingManagerId = parseInt(reportingManagerId, 10);
             }
         }
 
@@ -118,15 +115,18 @@ async function createEmployee(req, res) {
                     email,
                     password: hashedPassword,
                     role: role || 'EMPLOYEE',
-                    accountStatus: 'PENDING', // PENDING until they verify
+                    accountStatus: 'ACTIVE', // Auto-activated so they can log in directly after email verification
                 }
             });
 
             // 2. Create Employee Profile
+            const compNameOrCode = company.name || company.companyCode;
+            const empCode = await generateEmployeeCode(tx, company.id, compNameOrCode);
+
             const employee = await tx.employee.create({
                 data: {
                     userId: user.id,
-                    employeeCode: `${getCompanyPrefix(company.name)}-${Date.now().toString().slice(-6)}`,
+                    employeeCode: empCode,
                     firstName,
                     lastName,
                     phone,
@@ -183,7 +183,7 @@ async function createEmployee(req, res) {
         });
 
         // 4. Send Email (non-blocking)
-        const workspaceUrl = req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:5173';
+        const workspaceUrl = getDynamicFrontendUrl(req);
         const logoUrl = company.logoUrl ? (company.logoUrl.startsWith('http') ? company.logoUrl : `https://api.aaups.com${company.logoUrl}`) : null;
         emailService.sendEmployeeInviteEmail(
             email,
@@ -350,16 +350,16 @@ async function updateEmployee(req, res) {
             }
         }
 
-        if (isHrManagerRole) {
-            const companyAdmin = await prisma.user.findFirst({
-                where: { companyId, role: 'COMPANY_ADMIN' },
-                include: { employee: true }
-            });
-            if (companyAdmin && companyAdmin.employee) {
-                dataToUpdate.reportingManagerId = companyAdmin.employee.id;
+        if (reportingManagerId !== undefined) {
+            if (reportingManagerId === 'COMPANY_ADMIN') {
+                const companyAdmin = await prisma.user.findFirst({
+                    where: { companyId, role: 'COMPANY_ADMIN' },
+                    include: { employee: true }
+                });
+                dataToUpdate.reportingManagerId = (companyAdmin && companyAdmin.employee) ? companyAdmin.employee.id : null;
+            } else {
+                dataToUpdate.reportingManagerId = (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null' && reportingManagerId !== '') ? parseInt(reportingManagerId, 10) : null;
             }
-        } else if (reportingManagerId !== undefined) {
-            dataToUpdate.reportingManagerId = (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null') ? parseInt(reportingManagerId, 10) : null;
         }
         if (companyRoleId !== undefined) {
             dataToUpdate.companyRoleId = (companyRoleId && companyRoleId !== 'undefined' && companyRoleId !== 'null') ? parseInt(companyRoleId, 10) : null;
@@ -537,7 +537,12 @@ async function getMe(req, res) {
                 department: true,
                 designation: true,
                 bankDetails: true,
-                salaryStructure: true
+                salaryStructure: true,
+                companyRole: {
+                    include: {
+                        permissions: true
+                    }
+                }
             }
         });
 
@@ -569,11 +574,29 @@ async function getMe(req, res) {
                         department: { name: 'Management' },
                         designation: { name: user.role === 'COMPANY_ADMIN' ? 'Company Administrator' : 'Super Administrator' },
                         reportingManager: null,
-                        dateOfJoining: user.createdAt
+                        dateOfJoining: user.createdAt,
+                        permissions: []
                     });
                 }
 
                 try {
+                    // Try auto-assigning matching companyRole
+                    let compRoleId = null;
+                    if (user.companyId) {
+                        const roleNameMap = { HR: 'HR Manager', MANAGER: 'Manager', EMPLOYEE: 'Employee' };
+                        const targetRoleName = roleNameMap[user.role] || user.role;
+                        let foundRole = await prisma.companyRole.findFirst({
+                            where: { companyId: user.companyId, name: targetRoleName }
+                        });
+                        if (!foundRole) {
+                            await seedDefaultCompanyRoles(prisma, user.companyId);
+                            foundRole = await prisma.companyRole.findFirst({
+                                where: { companyId: user.companyId, name: targetRoleName }
+                            });
+                        }
+                        compRoleId = foundRole?.id || null;
+                    }
+
                     employee = await prisma.employee.create({
                         data: {
                             userId,
@@ -582,6 +605,7 @@ async function getMe(req, res) {
                             lastName,
                             phone: user.company?.phone || null,
                             address: user.company?.address || null,
+                            companyRoleId: compRoleId,
                             onboardingStatus: 'COMPLETED'
                         },
                         include: {
@@ -589,7 +613,10 @@ async function getMe(req, res) {
                             department: true,
                             designation: true,
                             bankDetails: true,
-                            salaryStructure: true
+                            salaryStructure: true,
+                            companyRole: {
+                                include: { permissions: true }
+                            }
                         }
                     });
                 } catch (createErr) {
@@ -606,7 +633,8 @@ async function getMe(req, res) {
                         department: { name: user.role === 'HR' ? 'Human Resources' : user.role },
                         designation: { name: user.role === 'HR' ? 'HR Manager' : user.role },
                         reportingManager: null,
-                        dateOfJoining: user.createdAt
+                        dateOfJoining: user.createdAt,
+                        permissions: []
                     });
                 }
             } else {
@@ -630,13 +658,49 @@ async function getMe(req, res) {
                         department: true,
                         designation: true,
                         bankDetails: true,
-                        salaryStructure: true
+                        salaryStructure: true,
+                        companyRole: {
+                            include: { permissions: true }
+                        }
                     }
                 });
             }
         }
 
-        res.json(employee);
+        // Auto-link companyRole if currently missing for an existing employee
+        if (employee && !employee.companyRole && employee.user?.company?.id) {
+            const companyId = employee.user.company.id;
+            const roleNameMap = { HR: 'HR Manager', MANAGER: 'Manager', EMPLOYEE: 'Employee' };
+            const targetRoleName = roleNameMap[employee.user.role] || employee.user.role;
+            let foundRole = await prisma.companyRole.findFirst({
+                where: { companyId, name: targetRoleName },
+                include: { permissions: true }
+            });
+            if (!foundRole) {
+                await seedDefaultCompanyRoles(prisma, companyId);
+                foundRole = await prisma.companyRole.findFirst({
+                    where: { companyId, name: targetRoleName },
+                    include: { permissions: true }
+                });
+            }
+            if (foundRole) {
+                await prisma.employee.update({
+                    where: { id: employee.id },
+                    data: { companyRoleId: foundRole.id }
+                }).catch(err => console.warn('Failed to auto-link companyRoleId in getMe:', err.message));
+                employee.companyRole = foundRole;
+            }
+        }
+
+        // Construct final payload with permissions and role name
+        const permissions = employee.companyRole?.permissions || [];
+        const result = {
+            ...employee,
+            companyRoleName: employee.companyRole?.name || null,
+            permissions
+        };
+
+        res.json(result);
     } catch (error) {
         console.error('Error fetching my profile:', error);
         res.status(500).json({ message: 'Internal server error' });
@@ -743,22 +807,58 @@ async function updateMe(req, res) {
 async function onboardingPersonal(req, res) {
     try {
         const userId = req.user.id;
-        const { dateOfBirth, gender, address, emergencyContactName, emergencyContactPhone } = req.body;
+        const userRole = req.user.role;
+        const { firstName, lastName, dateOfBirth, dateOfJoining, gender, phone, address, emergencyContactName, emergencyContactPhone, profilePhotoUrl } = req.body;
 
         const employee = await prisma.employee.findUnique({ where: { userId } });
         if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
 
+        let finalPhotoUrl = employee.profilePhotoUrl;
+        if (req.file) {
+            finalPhotoUrl = `/uploads/profiles/${req.file.filename}`;
+        } else if (profilePhotoUrl !== undefined) {
+            finalPhotoUrl = profilePhotoUrl ? profilePhotoUrl : null;
+        }
+
+        // Date of Joining: ONLY HR Manager or Company Admin / Super Admin can change it.
+        // Employees can NEVER change their Date of Joining!
+        let finalDateOfJoining = employee.dateOfJoining;
+        if (dateOfJoining && (userRole === 'HR' || userRole === 'COMPANY_ADMIN' || userRole === 'SUPER_ADMIN')) {
+            finalDateOfJoining = new Date(dateOfJoining);
+        }
+
+        const dataToUpdate = {
+            dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : employee.dateOfBirth,
+            dateOfJoining: finalDateOfJoining,
+            gender: gender || employee.gender,
+            phone: phone || employee.phone,
+            profilePhotoUrl: finalPhotoUrl,
+            address: address || employee.address,
+            emergencyContactName: emergencyContactName || employee.emergencyContactName,
+            emergencyContactPhone: emergencyContactPhone || employee.emergencyContactPhone,
+        };
+
+        if (firstName) dataToUpdate.firstName = firstName;
+        if (lastName) dataToUpdate.lastName = lastName;
+
         const updated = await prisma.employee.update({
             where: { userId },
-            data: {
-                dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-                gender: gender || null,
-                address: address || null,
-                emergencyContactName: emergencyContactName || null,
-                emergencyContactPhone: emergencyContactPhone || null,
-                onboardingStatus: (employee.onboardingStatus === 'INVITED' || employee.onboardingStatus === 'CORRECTION_REQUESTED') ? 'PROFILE_SUBMITTED' : employee.onboardingStatus
-            }
+            data: dataToUpdate
         });
+
+        // Update User name if first/last name changed
+        if (firstName || lastName) {
+            const newName = `${firstName || employee.firstName || ''} ${lastName || employee.lastName || ''}`.trim();
+            if (newName) {
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: { name: newName }
+                }).catch(err => console.warn('Failed to update user name:', err.message));
+            }
+        }
+
+        // Auto-assign default department, designation, employeeCode & username if missing
+        await autoAssignEmployeeDefaults(prisma, userId, employee.companyId || req.user.companyId);
 
         res.json({ message: 'Personal details saved successfully', employee: updated });
     } catch (error) {
@@ -791,14 +891,28 @@ async function onboardingBank(req, res) {
 async function onboardingDocuments(req, res) {
     try {
         const userId = req.user.id;
-        const employee = await prisma.employee.findUnique({ where: { userId } });
+        const employee = await prisma.employee.findUnique({ 
+            where: { userId },
+            include: { user: { include: { company: true } } }
+        });
         if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
 
         const aadhaarFile = req.files && req.files['aadhaar'] ? `/uploads/documents/${req.files['aadhaar'][0].filename}` : null;
         const panFile = req.files && req.files['pan'] ? `/uploads/documents/${req.files['pan'][0].filename}` : null;
         const resumeFile = req.files && req.files['resume'] ? `/uploads/documents/${req.files['resume'][0].filename}` : null;
 
-        const dataToUpdate = { onboardingStatus: 'DOCS_SUBMITTED', rejectionReason: null };
+        // Auto-approve: Generate final employee code if temporary or using legacy acronym
+        let finalEmpCode = employee.employeeCode;
+        if (!finalEmpCode || finalEmpCode.startsWith('PENDING_HR_') || finalEmpCode.startsWith('EMP-') || finalEmpCode.includes('-502-') || finalEmpCode.startsWith('HIPL-')) {
+            const compNameOrCode = employee.user?.company?.name || employee.user?.company?.companyCode;
+            finalEmpCode = await generateEmployeeCode(prisma, employee.user?.companyId, compNameOrCode);
+        }
+
+        const dataToUpdate = { 
+            onboardingStatus: 'COMPLETED', 
+            employeeCode: finalEmpCode,
+            rejectionReason: null 
+        };
         if (aadhaarFile) dataToUpdate.aadhaarPath = aadhaarFile;
         if (panFile) dataToUpdate.panPath = panFile;
         if (resumeFile) dataToUpdate.resumePath = resumeFile;
@@ -808,9 +922,143 @@ async function onboardingDocuments(req, res) {
             data: dataToUpdate
         });
 
-        res.json({ message: 'Fill onboarding form successfully Wait for Approval by Managment.', employee: updated });
+        // Activate User account
+        await prisma.user.update({
+            where: { id: userId },
+            data: { accountStatus: 'ACTIVE' }
+        });
+
+        res.json({ message: 'Onboarding completed and account auto-approved successfully!', employee: updated });
     } catch (error) {
         console.error('Onboarding Documents Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function hireHRManager(req, res) {
+    try {
+        const { firstName, lastName, email, password, role } = req.body;
+
+        if (req.user.role !== 'COMPANY_ADMIN' && req.user.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ message: 'Only Company Admin can hire HR Manager' });
+        }
+
+        if (!firstName || !lastName || !email) {
+            return res.status(400).json({ message: 'First Name, Last Name, and Email are required' });
+        }
+
+        const companyId = req.user.companyId;
+        if (!companyId && req.user.role !== 'SUPER_ADMIN') {
+            return res.status(400).json({ message: 'Company ID is required' });
+        }
+
+        const targetCompanyId = companyId || req.body.companyId;
+
+        // Check if email is already registered
+        const existingUser = await prisma.user.findUnique({ where: { email } });
+        if (existingUser) {
+            return res.status(400).json({ message: 'A user with this email already exists' });
+        }
+
+        const tempPassword = crypto.randomBytes(16).toString('hex');
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        const selectedRole = 'HR';
+
+        const tempEmpCode = `PENDING_HR_${Date.now().toString().slice(-6)}`;
+
+        // Find or seed 'HR Manager' CompanyRole for this company
+        let hrCompanyRole = await prisma.companyRole.findFirst({
+            where: { companyId: targetCompanyId, name: { in: ['HR Manager', 'HR'] } }
+        });
+        if (!hrCompanyRole) {
+            await seedDefaultCompanyRoles(prisma, targetCompanyId);
+            hrCompanyRole = await prisma.companyRole.findFirst({
+                where: { companyId: targetCompanyId, name: { in: ['HR Manager', 'HR'] } }
+            });
+        }
+
+        const newUser = await prisma.user.create({
+            data: {
+                companyId: targetCompanyId,
+                name: `${firstName} ${lastName}`,
+                email,
+                password: hashedPassword,
+                role: selectedRole,
+                accountStatus: 'PENDING',
+                employee: {
+                    create: {
+                        employeeCode: tempEmpCode,
+                        firstName,
+                        lastName,
+                        companyRoleId: hrCompanyRole?.id || null,
+                        onboardingStatus: 'INVITED'
+                    }
+                }
+            },
+            include: { employee: true }
+        });
+
+        // Generate password reset / verification token for HR Manager
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+
+        await prisma.passwordResetToken.create({
+            data: {
+                userId: newUser.id,
+                token: resetToken,
+                expiresAt
+            }
+        });
+
+        // Fetch company details for email sending
+        const company = await prisma.company.findUnique({ where: { id: targetCompanyId } });
+        const companyName = company?.name || 'Company';
+        const frontendUrl = getDynamicFrontendUrl(req);
+        const verifyUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${resetToken}`;
+
+        // Send onboarding & password setup email asynchronously
+        emailService.sendHRManagerOnboardingEmail({
+            toEmail: email,
+            hrName: `${firstName} ${lastName}`,
+            companyName,
+            verifyUrl
+        }).catch(err => console.warn('[EMAIL WARNING] Failed to send HR Manager verification email:', err.message));
+
+        res.status(201).json({
+            message: `HR Manager added successfully! An account verification & password setup email has been sent to ${email}.`,
+            user: newUser
+        });
+    } catch (error) {
+        console.error('Hire HR Manager Error:', error);
+        res.status(500).json({ message: error.message || 'Internal server error' });
+    }
+}
+
+async function getPendingHROnboarding(req, res) {
+    try {
+        const companyId = req.user.companyId;
+        const whereClause = {
+            onboardingStatus: { in: ['PROFILE_SUBMITTED', 'DOCS_SUBMITTED', 'HR_REVIEW', 'INVITED'] },
+            user: { role: 'HR' }
+        };
+        if (companyId) {
+            whereClause.user = { role: 'HR', companyId };
+        }
+
+        const pendingList = await prisma.employee.findMany({
+            where: whereClause,
+            include: {
+                user: { select: { id: true, name: true, email: true, role: true, accountStatus: true } },
+                department: true,
+                designation: true,
+                bankDetails: true
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.json(pendingList);
+    } catch (error) {
+        console.error('Get Pending HR Onboarding Error:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
 }
@@ -818,10 +1066,11 @@ async function onboardingDocuments(req, res) {
 async function approveOnboarding(req, res) {
     try {
         const { id } = req.params; // Employee ID
+        const { departmentId, designationId, employeeCode, username } = req.body || {};
 
         const employee = await prisma.employee.findUnique({ 
-            where: { id: parseInt(id) },
-            include: { user: true }
+            where: { id: parseInt(id, 10) },
+            include: { user: { include: { company: true } } }
         });
         if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
@@ -829,17 +1078,17 @@ async function approveOnboarding(req, res) {
             return res.status(403).json({ message: 'Only a Company Admin can approve onboarding for an HR role' });
         }
 
-        const updated = await prisma.employee.update({
-            where: { id: parseInt(id) },
-            data: {
-                onboardingStatus: 'COMPLETED'
-            }
+        await autoAssignEmployeeDefaults(prisma, employee.userId, employee.user?.companyId || req.user.companyId);
+
+        const updated = await prisma.employee.findUnique({
+            where: { id: parseInt(id, 10) },
+            include: { user: true, department: true, designation: true }
         });
 
         res.json({ message: 'Employee onboarding approved successfully!', employee: updated });
     } catch (error) {
         console.error('Approve Onboarding Error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(500).json({ message: error.message || 'Internal server error' });
     }
 }
 
@@ -889,7 +1138,7 @@ async function resendInvite(req, res) {
 
         // Send email
         const company = employee.user.company;
-        const workspaceUrl = req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:5173';
+        const workspaceUrl = getDynamicFrontendUrl(req);
         const logoUrl = company.logoUrl ? (company.logoUrl.startsWith('http') ? company.logoUrl : `https://api.aaups.com${company.logoUrl}`) : null;
 
         emailService.sendEmployeeInviteEmail(
@@ -985,7 +1234,7 @@ async function requestOnboardingCorrection(req, res) {
         console.log('Preparing to send correction email to:', employee.user?.email);
         if (employee.user && employee.user.email) {
             const company = employee.user.company;
-            const workspaceUrl = req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:3000';
+            const workspaceUrl = getDynamicFrontendUrl(req);
 
             await emailService.sendCorrectionRequestEmail(
                 employee.user.email,
@@ -1955,6 +2204,8 @@ async function getQuotaStatus(req, res) {
 
 module.exports = {
     checkEmailAvailability,
+    hireHRManager,
+    getPendingHROnboarding,
     createEmployee,
     getEmployees,
     getEmployeeById,

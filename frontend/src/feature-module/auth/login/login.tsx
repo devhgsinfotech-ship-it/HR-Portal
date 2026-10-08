@@ -86,17 +86,19 @@ const Login = () => {
       // With this:
       dispatch(setCredentials({ token, user }));
 
-      // Check onboarding status first
+      // Check onboarding status first (HR and Employees must complete onboarding)
       const onboardingStatus = user.onboardingStatus || 'INVITED';
       
       if (user.role !== 'SUPER_ADMIN' && user.role !== 'COMPANY_ADMIN' && onboardingStatus !== 'COMPLETED') {
         navigation('/onboarding');
       } else {
-        // Redirect based on role if onboarding is completed or user is SUPER_ADMIN
+        // Redirect based on role if onboarding is completed or user is SUPER_ADMIN / COMPANY_ADMIN
         if (user.role === "SUPER_ADMIN") {
           navigation(routes.superAdminDashboard);
-        } else if (user.role === "COMPANY_ADMIN" || user.role === "HR") {
-          navigation(routes.adminDashboard || routes.hrDashboard);
+        } else if (user.role === "COMPANY_ADMIN") {
+          navigation(routes.adminDashboard);
+        } else if (user.role === "HR") {
+          navigation(routes.hrDashboard);
         } else {
           navigation(routes.employeeDashboard);
         }
