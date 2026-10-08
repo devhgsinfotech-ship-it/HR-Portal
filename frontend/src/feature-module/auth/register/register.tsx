@@ -104,7 +104,7 @@ const Register = () => {
 
       const { company } = response.data;
       setWorkspaceUrl(
-        company.workspaceUrl || `http://${company.subdomain}.yourhrms.com/login`
+        company.workspaceUrl || `${window.location.origin}/login`
       );
       setRegisteredCompanyCode(company.companyCode || "");
       setRegisteredEmail(email);

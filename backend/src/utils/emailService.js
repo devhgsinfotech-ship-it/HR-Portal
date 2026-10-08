@@ -470,7 +470,7 @@ async function sendDomainApprovedEmail(toEmail, companyName, subdomain, workspac
                     <div style="background-color: #f4fdf7; padding: 18px; border-left: 4px solid #28a745; border-radius: 6px; margin: 20px 0;">
                         <h4 style="margin-top: 0; color: #222;">Your Active Workspace Access Details:</h4>
                         <ul style="color: #444; line-height: 1.8; padding-left: 20px; font-size: 14px; margin-bottom: 0;">
-                            <li><strong>Subdomain Prefix:</strong> ${subdomain}</li>
+                            <li><strong>Company Domain:</strong> ${subdomain}</li>
                             <li><strong>Workspace Access URL:</strong> <a href="${loginUrl}" target="_blank" style="color: #ff5722; font-weight: bold;">${loginUrl}</a></li>
                         </ul>
                     </div>

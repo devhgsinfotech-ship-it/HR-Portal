@@ -11,7 +11,9 @@ interface DomainDetails {
   companyName: string;
   email: string;
   domain: string;
-  subdomain: string;
+  emailDomain?: string;
+  companyCode?: string;
+  subdomain?: string;
   plan: string;
   createdDate: string;
   status: 'APPROVED' | 'PENDING' | 'REJECTED' | string;
@@ -21,7 +23,7 @@ const Domain = () => {
   const [domains, setDomains] = useState<DomainDetails[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDomain, setSelectedDomain] = useState<DomainDetails | null>(null);
-  const [editSubdomain, setEditSubdomain] = useState<string>('');
+  const [editDomain, setEditDomain] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'success' | 'danger', text: string } | null>(null);
 
   const fetchDomains = async () => {
@@ -44,18 +46,19 @@ const Domain = () => {
 
   const handleSelectDomain = (domain: DomainDetails) => {
     setSelectedDomain(domain);
-    const prefix = domain.subdomain || domain.domain.split('.')[0] || '';
-    setEditSubdomain(prefix);
+    const domainVal = domain.emailDomain || domain.domain || '';
+    setEditDomain(domainVal);
   };
 
-  const handleUpdateStatus = async (domainId: number, newStatus: 'APPROVED' | 'REJECTED' | 'UPDATE_ONLY', customSubdomain?: string) => {
+  const handleUpdateStatus = async (domainId: number, newStatus: 'APPROVED' | 'REJECTED' | 'UPDATE_ONLY', customDomain?: string) => {
     try {
       const payload: any = {};
       if (newStatus !== 'UPDATE_ONLY') {
         payload.status = newStatus;
       }
-      if (customSubdomain && customSubdomain.trim() !== '') {
-        payload.subdomain = customSubdomain.trim().toLowerCase();
+      if (customDomain && customDomain.trim() !== '') {
+        payload.domain = customDomain.trim().toLowerCase();
+        payload.emailDomain = customDomain.trim().toLowerCase();
       }
       const res = await apiClient.put(`/subscriptions/domains/${domainId}/status`, payload);
       setMessage({ type: 'success', text: res.data?.message || `Domain request updated successfully!` });
@@ -94,9 +97,18 @@ const Domain = () => {
       sorter: (a: DomainDetails, b: DomainDetails) => a.companyName.localeCompare(b.companyName),
     },
     {
-      title: "Subdomain / Domain URL",
+      title: "Company Domain",
       dataIndex: "domain",
-      render: (text: string) => <span className="text-primary fw-medium">{text}</span>,
+      render: (text: string, record: DomainDetails) => (
+        <div>
+          <span className="text-primary fw-medium">{text}</span>
+          {record.companyCode && (
+            <div>
+              <span className="badge badge-soft-info border fs-11 mt-1">{record.companyCode}</span>
+            </div>
+          )}
+        </div>
+      ),
       sorter: (a: DomainDetails, b: DomainDetails) => a.domain.localeCompare(b.domain),
     },
     {
@@ -277,29 +289,34 @@ const Domain = () => {
 
                   <div className="col-md-12 mb-3">
                     <label className="form-label fw-bold text-dark fs-13 mb-1">
-                      Subdomain / Workspace URL <span className="text-muted fw-normal">(Super Admin can modify for host availability)</span>
+                      Company Domain / Corporate Email Domain <span className="text-muted fw-normal">(Domain used for company employees)</span>
                     </label>
                     <div className="input-group">
+                      <span className="input-group-text bg-light text-secondary">
+                        <i className="ti ti-world fs-14" />
+                      </span>
                       <input
                         type="text"
                         className="form-control"
-                        value={editSubdomain}
-                        onChange={(e) => setEditSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                        placeholder="e.g. wipro"
+                        value={editDomain}
+                        onChange={(e) => setEditDomain(e.target.value.toLowerCase().replace(/^https?:\/\//, ''))}
+                        placeholder="e.g. hgsinfotech.com"
                       />
-                      <span className="input-group-text bg-light text-primary fw-medium">.yourhrms.com</span>
                     </div>
                     <div className="d-flex align-items-center justify-content-between mt-1">
                       <small className="text-muted fs-11">
-                        Active Subdomain: <strong className="text-primary">{editSubdomain || 'subdomain'}.yourhrms.com</strong>
+                        Active Domain: <strong className="text-primary">{editDomain || 'N/A'}</strong>
+                        {selectedDomain.companyCode && (
+                          <span className="ms-2 text-dark font-monospace">[{selectedDomain.companyCode}]</span>
+                        )}
                       </small>
-                      {editSubdomain !== (selectedDomain.subdomain || selectedDomain.domain.split('.')[0]) && (
+                      {editDomain !== (selectedDomain.emailDomain || selectedDomain.domain) && (
                         <button
                           type="button"
                           className="btn btn-xs btn-outline-primary py-1 px-2 fs-11"
-                          onClick={() => handleUpdateStatus(selectedDomain.id, 'UPDATE_ONLY', editSubdomain)}
+                          onClick={() => handleUpdateStatus(selectedDomain.id, 'UPDATE_ONLY', editDomain)}
                         >
-                          Save Subdomain Change
+                          Save Domain Change
                         </button>
                       )}
                     </div>
@@ -329,7 +346,7 @@ const Domain = () => {
                         </button>
                         <button
                           className="btn btn-success"
-                          onClick={() => handleUpdateStatus(selectedDomain.id, 'APPROVED', editSubdomain)}
+                          onClick={() => handleUpdateStatus(selectedDomain.id, 'APPROVED', editDomain)}
                         >
                           Approve & Activate Company
                         </button>
@@ -338,7 +355,7 @@ const Domain = () => {
                     {selectedDomain.status === 'APPROVED' && (
                       <button
                         className="btn btn-primary"
-                        onClick={() => handleUpdateStatus(selectedDomain.id, 'APPROVED', editSubdomain)}
+                        onClick={() => handleUpdateStatus(selectedDomain.id, 'APPROVED', editDomain)}
                       >
                         Update Domain Configuration
                       </button>
