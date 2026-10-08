@@ -934,8 +934,10 @@ async function getSuperAdminCompanies(req, res) {
         id: comp.id,
         name: comp.name,
         email: comp.email,
+        companyCode: comp.companyCode,
+        emailDomain: comp.emailDomain,
         subdomain: comp.subdomain,
-        accountUrl: `${comp.subdomain}.yourhrms.com`,
+        accountUrl: comp.emailDomain || (comp.email ? comp.email.split('@')[1] : null) || comp.subdomain,
         logoUrl: comp.logoUrl,
         plan: fullPlanDisplay,
         planId: sub?.planId,
@@ -1052,6 +1054,8 @@ async function getSuperAdminDomains(req, res) {
       whereClause.OR = [
         { name: { contains: search } },
         { email: { contains: search } },
+        { emailDomain: { contains: search } },
+        { companyCode: { contains: search } },
         { subdomain: { contains: search } }
       ];
     }
@@ -1066,17 +1070,22 @@ async function getSuperAdminDomains(req, res) {
       orderBy: { createdAt: 'desc' }
     });
 
-    const formattedDomains = domains.map(d => ({
-      id: d.id,
-      companyName: d.name,
-      email: d.email,
-      domain: `${d.subdomain}.yourhrms.com`,
-      subdomain: d.subdomain,
-      status: d.domainStatus || 'PENDING',
-      isActive: d.isActive,
-      createdDate: d.createdAt,
-      plan: d.subscription?.plan?.name || 'Starter'
-    }));
+    const formattedDomains = domains.map(d => {
+      const actualDomain = d.emailDomain || (d.email ? d.email.split('@')[1] : null) || d.subdomain;
+      return {
+        id: d.id,
+        companyName: d.name,
+        email: d.email,
+        domain: actualDomain,
+        emailDomain: d.emailDomain || (d.email ? d.email.split('@')[1] : null),
+        companyCode: d.companyCode,
+        subdomain: d.subdomain,
+        status: d.domainStatus || 'APPROVED',
+        isActive: d.isActive,
+        createdDate: d.createdAt,
+        plan: d.subscription?.plan?.name || 'Starter'
+      };
+    });
 
     res.json({ domains: formattedDomains });
   } catch (error) {
@@ -1088,7 +1097,7 @@ async function getSuperAdminDomains(req, res) {
 async function updateDomainStatus(req, res) {
   try {
     const { id } = req.params;
-    const { status, subdomain } = req.body;
+    const { status, domain, emailDomain, subdomain } = req.body;
 
     const companyId = parseInt(id, 10);
     if (isNaN(companyId)) {
@@ -1112,24 +1121,28 @@ async function updateDomainStatus(req, res) {
       updateData.isActive = (newStatus === 'APPROVED');
     }
 
-    if (subdomain !== undefined && subdomain !== null && subdomain.trim() !== '') {
-      const cleanSubdomain = subdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
-      if (!cleanSubdomain) {
-        return res.status(400).json({ message: 'Invalid subdomain format' });
+    const targetDomainInput = domain || emailDomain || subdomain;
+    if (targetDomainInput !== undefined && targetDomainInput !== null && targetDomainInput.trim() !== '') {
+      const cleanDomain = targetDomainInput.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      if (!cleanDomain) {
+        return res.status(400).json({ message: 'Invalid domain format' });
       }
 
-      // Check availability across other companies
-      const existing = await prisma.company.findFirst({
-        where: {
-          subdomain: cleanSubdomain,
-          NOT: { id: companyId }
+      updateData.emailDomain = cleanDomain;
+
+      // Keep subdomain in sync (slugified) if needed for DB uniqueness constraint
+      const slugSubdomain = cleanDomain.split('.')[0].replace(/[^a-z0-9-]/g, '');
+      if (slugSubdomain) {
+        const existing = await prisma.company.findFirst({
+          where: {
+            subdomain: slugSubdomain,
+            NOT: { id: companyId }
+          }
+        });
+        if (!existing) {
+          updateData.subdomain = slugSubdomain;
         }
-      });
-      if (existing) {
-        return res.status(400).json({ message: `Subdomain "${cleanSubdomain}" is already taken by another company (${existing.name}).` });
       }
-
-      updateData.subdomain = cleanSubdomain;
     }
 
     const updatedCompany = await prisma.company.update({
@@ -1161,18 +1174,18 @@ async function updateDomainStatus(req, res) {
       }
     }
 
-    if (isApproved && (company.domainStatus !== 'APPROVED' || company.subdomain !== updatedCompany.subdomain)) {
+    if (isApproved && (company.domainStatus !== 'APPROVED' || company.emailDomain !== updatedCompany.emailDomain)) {
       const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
       const baseDomain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
       const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
-      const workspaceUrl = `${protocol}://${updatedCompany.subdomain}.${baseDomain}`;
+      const workspaceUrl = `${protocol}://${baseDomain}`;
 
-      sendDomainApprovedEmail(updatedCompany.email, updatedCompany.name, updatedCompany.subdomain, workspaceUrl)
+      sendDomainApprovedEmail(updatedCompany.email, updatedCompany.name, updatedCompany.emailDomain || updatedCompany.name, workspaceUrl)
         .catch(err => console.warn('Domain approval email notice:', err.message));
     }
 
     res.json({
-      message: `Domain request updated successfully. Subdomain: ${updatedCompany.subdomain}`,
+      message: `Domain request updated successfully. Domain: ${updatedCompany.emailDomain || updatedCompany.name}`,
       company: updatedCompany
     });
   } catch (error) {

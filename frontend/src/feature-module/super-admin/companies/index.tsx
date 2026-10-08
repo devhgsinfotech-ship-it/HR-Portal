@@ -222,10 +222,17 @@ const Companies = () => {
       sorter: (a: any, b: any) => a.email.localeCompare(b.email),
     },
     {
-      title: "Subdomain URL",
+      title: "Company Domain",
       dataIndex: "accountUrl",
-      render: (text: string) => (
-        <span className="text-primary">{text}</span>
+      render: (text: string, record: any) => (
+        <div>
+          <span className="text-primary">{text}</span>
+          {record.companyCode && (
+            <div>
+              <span className="badge badge-soft-info border fs-11 mt-1">{record.companyCode}</span>
+            </div>
+          )}
+        </div>
       ),
       sorter: (a: any, b: any) => (a.accountUrl || '').localeCompare(b.accountUrl || ''),
     },
@@ -789,7 +796,7 @@ const Companies = () => {
                     <div>{selectedCompany.email}</div>
                   </div>
                   <div className="col-md-6 mb-3">
-                    <strong>Account Subdomain URL:</strong>
+                    <strong>Company Domain:</strong>
                     <div className="text-primary">{selectedCompany.accountUrl}</div>
                   </div>
                   <div className="col-md-6 mb-3">
