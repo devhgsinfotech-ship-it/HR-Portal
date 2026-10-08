@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { all_routes } from '../../../router/all_routes';
 import { Link } from 'react-router-dom';
 import ImageWithBasePath from '../../../core/common/imageWithBasePath';
@@ -77,6 +77,29 @@ const EmployeesGrid = () => {
     const [deleteEmpId, setDeleteEmpId] = useState<string | number | null>(null);
     const [emailStatus, setEmailStatus] = useState<{ available?: boolean, suggestion?: string, checking?: boolean }>({});
     const [isEmailEdited, setIsEmailEdited] = useState(false);
+
+    const getAdminCompanyDomain = useCallback(() => {
+        try {
+            const userStr = localStorage.getItem('authUser') || localStorage.getItem('user');
+            if (userStr) {
+                const u = JSON.parse(userStr);
+                if (u.email && u.email.includes('@')) {
+                    const domain = u.email.split('@')[1];
+                    if (domain && !['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com'].includes(domain.toLowerCase())) {
+                        return domain.toLowerCase();
+                    }
+                }
+                if (u.company?.emailDomain) return u.company.emailDomain.toLowerCase();
+                if (u.company?.domain) return u.company.domain.toLowerCase();
+                if (u.company?.name) {
+                    const clean = u.company.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    if (clean) return `${clean}.com`;
+                }
+            }
+        } catch {}
+        const sub = getSubdomain();
+        return sub ? `${sub}.com` : 'hgsinfotech.com';
+    }, []);
 
     const calculateSalary = (empState: any, fieldUpdates: any) => {
         const updated = { ...empState, ...fieldUpdates };
@@ -876,19 +899,6 @@ const EmployeesGrid = () => {
                                     <li className="nav-item" role="presentation">
                                         <button
                                             className="nav-link"
-                                            id="address-tab"
-                                            data-bs-toggle="tab"
-                                            data-bs-target="#address"
-                                            type="button"
-                                            role="tab"
-                                            aria-selected="false"
-                                        >
-                                            Permissions
-                                        </button>
-                                    </li>
-                                    <li className="nav-item" role="presentation">
-                                        <button
-                                            className="nav-link"
                                             id="salary-tab"
                                             data-bs-toggle="tab"
                                             data-bs-target="#salary"
@@ -958,10 +968,14 @@ const EmployeesGrid = () => {
                                                     </label>
                                                     <input type="text" className="form-control" value={newEmp.firstName} onChange={(e) => {
                                                         const firstName = e.target.value;
+                                                        const companyDomain = getAdminCompanyDomain();
+                                                        const fnClean = firstName.toLowerCase().replace(/\s+/g, '');
+                                                        const lnClean = (newEmp.lastName || '').toLowerCase().replace(/\s+/g, '');
+                                                        const emailHandle = fnClean ? (lnClean ? `${fnClean}.${lnClean}` : fnClean) : '';
                                                         if (!isEmailEdited) {
-                                                            setNewEmp({...newEmp, firstName, email: `${firstName.toLowerCase().replace(/\s+/g, '')}@${getSubdomain() || 'hgs'}.com`})
+                                                            setNewEmp({...newEmp, firstName, email: emailHandle ? `${emailHandle}@${companyDomain}` : ''});
                                                         } else {
-                                                            setNewEmp({...newEmp, firstName})
+                                                            setNewEmp({...newEmp, firstName});
                                                         }
                                                     }} required />
                                                 </div>
@@ -969,7 +983,18 @@ const EmployeesGrid = () => {
                                             <div className="col-md-6">
                                                 <div className="mb-3">
                                                     <label className="form-label">Last Name</label>
-                                                    <input type="text" className="form-control" value={newEmp.lastName} onChange={(e) => setNewEmp({...newEmp, lastName: e.target.value})} />
+                                                    <input type="text" className="form-control" value={newEmp.lastName} onChange={(e) => {
+                                                        const lastName = e.target.value;
+                                                        const companyDomain = getAdminCompanyDomain();
+                                                        const fnClean = (newEmp.firstName || '').toLowerCase().replace(/\s+/g, '');
+                                                        const lnClean = lastName.toLowerCase().replace(/\s+/g, '');
+                                                        const emailHandle = fnClean ? (lnClean ? `${fnClean}.${lnClean}` : fnClean) : '';
+                                                        if (!isEmailEdited) {
+                                                            setNewEmp({...newEmp, lastName, email: emailHandle ? `${emailHandle}@${companyDomain}` : ''});
+                                                        } else {
+                                                            setNewEmp({...newEmp, lastName});
+                                                        }
+                                                    }} />
                                                 </div>
                                             </div>
                                             <div className="col-md-6">
@@ -1015,10 +1040,52 @@ const EmployeesGrid = () => {
                                                     <label className="form-label">
                                                         Email <span className="text-danger"> *</span>
                                                     </label>
-                                                    <input type="email" className={`form-control ${emailStatus.available === false ? 'is-invalid' : ''} ${emailStatus.available === true ? 'is-valid' : ''}`} value={newEmp.email} onChange={(e) => {
-                                                        setIsEmailEdited(true);
-                                                        setNewEmp({...newEmp, email: e.target.value});
-                                                    }} required />
+                                                    <div className="input-group">
+                                                        <input
+                                                            type="email"
+                                                            className={`form-control ${emailStatus.available === false ? 'is-invalid' : ''} ${emailStatus.available === true ? 'is-valid' : ''}`}
+                                                            value={newEmp.email}
+                                                            onChange={(e) => {
+                                                                setIsEmailEdited(true);
+                                                                setNewEmp({...newEmp, email: e.target.value});
+                                                            }}
+                                                            onBlur={(e) => {
+                                                                const val = e.target.value.trim();
+                                                                const companyDomain = getAdminCompanyDomain();
+                                                                if (val && !val.includes('@')) {
+                                                                    setNewEmp({ ...newEmp, email: `${val.toLowerCase()}@${companyDomain}` });
+                                                                    setIsEmailEdited(true);
+                                                                }
+                                                            }}
+                                                            required
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-secondary btn-sm"
+                                                            title={`Append @${getAdminCompanyDomain()}`}
+                                                            onClick={() => {
+                                                                const companyDomain = getAdminCompanyDomain();
+                                                                const val = newEmp.email.trim();
+                                                                if (!val) {
+                                                                    const fnClean = (newEmp.firstName || '').toLowerCase().replace(/\s+/g, '');
+                                                                    const lnClean = (newEmp.lastName || '').toLowerCase().replace(/\s+/g, '');
+                                                                    const handle = fnClean ? (lnClean ? `${fnClean}.${lnClean}` : fnClean) : 'employee';
+                                                                    setNewEmp({ ...newEmp, email: `${handle}@${companyDomain}` });
+                                                                } else if (!val.includes('@')) {
+                                                                    setNewEmp({ ...newEmp, email: `${val.toLowerCase()}@${companyDomain}` });
+                                                                } else {
+                                                                    const handle = val.split('@')[0];
+                                                                    setNewEmp({ ...newEmp, email: `${handle}@${companyDomain}` });
+                                                                }
+                                                                setIsEmailEdited(true);
+                                                            }}
+                                                        >
+                                                            @{getAdminCompanyDomain()}
+                                                        </button>
+                                                    </div>
+                                                    <div className="form-text text-muted mt-1">
+                                                        💡 Auto Domain: <span className="fw-semibold text-primary">@{getAdminCompanyDomain()}</span>
+                                                    </div>
                                                     {emailStatus.checking && <div className="form-text text-muted">Checking availability...</div>}
                                                     {emailStatus.available === false && (
                                                         <div className="invalid-feedback d-block">
@@ -1134,17 +1201,10 @@ const EmployeesGrid = () => {
                                                         options={[
                                                             { value: 'EMPLOYEE', label: 'Employee' },
                                                             { value: 'MANAGER', label: 'Manager' },
-                                                            { value: 'HR', label: 'HR' },
-                                                            { value: 'SUPER_ADMIN', label: 'Super Admin' }
+                                                            { value: 'HR', label: 'HR' }
                                                         ]}
                                                         onChange={(opt) => {
-                                                            const selectedRole = opt?.value || 'EMPLOYEE';
-                                                            const updates: any = { role: selectedRole };
-                                                            if (selectedRole === 'HR') {
-                                                                const adminEmp = dbEmployees.find((e: any) => e.user?.role === 'COMPANY_ADMIN');
-                                                                if (adminEmp) updates.reportingManagerId = String(adminEmp.id);
-                                                            }
-                                                            setNewEmp({...newEmp, ...updates});
+                                                            setNewEmp({...newEmp, role: opt?.value || 'EMPLOYEE'});
                                                         }}
                                                     />
                                                 </div>
@@ -1152,13 +1212,28 @@ const EmployeesGrid = () => {
                                             <div className="col-md-6">
                                                 <div className="mb-3">
                                                     <label className="form-label">Reporting Manager</label>
-                                                    <CommonSelect
-                                                        key={`rm-new-${newEmp.reportingManagerId}-${newEmp.companyRoleId}-${newEmp.role}`}
-                                                        className="select"
-                                                        options={[{ value: '', label: newEmp.role === 'HR' ? 'Company Admin' : '-- None --' }, ...dbEmployees.map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed' }))]}
-                                                        onChange={(opt) => setNewEmp({...newEmp, reportingManagerId: opt?.value || ''})}
-                                                        isDisabled={newEmp.role === 'HR'}
-                                                    />
+                                                    {(() => {
+                                                        const managerOptions = [
+                                                            { value: '', label: '-- None --' },
+                                                            { value: 'COMPANY_ADMIN', label: 'Company Admin' },
+                                                            ...dbEmployees.map((emp: any) => ({
+                                                                value: String(emp.id),
+                                                                label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed'
+                                                            }))
+                                                        ];
+                                                        const defaultVal = managerOptions.find(m => m.value === String(newEmp.reportingManagerId)) || managerOptions[0];
+
+                                                        return (
+                                                            <CommonSelect
+                                                                key={`rm-new-${newEmp.reportingManagerId}-${newEmp.companyRoleId}-${newEmp.role}`}
+                                                                className="select"
+                                                                options={managerOptions}
+                                                                defaultValue={defaultVal}
+                                                                onChange={(opt) => setNewEmp({...newEmp, reportingManagerId: opt?.value || ''})}
+                                                                isDisabled={false}
+                                                            />
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                         </div>
@@ -1275,32 +1350,6 @@ const EmployeesGrid = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div className="modal-footer">
-                                        <button
-                                            type="button"
-                                            className="btn btn-outline-light border me-2"
-                                            data-bs-dismiss="modal"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            className="btn btn-primary"
-                                        >
-                                            Save{" "}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div
-                                    className="tab-pane fade"
-                                    id="address"
-                                    role="tabpanel"
-                                    aria-labelledby="address-tab"
-                                    tabIndex={0}
-                                >
-                                    <div className="modal-body">
-                                        <p className="text-muted">Permissions can be customized after adding the employee.</p>
                                     </div>
                                     <div className="modal-footer">
                                         <button
@@ -1634,8 +1683,7 @@ const EmployeesGrid = () => {
                                                         options={[
                                                             { value: 'EMPLOYEE', label: 'Employee' },
                                                             { value: 'MANAGER', label: 'Manager' },
-                                                            { value: 'HR', label: 'HR' },
-                                                            { value: 'SUPER_ADMIN', label: 'Super Admin' }
+                                                            { value: 'HR', label: 'HR' }
                                                         ]}
                                                         defaultValue={{ value: editEmp.role, label: editEmp.role }}
                                                         onChange={(opt) => setEditEmp({...editEmp, role: opt?.value || 'EMPLOYEE'})}
@@ -1645,17 +1693,28 @@ const EmployeesGrid = () => {
                                             <div className="col-md-6">
                                                 <div className="mb-3">
                                                     <label className="form-label">Reporting Manager</label>
-                                                    <CommonSelect
-                                                        key={`rm-${editEmp.id}-${editEmp.reportingManagerId}-${editEmp.companyRoleId}-${editEmp.role}`}
-                                                        className="select"
-                                                        options={[{ value: '', label: editEmp.role === 'HR' ? 'Company Admin' : '-- None --' }, ...dbEmployees.filter((e: any) => e.id !== editEmp.id).map((emp: any) => ({ value: String(emp.id), label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed' }))]}
-                                                        defaultValue={(() => {
-                                                            const isHR = editEmp.role === 'HR';
-                                                            return { value: String(editEmp.reportingManagerId || ''), label: editEmp.reportingManagerId ? (dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.firstName ? `${dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.firstName} ${dbEmployees.find((e: any) => e.id === editEmp.reportingManagerId)?.lastName}`.trim() : 'Selected Manager') : (isHR ? 'Company Admin' : '-- None --') };
-                                                        })()}
-                                                        onChange={(opt) => setEditEmp({...editEmp, reportingManagerId: opt?.value || ''})}
-                                                        isDisabled={editEmp.role === 'HR'}
-                                                    />
+                                                    {(() => {
+                                                        const managerOptions = [
+                                                            { value: '', label: '-- None --' },
+                                                            { value: 'COMPANY_ADMIN', label: 'Company Admin' },
+                                                            ...dbEmployees.filter((e: any) => e.id !== editEmp.id).map((emp: any) => ({
+                                                                value: String(emp.id),
+                                                                label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed'
+                                                            }))
+                                                        ];
+                                                        const defaultVal = managerOptions.find(m => m.value === String(editEmp.reportingManagerId)) || managerOptions[0];
+
+                                                        return (
+                                                            <CommonSelect
+                                                                key={`rm-${editEmp.id}-${editEmp.reportingManagerId}-${editEmp.companyRoleId}-${editEmp.role}`}
+                                                                className="select"
+                                                                options={managerOptions}
+                                                                defaultValue={defaultVal}
+                                                                onChange={(opt) => setEditEmp({...editEmp, reportingManagerId: opt?.value || ''})}
+                                                                isDisabled={false}
+                                                            />
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                         </div>

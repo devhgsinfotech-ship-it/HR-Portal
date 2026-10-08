@@ -42,10 +42,141 @@ const AdminDashboard = () => {
   const [attendanceStatus, setAttendanceStatus] = useState<any>(null);
   const [clockLoading, setClockLoading] = useState(false);
 
+  // ── Hire & Approve HR Manager State ──
+  const [hireHRForm, setHireHRForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: 'Password@123',
+    confirmPassword: 'Password@123',
+    role: 'HR'
+  });
+  const [isHREmailEdited, setIsHREmailEdited] = useState(false);
+  const [hireHRLoading, setHireHRLoading] = useState(false);
+
+  const getAdminDomain = () => {
+    if (user?.email && user.email.includes('@')) {
+      const d = user.email.split('@')[1];
+      if (d && !['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com'].includes(d.toLowerCase())) {
+        return d.toLowerCase();
+      }
+    }
+    if ((user as any)?.company?.emailDomain) return (user as any).company.emailDomain.toLowerCase();
+    if ((user as any)?.company?.name) {
+      const clean = (user as any).company.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (clean) return `${clean}.com`;
+    }
+    return 'hgsinfotech.com';
+  };
+  const [pendingHRList, setPendingHRList] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [designations, setDesignations] = useState<any[]>([]);
+  const [selectedHREmp, setSelectedHREmp] = useState<any>(null);
+  const [approveHRForm, setApproveHRForm] = useState({
+    departmentId: '',
+    designationId: '',
+    employeeCode: '',
+    username: ''
+  });
+  const [approveLoading, setApproveLoading] = useState(false);
+
+  const fetchPendingHR = async () => {
+    try {
+      const res = await apiClient.get('/employees/pending-hr-onboarding');
+      setPendingHRList(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch pending HR onboarding:', err);
+    }
+  };
+
+  const fetchDeptAndDesig = async () => {
+    try {
+      const [dRes, desRes] = await Promise.all([
+        apiClient.get('/departments'),
+        apiClient.get('/designations')
+      ]);
+      setDepartments(dRes.data || []);
+      setDesignations(desRes.data || []);
+    } catch (err) {
+      console.error('Failed to fetch departments/designations:', err);
+    }
+  };
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    fetchTodayAttendance();
+    if (user?.role === 'COMPANY_ADMIN' || user?.role === 'SUPER_ADMIN') {
+      fetchPendingHR();
+      fetchDeptAndDesig();
+    }
+  }, [user]);
+
+  const handleHireHRSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (hireHRForm.password !== hireHRForm.confirmPassword) {
+      alert('Password and Confirm Password do not match');
+      return;
+    }
+    setHireHRLoading(true);
+    try {
+      const res = await apiClient.post('/employees/hire-hr', {
+        firstName: hireHRForm.firstName,
+        lastName: hireHRForm.lastName,
+        email: hireHRForm.email,
+        password: hireHRForm.password,
+        role: hireHRForm.role
+      });
+      alert(res.data.message || 'HR Manager added successfully!');
+      setHireHRForm({
+        firstName: '',
+        lastName: '',
+        email: '',
+        password: 'Password@123',
+        confirmPassword: 'Password@123',
+        role: 'HR'
+      });
+      const btnClose = document.getElementById('close_hire_hr_modal');
+      if (btnClose) btnClose.click();
+      fetchPendingHR();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to hire HR Manager');
+    } finally {
+      setHireHRLoading(false);
+    }
+  };
+
+  const handleOpenApproveModal = (emp: any) => {
+    setSelectedHREmp(emp);
+    const defaultDept = departments.find((d: any) => d.name.toLowerCase().includes('hr'))?.id || '';
+    const defaultDesig = designations.find((d: any) => d.name.toLowerCase().includes('hr'))?.id || '';
+    setApproveHRForm({
+      departmentId: defaultDept ? String(defaultDept) : (emp.departmentId ? String(emp.departmentId) : ''),
+      designationId: defaultDesig ? String(defaultDesig) : (emp.designationId ? String(emp.designationId) : ''),
+      employeeCode: emp.employeeCode && !emp.employeeCode.startsWith('PENDING_HR_') ? emp.employeeCode : '',
+      username: emp.user?.name || `${emp.firstName} ${emp.lastName}`
+    });
+  };
+
+  const handleApproveHRSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedHREmp) return;
+    setApproveLoading(true);
+    try {
+      const res = await apiClient.post(`/employees/${selectedHREmp.id}/approve-onboarding`, approveHRForm);
+      alert(res.data.message || 'HR Manager onboarding approved successfully!');
+      const btnClose = document.getElementById('close_approve_hr_modal');
+      if (btnClose) btnClose.click();
+      fetchPendingHR();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to approve onboarding');
+    } finally {
+      setApproveLoading(false);
+    }
+  };
 
   const fetchTodayAttendance = async () => {
     try {
@@ -574,6 +705,18 @@ const AdminDashboard = () => {
                   </div>
                 )}
 
+                {(user?.role === 'COMPANY_ADMIN' || user?.role === 'SUPER_ADMIN') && (
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary me-2 mb-2 fw-medium shadow-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#hire_hr_manager_modal"
+                  >
+                    <i className="ti ti-user-plus me-1" />
+                    Add / Hire HR Manager
+                  </button>
+                )}
+
                 <Link
                   to="#"
                   className="btn btn-white me-2 mb-2"
@@ -596,6 +739,61 @@ const AdminDashboard = () => {
             </div>
           </div>
           {/* /Welcome Wrap */}
+
+          {/* Pending HR Manager Approvals (Only for Company Admin) */}
+          {(user?.role === 'COMPANY_ADMIN' || user?.role === 'SUPER_ADMIN') && pendingHRList.length > 0 && (
+            <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px', borderLeft: '4px solid #F26522' }}>
+              <div className="card-header bg-transparent d-flex align-items-center justify-content-between py-3">
+                <h5 className="mb-0 text-dark fw-bold">
+                  <i className="ti ti-user-check text-primary me-2 fs-18" />
+                  Pending HR Manager Onboarding Approvals ({pendingHRList.length})
+                </h5>
+                <span className="badge bg-warning-transparent text-warning px-3 py-2 fs-12">Needs Approval</span>
+              </div>
+              <div className="card-body p-0">
+                <div className="table-responsive">
+                  <table className="table table-hover align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Candidate Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Date of Joining</th>
+                        <th>Status</th>
+                        <th className="text-end">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingHRList.map((emp) => (
+                        <tr key={emp.id}>
+                          <td className="fw-semibold">{emp.firstName} {emp.lastName}</td>
+                          <td>{emp.user?.email || emp.email || '—'}</td>
+                          <td>{emp.phone || '—'}</td>
+                          <td>{emp.dateOfJoining ? new Date(emp.dateOfJoining).toLocaleDateString() : '—'}</td>
+                          <td>
+                            <span className={`badge ${emp.onboardingStatus === 'DOCS_SUBMITTED' ? 'bg-success-transparent text-success' : 'bg-info-transparent text-info'}`}>
+                              {emp.onboardingStatus === 'DOCS_SUBMITTED' ? 'Completed Onboarding' : emp.onboardingStatus}
+                            </span>
+                          </td>
+                          <td className="text-end">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary px-3"
+                              data-bs-toggle="modal"
+                              data-bs-target="#approve_hr_manager_modal"
+                              onClick={() => handleOpenApproveModal(emp)}
+                            >
+                              <i className="ti ti-check me-1" /> Approve &amp; Assign Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Company Admin Quick Control Panel */}
           {(user?.role === 'COMPANY_ADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'HR') && (
@@ -3216,6 +3414,254 @@ const AdminDashboard = () => {
       <ProjectModals />
       <RequestModals />
       <TodoModal />
+
+      {/* Hire HR Manager Modal */}
+      <div className="modal fade" id="hire_hr_manager_modal" tabIndex={-1} aria-hidden="true">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header bg-primary text-white">
+              <h5 className="modal-title text-white fw-bold">
+                <i className="ti ti-user-plus me-2" />
+                Add / Hire HR Manager
+              </h5>
+              <button
+                type="button"
+                className="btn-close btn-close-white"
+                data-bs-dismiss="modal"
+                id="close_hire_hr_modal"
+                aria-label="Close"
+              />
+            </div>
+            <form onSubmit={handleHireHRSubmit}>
+              <div className="modal-body p-4">
+                <div className="alert alert-info py-2 px-3 fs-13 mb-3">
+                  <i className="ti ti-info-circle me-1" />
+                  Adding an HR Manager creates their initial account. They will log in and fill their onboarding details (Phone, Date of Joining, Profile Photo, Bank &amp; Documents).
+                </div>
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-medium">First Name <span className="text-danger">*</span></label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      value={hireHRForm.firstName}
+                      onChange={(e) => {
+                        const fn = e.target.value;
+                        const domain = getAdminDomain();
+                        const fnClean = fn.toLowerCase().replace(/\s+/g, '');
+                        const lnClean = (hireHRForm.lastName || '').toLowerCase().replace(/\s+/g, '');
+                        const handle = fnClean ? (lnClean ? `${fnClean}.${lnClean}` : fnClean) : '';
+                        if (!isHREmailEdited) {
+                          setHireHRForm({ ...hireHRForm, firstName: fn, email: handle ? `${handle}@${domain}` : '' });
+                        } else {
+                          setHireHRForm({ ...hireHRForm, firstName: fn });
+                        }
+                      }}
+                      placeholder="e.g. Jane"
+                    />
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-medium">Last Name <span className="text-danger">*</span></label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      value={hireHRForm.lastName}
+                      onChange={(e) => {
+                        const ln = e.target.value;
+                        const domain = getAdminDomain();
+                        const fnClean = (hireHRForm.firstName || '').toLowerCase().replace(/\s+/g, '');
+                        const lnClean = ln.toLowerCase().replace(/\s+/g, '');
+                        const handle = fnClean ? (lnClean ? `${fnClean}.${lnClean}` : fnClean) : '';
+                        if (!isHREmailEdited) {
+                          setHireHRForm({ ...hireHRForm, lastName: ln, email: handle ? `${handle}@${domain}` : '' });
+                        } else {
+                          setHireHRForm({ ...hireHRForm, lastName: ln });
+                        }
+                      }}
+                      placeholder="e.g. Doe"
+                    />
+                  </div>
+                  <div className="col-md-12 mb-3">
+                    <label className="form-label fw-medium">Email Address <span className="text-danger">*</span></label>
+                    <div className="input-group">
+                      <input
+                        type="email"
+                        className="form-control"
+                        required
+                        value={hireHRForm.email}
+                        onChange={(e) => {
+                          setIsHREmailEdited(true);
+                          setHireHRForm({ ...hireHRForm, email: e.target.value });
+                        }}
+                        onBlur={(e) => {
+                          const val = e.target.value.trim();
+                          const domain = getAdminDomain();
+                          if (val && !val.includes('@')) {
+                            setHireHRForm({ ...hireHRForm, email: `${val.toLowerCase()}@${domain}` });
+                            setIsHREmailEdited(true);
+                          }
+                        }}
+                        placeholder={`e.g. hr@${getAdminDomain()}`}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        title={`Append @${getAdminDomain()}`}
+                        onClick={() => {
+                          const domain = getAdminDomain();
+                          const val = hireHRForm.email.trim();
+                          if (!val) {
+                            const fnClean = (hireHRForm.firstName || '').toLowerCase().replace(/\s+/g, '');
+                            const lnClean = (hireHRForm.lastName || '').toLowerCase().replace(/\s+/g, '');
+                            const handle = fnClean ? (lnClean ? `${fnClean}.${lnClean}` : fnClean) : 'hr.manager';
+                            setHireHRForm({ ...hireHRForm, email: `${handle}@${domain}` });
+                          } else if (!val.includes('@')) {
+                            setHireHRForm({ ...hireHRForm, email: `${val.toLowerCase()}@${domain}` });
+                          } else {
+                            const handle = val.split('@')[0];
+                            setHireHRForm({ ...hireHRForm, email: `${handle}@${domain}` });
+                          }
+                          setIsHREmailEdited(true);
+                        }}
+                      >
+                        @{getAdminDomain()}
+                      </button>
+                    </div>
+                    <div className="form-text text-muted mt-1">
+                      💡 Auto Domain Reference: <span className="fw-semibold text-primary">@{getAdminDomain()}</span>
+                    </div>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-medium">Password</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      value={hireHRForm.password}
+                      onChange={(e) => setHireHRForm({ ...hireHRForm, password: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-medium">Confirm Password</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      value={hireHRForm.confirmPassword}
+                      onChange={(e) => setHireHRForm({ ...hireHRForm, confirmPassword: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer bg-light">
+                <button type="button" className="btn btn-outline-secondary" data-bs-dismiss="modal">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={hireHRLoading}>
+                  {hireHRLoading ? 'Saving...' : 'Add HR Manager'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      {/* Approve HR Manager Modal */}
+      <div className="modal fade" id="approve_hr_manager_modal" tabIndex={-1} aria-hidden="true">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header bg-success text-white">
+              <h5 className="modal-title text-white fw-bold">
+                <i className="ti ti-check-check me-2" />
+                Approve HR Manager Onboarding
+              </h5>
+              <button
+                type="button"
+                className="btn-close btn-close-white"
+                data-bs-dismiss="modal"
+                id="close_approve_hr_modal"
+                aria-label="Close"
+              />
+            </div>
+            <form onSubmit={handleApproveHRSubmit}>
+              <div className="modal-body p-4">
+                {selectedHREmp && (
+                  <div className="mb-3 p-3 bg-light rounded border">
+                    <h6 className="mb-1 fw-bold">{selectedHREmp.firstName} {selectedHREmp.lastName}</h6>
+                    <span className="text-muted fs-13 d-block">{selectedHREmp.user?.email || selectedHREmp.email}</span>
+                    {selectedHREmp.phone && <span className="text-muted fs-13 d-block">Phone: {selectedHREmp.phone}</span>}
+                    {selectedHREmp.dateOfJoining && (
+                      <span className="text-muted fs-13 d-block">
+                        Date of Joining: {new Date(selectedHREmp.dateOfJoining).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-medium">Department <span className="text-danger">*</span></label>
+                    <select
+                      className="form-select"
+                      required
+                      value={approveHRForm.departmentId}
+                      onChange={(e) => setApproveHRForm({ ...approveHRForm, departmentId: e.target.value })}
+                    >
+                      <option value="">Select Department</option>
+                      {departments.map((d: any) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-medium">Designation <span className="text-danger">*</span></label>
+                    <select
+                      className="form-select"
+                      required
+                      value={approveHRForm.designationId}
+                      onChange={(e) => setApproveHRForm({ ...approveHRForm, designationId: e.target.value })}
+                    >
+                      <option value="">Select Designation</option>
+                      {designations.map((d: any) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-medium">Employee ID (Auto-generated)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={approveHRForm.employeeCode}
+                      onChange={(e) => setApproveHRForm({ ...approveHRForm, employeeCode: e.target.value })}
+                      placeholder="Auto-generated if empty"
+                    />
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-medium">Username / Full Name</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={approveHRForm.username}
+                      onChange={(e) => setApproveHRForm({ ...approveHRForm, username: e.target.value })}
+                      placeholder="Username or Full Name"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer bg-light">
+                <button type="button" className="btn btn-outline-secondary" data-bs-dismiss="modal">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-success" disabled={approveLoading}>
+                  {approveLoading ? 'Approving...' : 'Approve & Activate'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </>
   );
 };

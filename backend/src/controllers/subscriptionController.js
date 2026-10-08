@@ -1009,8 +1009,28 @@ async function deleteSuperAdminCompany(req, res) {
       return res.status(400).json({ message: 'Invalid company ID' });
     }
 
-    await prisma.company.delete({
-      where: { id: companyId }
+    await prisma.$transaction(async (tx) => {
+      // 1. Find all employees belonging to this company
+      const employees = await tx.employee.findMany({
+        where: { user: { companyId } },
+        select: { id: true }
+      });
+      const employeeIds = employees.map(e => e.id);
+
+      // 2. Clean up leave requests and balances for these employees
+      if (employeeIds.length > 0) {
+        await tx.leaveRequest.deleteMany({ where: { employeeId: { in: employeeIds } } });
+        await tx.leaveBalance.deleteMany({ where: { employeeId: { in: employeeIds } } });
+      }
+
+      // 3. Clean up leave policies & leave types for this company
+      await tx.leavePolicy.deleteMany({ where: { companyId } });
+      await tx.leaveType.deleteMany({ where: { companyId } });
+
+      // 4. Delete company (cascades all remaining company models)
+      await tx.company.delete({
+        where: { id: companyId }
+      });
     });
 
     res.json({ message: 'Company and all associated data deleted successfully' });

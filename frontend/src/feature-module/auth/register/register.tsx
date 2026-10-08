@@ -56,6 +56,7 @@ const Register = () => {
   const [success, setSuccess] = useState(false);
   const [workspaceUrl, setWorkspaceUrl] = useState("");
   const [registeredEmail, setRegisteredEmail] = useState("");
+  const [registeredCompanyCode, setRegisteredCompanyCode] = useState("");
 
   // Resend state
   const [isResending, setIsResending] = useState(false);
@@ -105,6 +106,7 @@ const Register = () => {
       setWorkspaceUrl(
         company.workspaceUrl || `http://${company.subdomain}.yourhrms.com/login`
       );
+      setRegisteredCompanyCode(company.companyCode || "");
       setRegisteredEmail(email);
       setSuccess(true);
     } catch (err: any) {
@@ -184,16 +186,18 @@ const Register = () => {
                   </div>
                 </div>
 
-                <div className="card bg-light mb-3 p-3 text-start border">
-                  <p className="mb-1 fw-semibold text-muted small">
-                    <i className="ti ti-world me-1" /> Your Workspace URL:
-                  </p>
-                  <p className="text-primary mb-0 fw-semibold fs-15">{workspaceUrl}</p>
-                </div>
+                {registeredCompanyCode && (
+                  <div className="card bg-light mb-3 p-3 text-start border">
+                    <p className="mb-1 fw-semibold text-muted small">
+                      <i className="ti ti-building me-1" /> Your Company Code:
+                    </p>
+                    <p className="text-primary mb-0 fw-bold fs-16">{registeredCompanyCode}</p>
+                  </div>
+                )}
 
-                <a href={`${workspaceUrl}/login`} className="btn btn-primary w-100 mb-3 py-2 fw-medium">
+                <Link to={routes.login} className="btn btn-primary w-100 mb-3 py-2 fw-medium">
                   Go to Login
-                </a>
+                </Link>
                 <p className="text-muted small mb-0">
                   Didn't receive the email?{" "}
                   <Link

@@ -24,6 +24,7 @@ model Company {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   emailDomain      String?
+  companyCode      String?           @unique
   announcements    Announcement[]
   applicants       Applicant[]
   assetCategories  AssetCategory[]
@@ -287,7 +288,7 @@ model LeaveRequest {
   updatedAt    DateTime     @updatedAt
   leaveSession LeaveSession @default(FULL_DAY)
   employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveType    LeaveType    @relation(fields: [leaveTypeId], references: [id])
+  leaveType    LeaveType    @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId], map: "leave_requests_employeeId_fkey")
   @@index([leaveTypeId], map: "leave_requests_leaveTypeId_fkey")
@@ -302,7 +303,7 @@ model LeaveBalance {
   totalDays   Decimal   @default(0.0) @db.Decimal(5, 1)
   usedDays    Decimal   @default(0.0) @db.Decimal(5, 1)
   employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id])
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, leaveTypeId, year])
   @@index([leaveTypeId], map: "leave_balances_leaveTypeId_fkey")

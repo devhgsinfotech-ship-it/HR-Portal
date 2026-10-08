@@ -18,7 +18,7 @@ const storage = multer.diskStorage({
         let dir = path.join(UPLOAD_BASE, 'profiles');
         if (file.fieldname === 'postImage') {
             dir = path.join(UPLOAD_BASE, 'posts');
-        } else if (file.fieldname !== 'profileImage') {
+        } else if (file.fieldname !== 'profileImage' && file.fieldname !== 'profilePhoto') {
             dir = path.join(UPLOAD_BASE, 'documents');
         }
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -35,7 +35,7 @@ const upload = multer({ storage });
 router.use(verifyToken);
 
 // Employee Onboarding Endpoints
-router.put('/onboarding/personal', employeeController.onboardingPersonal);
+router.put('/onboarding/personal', upload.single('profilePhoto'), employeeController.onboardingPersonal);
 router.post('/onboarding/bank', employeeController.onboardingBank);
 router.post('/onboarding/documents', upload.fields([
     { name: 'aadhaar', maxCount: 1 },
@@ -66,6 +66,8 @@ router.get('/dashboard/next-holiday', employeeController.getNextHoliday);
 // SUPER_ADMIN has view/support access; employee CRUD is Company Admin/HR domain
 router.get('/check-email', requireCompanyRole('HR'),                                          employeeController.checkEmailAvailability);
 router.get('/quota-status',                                                                   employeeController.getQuotaStatus);
+router.post('/hire-hr', requireCompanyRole('COMPANY_ADMIN', 'SUPER_ADMIN'), checkEmployeeQuota, employeeController.hireHRManager);
+router.get('/pending-hr-onboarding', requireCompanyRole('COMPANY_ADMIN', 'SUPER_ADMIN'), employeeController.getPendingHROnboarding);
 router.post('/',           requireCompanyRole('HR'), checkEmployeeQuota, upload.single('profileImage'), employeeController.createEmployee);
 router.get('/', employeeController.getEmployees);
 

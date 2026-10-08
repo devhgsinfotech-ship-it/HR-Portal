@@ -124,7 +124,12 @@ const TwoColumnSidebar = () => {
                                                             <li className="menu-title">
                                                                 <span>{title.menuValue}</span>
                                                             </li>
-                                                            {title.subMenus.map((subMenus: any, j: number) => (
+                                                            {title.subMenus.filter((s: any) => {
+                                                                if (role === "EMPLOYEE" && title.menuValue === "Dashboard") {
+                                                                    return s.menuValue === "Employee Dashboard";
+                                                                }
+                                                                return true;
+                                                            }).map((subMenus: any, j: number) => (
                                                                 <React.Fragment key={`submenu-${index}-${i}-${j}`}>
                                                                     {title.hasSubRoute && (
                                                                         <li>

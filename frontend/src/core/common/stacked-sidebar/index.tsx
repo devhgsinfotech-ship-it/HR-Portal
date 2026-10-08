@@ -4,8 +4,11 @@ import { TowColData } from '../../data/json/twoColData'
 import ImageWithBasePath from '../imageWithBasePath';
 import { all_routes } from '../../../router/all_routes';
 import React from 'react';
+import { useAppSelector } from '../../data/redux/store';
 
 const StackedSidebar = () => {
+    const user = useAppSelector((state) => state.auth.user) as any;
+    const role = user?.role || 'EMPLOYEE';
     const routes = all_routes
     const Location = useLocation();
     const [showSubMenusTab, SetShowSubMenusTab] = useState(false);
@@ -124,7 +127,12 @@ const StackedSidebar = () => {
                                             {title.showMyTab === true && (
                                             <>
                                             
-                                                {title.subMenus.map((subMenus: any, j: number) => (
+                                                {title.subMenus.filter((s: any) => {
+                                                    if (role === "EMPLOYEE" && title.menuValue === "Dashboard") {
+                                                        return s.menuValue === "Employee Dashboard";
+                                                    }
+                                                    return true;
+                                                }).map((subMenus: any, j: number) => (
                                                 <React.Fragment key={`submenu-${index}-${i}-${j}`}>
                                                     {title.hasSubRoute && (
                                                     <li>
