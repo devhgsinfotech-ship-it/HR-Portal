@@ -579,7 +579,9 @@ const EmployeeList = () => {
                 company: record.raw?.user?.company?.name || '',
                 role: record.raw?.user?.role || 'EMPLOYEE',
                 companyRoleId: record.raw?.companyRoleId || '',
-                reportingManagerId: record.raw?.reportingManagerId || (record.raw?.companyRole?.name === 'HR Manager' ? String(dbEmployees.find((e: any) => e.raw?.user?.role === 'COMPANY_ADMIN')?.id || '') : ''),
+                reportingManagerId: (record.raw?.reportingManager?.user?.role === 'COMPANY_ADMIN' || record.raw?.reportingManagerId === 'COMPANY_ADMIN')
+                  ? 'COMPANY_ADMIN'
+                  : (record.raw?.reportingManagerId ? String(record.raw.reportingManagerId) : ((record.raw?.companyRole?.name === 'HR Manager' || record.raw?.user?.role === 'HR') ? 'COMPANY_ADMIN' : '')),
                 password: '',
                 confirmPassword: '',
                 basic: record.raw?.salaryStructure?.basic || 0,
@@ -616,6 +618,26 @@ const EmployeeList = () => {
               }}
             >
               <i className="ti ti-check" />
+            </Link>
+          )}
+          {record.onboardingStatus === 'COMPLETED' &&
+           (['HR', 'COMPANY_ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role || '')) && (
+            <Link
+              to="#"
+              className="ms-2 text-info"
+              title="View & Edit Onboarding Documents"
+              onClick={(e) => {
+                e.preventDefault();
+                setVerifyEmp(record);
+                const modalEl = document.getElementById('verify_employee_modal');
+                if (modalEl) {
+                  // @ts-ignore
+                  const modal = window.bootstrap?.Modal?.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+                  modal.show();
+                }
+              }}
+            >
+              <i className="ti ti-file-certificate" />
             </Link>
           )}
           {record.onboardingStatus === 'INVITED' && (!(record.raw?.user?.role === 'HR') || ['SUPER_ADMIN', 'COMPANY_ADMIN'].includes(currentUser?.role)) && (
@@ -1365,7 +1387,14 @@ const EmployeeList = () => {
                               { value: 'MANAGER', label: 'Manager' },
                               { value: 'HR', label: 'HR' }
                             ]}
-                            onChange={(opt) => setNewEmp({...newEmp, role: opt?.value || 'EMPLOYEE'})}
+                            onChange={(opt) => {
+                              const selectedRole = opt?.value || 'EMPLOYEE';
+                              setNewEmp((prev: any) => ({
+                                ...prev,
+                                role: selectedRole,
+                                reportingManagerId: selectedRole === 'HR' ? 'COMPANY_ADMIN' : prev.reportingManagerId
+                              }));
+                            }}
                           />
                         </div>
                       </div>
@@ -1375,7 +1404,17 @@ const EmployeeList = () => {
                           <CommonSelect
                             className="select"
                             options={[{ value: '', label: '-- None --' }, ...dbRoles]}
-                            onChange={(opt) => setNewEmp({...newEmp, companyRoleId: opt?.value || ''})}
+                            onChange={(opt) => {
+                              const selectedRoleId = opt?.value || '';
+                              const selectedRoleObj = dbRoles.find(r => String(r.value) === String(selectedRoleId));
+                              const isHRRole = selectedRoleObj?.label === 'HR Manager' || selectedRoleObj?.label === 'HR';
+                              setNewEmp((prev: any) => ({
+                                ...prev,
+                                companyRoleId: selectedRoleId,
+                                role: isHRRole ? 'HR' : prev.role,
+                                reportingManagerId: isHRRole ? 'COMPANY_ADMIN' : prev.reportingManagerId
+                              }));
+                            }}
                           />
                         </div>
                       </div>
@@ -1386,12 +1425,22 @@ const EmployeeList = () => {
                             const managerOptions = [
                               { value: '', label: '-- None --' },
                               { value: 'COMPANY_ADMIN', label: 'Company Admin' },
-                              ...dbEmployees.map((emp: any) => ({
-                                value: String(emp.id),
-                                label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed'
-                              }))
+                              ...dbEmployees.map((emp: any) => {
+                                const name = `${emp.firstName || emp.raw?.firstName || ''} ${emp.lastName || emp.raw?.lastName || ''}`.trim() || emp.Name || emp.user?.name || (emp.employeeCode ? `Employee (${emp.employeeCode})` : '') || 'Employee';
+                                const desig = emp.Designation || emp.designation?.name || emp.raw?.designation?.name || '';
+                                return {
+                                  value: String(emp.id),
+                                  label: desig ? `${name} (${desig})` : name
+                                };
+                              })
                             ];
-                            const defaultVal = managerOptions.find(m => m.value === String(newEmp.reportingManagerId)) || managerOptions[0];
+                            const defaultVal = managerOptions.find(m => 
+                              m.value === String(newEmp.reportingManagerId) ||
+                              (m.value === 'COMPANY_ADMIN' && (
+                                newEmp.reportingManagerId === 'COMPANY_ADMIN' ||
+                                ((newEmp.role === 'HR' || dbRoles.find(r => r.value === String(newEmp.companyRoleId))?.label === 'HR Manager') && !newEmp.reportingManagerId)
+                              ))
+                            ) || managerOptions[0];
 
                             return (
                               <CommonSelect
@@ -1399,7 +1448,7 @@ const EmployeeList = () => {
                                 className="select"
                                 options={managerOptions}
                                 defaultValue={defaultVal}
-                                onChange={(opt) => setNewEmp({...newEmp, reportingManagerId: opt?.value || ''})}
+                                onChange={(opt) => setNewEmp((prev: any) => ({ ...prev, reportingManagerId: opt?.value || '' }))}
                                 isDisabled={false}
                               />
                             );
@@ -1877,7 +1926,14 @@ const EmployeeList = () => {
                               { value: 'MANAGER', label: 'Manager' },
                               { value: 'HR', label: 'HR' }
                             ]}
-                            onChange={(opt) => setEditEmp({...editEmp, role: opt?.value || 'EMPLOYEE'})}
+                            onChange={(opt) => {
+                              const selectedRole = opt?.value || 'EMPLOYEE';
+                              setEditEmp((prev: any) => ({
+                                ...prev,
+                                role: selectedRole,
+                                reportingManagerId: selectedRole === 'HR' ? 'COMPANY_ADMIN' : prev.reportingManagerId
+                              }));
+                            }}
                             defaultValue={(() => {
                               const roles = [
                                 { value: 'EMPLOYEE', label: 'Employee' },
@@ -1896,9 +1952,15 @@ const EmployeeList = () => {
                             className="select"
                             options={[{ value: '', label: '-- None --' }, ...dbRoles]}
                             onChange={(opt) => {
-                              const updates: any = { companyRoleId: opt?.value || '' };
-                              const selectedRoleName = opt?.label || '';
-                              setEditEmp({...editEmp, companyRoleId: opt?.value || ''});
+                              const selectedRoleId = opt?.value || '';
+                              const selectedRoleObj = dbRoles.find(r => String(r.value) === String(selectedRoleId));
+                              const isHRRole = selectedRoleObj?.label === 'HR Manager' || selectedRoleObj?.label === 'HR';
+                              setEditEmp((prev: any) => ({
+                                ...prev,
+                                companyRoleId: selectedRoleId,
+                                role: isHRRole ? 'HR' : prev.role,
+                                reportingManagerId: isHRRole ? 'COMPANY_ADMIN' : prev.reportingManagerId
+                              }));
                             }}
                             defaultValue={(() => {
                               const allOptions = [{ value: '', label: '-- None --' }, ...dbRoles];
@@ -1914,12 +1976,23 @@ const EmployeeList = () => {
                             const managerOptions = [
                               { value: '', label: '-- None --' },
                               { value: 'COMPANY_ADMIN', label: 'Company Admin' },
-                              ...dbEmployees.filter((emp: any) => emp.id !== editEmp.id).map((emp: any) => ({
-                                value: String(emp.id),
-                                label: emp.Name || `${emp.raw?.firstName || ''} ${emp.raw?.lastName || ''}`.trim() || 'Unnamed'
-                              }))
+                              ...dbEmployees.filter((emp: any) => emp.id !== editEmp.id).map((emp: any) => {
+                                const name = `${emp.firstName || emp.raw?.firstName || ''} ${emp.lastName || emp.raw?.lastName || ''}`.trim() || emp.Name || emp.user?.name || (emp.employeeCode ? `Employee (${emp.employeeCode})` : '') || 'Employee';
+                                const desig = emp.Designation || emp.designation?.name || emp.raw?.designation?.name || '';
+                                return {
+                                  value: String(emp.id),
+                                  label: desig ? `${name} (${desig})` : name
+                                };
+                              })
                             ];
-                            const defaultVal = managerOptions.find(m => m.value === String(editEmp.reportingManagerId)) || managerOptions[0];
+                            const defaultVal = managerOptions.find(m => 
+                              m.value === String(editEmp.reportingManagerId) ||
+                              (m.value === 'COMPANY_ADMIN' && (
+                                editEmp.reportingManagerId === 'COMPANY_ADMIN' ||
+                                (editEmp.reportingManager?.user?.role === 'COMPANY_ADMIN') ||
+                                ((editEmp.role === 'HR' || dbRoles.find(r => r.value === String(editEmp.companyRoleId))?.label === 'HR Manager') && !editEmp.reportingManagerId)
+                              ))
+                            ) || managerOptions[0];
 
                             return (
                               <CommonSelect
@@ -1927,7 +2000,7 @@ const EmployeeList = () => {
                                 className="select"
                                 options={managerOptions}
                                 defaultValue={defaultVal}
-                                onChange={(opt) => setEditEmp({...editEmp, reportingManagerId: opt?.value || ''})}
+                                onChange={(opt) => setEditEmp((prev: any) => ({ ...prev, reportingManagerId: opt?.value || '' }))}
                                 isDisabled={false}
                               />
                             );

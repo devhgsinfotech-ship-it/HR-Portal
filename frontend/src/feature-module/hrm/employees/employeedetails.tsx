@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useSelector } from "react-redux";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { DatePicker } from "antd";
 import CommonSelect from "../../../core/common/commonSelect";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 import dayjs from "dayjs";
 
 type PasswordField = "password" | "confirmPassword";
@@ -15,10 +17,14 @@ const EmployeeDetails = () => {
   const searchParams = new URLSearchParams(location.search);
   const employeeId = searchParams.get('id');
 
+  const currentUser = useSelector((state: any) => state.auth?.user);
+  const canEditDocs = ['HR', 'COMPANY_ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role || '');
+
   const [emp, setEmp] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saveMsg, setSaveMsg] = useState('');
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
+  const [docUploading, setDocUploading] = useState<'aadhaar' | 'pan' | 'resume' | null>(null);
 
   // Edit state objects
   const [editBasic, setEditBasic] = useState({ phone: '', address: '', gender: '', dateOfBirth: '' });
@@ -53,6 +59,143 @@ const EmployeeDetails = () => {
     return `${apiBase}${photoUrl.startsWith('/') ? '' : '/'}${photoUrl}`;
   };
 
+  const getAdminCompanyDomain = () => {
+    try {
+      const userStr = localStorage.getItem('authUser') || localStorage.getItem('user');
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.email && u.email.includes('@')) {
+          const domain = u.email.split('@')[1];
+          if (domain && !['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com'].includes(domain.toLowerCase())) {
+            return domain.toLowerCase();
+          }
+        }
+        if (u.company?.emailDomain) return u.company.emailDomain.toLowerCase();
+        if (u.company?.domain) return u.company.domain.toLowerCase();
+        if (u.company?.name) {
+          const clean = u.company.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (clean) return `${clean}.com`;
+        }
+      }
+    } catch {}
+    return 'hgsinfotech.com';
+  };
+
+  const [dbDepartments, setDbDepartments] = useState<any[]>([]);
+  const [dbDesignations, setDbDesignations] = useState<any[]>([]);
+  const [dbRoles, setDbRoles] = useState<any[]>([]);
+  const [dbEmployees, setDbEmployees] = useState<any[]>([]);
+
+  const [editEmp, setEditEmp] = useState<any>({
+    id: '', firstName: '', lastName: '', email: '', phone: '', departmentId: '', designationId: '', companyRoleId: '', dateOfJoining: '', profilePhotoUrl: '', employeeCode: '', username: '', company: '', password: '', confirmPassword: '', role: 'EMPLOYEE', reportingManagerId: '', about: '',
+    basic: 0, hra: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0, bonus: 0, pfDeduction: 0, pfEmployer: 0, professionalTax: 0, tdsDeduction: 0, otherDeductions: 0, grossSalary: 0, netSalary: 0
+  });
+  const [editEmpFile, setEditEmpFile] = useState<File | null>(null);
+  const [editErrorMsg, setEditErrorMsg] = useState('');
+
+  const initEditEmp = (data: any) => {
+    if (!data) return;
+    const salary = data.salaryStructure || {};
+    setEditEmp({
+      id: data.id,
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      email: data.user?.email || data.email || '',
+      phone: data.phone || '',
+      departmentId: data.departmentId ? String(data.departmentId) : '',
+      designationId: data.designationId ? String(data.designationId) : '',
+      dateOfJoining: data.dateOfJoining ? dayjs(data.dateOfJoining).format('YYYY-MM-DD') : '',
+      profilePhotoUrl: data.profilePhotoUrl || '',
+      employeeCode: data.employeeCode || '',
+      username: data.user?.name || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+      company: data.user?.company?.name || 'HGS Infotech',
+      role: data.user?.role || 'EMPLOYEE',
+      companyRoleId: data.companyRoleId ? String(data.companyRoleId) : '',
+      reportingManagerId: (data.reportingManager?.user?.role === 'COMPANY_ADMIN' || data.reportingManagerId === 'COMPANY_ADMIN')
+        ? 'COMPANY_ADMIN'
+        : (data.reportingManagerId ? String(data.reportingManagerId) : ((data.user?.role === 'HR' || data.companyRole?.name === 'HR Manager') ? 'COMPANY_ADMIN' : '')),
+      about: data.about || '',
+      password: '',
+      confirmPassword: '',
+      basic: salary.basic || 0,
+      hra: salary.hra || 0,
+      conveyance: salary.conveyance || 0,
+      medicalAllowance: salary.medicalAllowance || 0,
+      specialAllowance: salary.specialAllowance || 0,
+      bonus: salary.bonus || 0,
+      pfDeduction: salary.pfDeduction || 0,
+      pfEmployer: salary.pfEmployer || 0,
+      professionalTax: salary.professionalTax || 0,
+      tdsDeduction: salary.tdsDeduction || 0,
+      otherDeductions: salary.otherDeductions || 0,
+      grossSalary: salary.grossSalary || 0,
+      netSalary: salary.netSalary || 0
+    });
+    setEditEmpFile(null);
+    setEditErrorMsg('');
+  };
+
+  const calculateSalary = (empState: any, fieldUpdates: any) => {
+    const updated = { ...empState, ...fieldUpdates };
+    const basic = Number(updated.basic || 0);
+    const hra = Number(updated.hra || 0);
+    const conveyance = Number(updated.conveyance || 0);
+    const medical = Number(updated.medicalAllowance || 0);
+    const special = Number(updated.specialAllowance || 0);
+    const bonus = Number(updated.bonus || 0);
+    
+    const pf = Number(updated.pfDeduction || 0);
+    const pt = Number(updated.professionalTax || 0);
+    const tds = Number(updated.tdsDeduction || 0);
+    const other = Number(updated.otherDeductions || 0);
+
+    const grossSalary = basic + hra + conveyance + medical + special + bonus;
+    const netSalary = grossSalary - (pf + pt + tds + other);
+
+    return {
+      ...updated,
+      grossSalary,
+      netSalary
+    };
+  };
+
+  const handleEditEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editEmp.password && editEmp.password !== editEmp.confirmPassword) {
+      setEditErrorMsg('Password and Confirm Password do not match');
+      return;
+    }
+    try {
+      const formData = new FormData();
+      Object.entries(editEmp).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && key !== 'confirmPassword') {
+          formData.append(key, String(value));
+        }
+      });
+      if (editEmpFile) formData.append('profileImage', editEmpFile);
+
+      await apiClient.put(`/employees/${editEmp.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      // Close modal programmatically
+      const modal = document.getElementById('edit_employee');
+      if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) backdrop.remove();
+      }
+
+      setSaveMsg('Employee updated successfully!');
+      setEditEmpFile(null);
+      setEditErrorMsg('');
+      fetchEmployee();
+    } catch (err: any) {
+      setEditErrorMsg(err.response?.data?.message || 'Error updating employee');
+    }
+  };
+
   const fetchEmployee = async () => {
     if (!employeeId) {
       setLoading(false);
@@ -62,6 +205,7 @@ const EmployeeDetails = () => {
       const res = await apiClient.get(`/employees/${employeeId}`);
       const data = res.data;
       setEmp(data);
+      initEditEmp(data);
       // Pre-populate edit states
       setEditBasic({
         phone: data.phone || '',
@@ -103,7 +247,55 @@ const EmployeeDetails = () => {
 
   useEffect(() => {
     fetchEmployee();
+    const fetchAuxData = async () => {
+      try {
+        const [deptRes, desigRes, rolesRes, empRes] = await Promise.allSettled([
+          apiClient.get('/departments'),
+          apiClient.get('/designations'),
+          apiClient.get('/api/roles/'),
+          apiClient.get('/employees'),
+        ]);
+        if (deptRes.status === 'fulfilled' && deptRes.value.data) {
+          setDbDepartments(deptRes.value.data.map((d: any) => ({ value: String(d.id), label: d.name })));
+        }
+        if (desigRes.status === 'fulfilled' && desigRes.value.data) {
+          setDbDesignations(desigRes.value.data.map((d: any) => ({ value: String(d.id), label: d.name })));
+        }
+        if (rolesRes.status === 'fulfilled' && rolesRes.value.data?.success) {
+          setDbRoles(rolesRes.value.data.data.map((r: any) => ({ value: String(r.id), label: r.name })));
+        }
+        if (empRes.status === 'fulfilled' && empRes.value.data) {
+          setDbEmployees(empRes.value.data);
+        }
+      } catch (err) {
+        console.error('Failed to load auxiliary dropdown data:', err);
+      }
+    };
+    fetchAuxData();
   }, [employeeId]);
+
+  const handleUploadDoc = async (docType: 'aadhaar' | 'pan' | 'resume', file: File) => {
+    if (!file || !employeeId) return;
+    setDocUploading(docType);
+    const formData = new FormData();
+    formData.append(docType, file);
+    try {
+      const res = await apiClient.put(`/employees/${employeeId}/documents`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setEmp((prev: any) => ({
+        ...prev,
+        aadhaarPath: res.data.employee.aadhaarPath ?? prev.aadhaarPath,
+        panPath: res.data.employee.panPath ?? prev.panPath,
+        resumePath: res.data.employee.resumePath ?? prev.resumePath,
+      }));
+      setSaveMsg(`${docType === 'aadhaar' ? 'Aadhaar Card' : docType === 'pan' ? 'PAN Card' : 'Resume'} updated successfully!`);
+    } catch (err: any) {
+      setSaveMsg(err.response?.data?.message || `Failed to update ${docType}`);
+    } finally {
+      setDocUploading(null);
+    }
+  };
 
   const saveField = async (fields: Record<string, any>, fileToUpload?: File | null) => {
     if (!employeeId) return;
@@ -291,12 +483,20 @@ const EmployeeDetails = () => {
                       <div className="d-flex align-items-center justify-content-between">
                         <span className="d-inline-flex align-items-center"><i className="ti ti-calendar-check me-2" />Report Office</span>
                         <div className="d-flex align-items-center">
-                          <p className="text-gray-9 mb-0">{emp?.reportingManager ? `${emp.reportingManager.firstName || ''} ${emp.reportingManager.lastName || ''}`.trim() : '—'}</p>
+                          <p className="text-gray-9 mb-0">
+                            {emp?.reportingManager ? (
+                              emp.reportingManager.user?.role === 'COMPANY_ADMIN'
+                                ? `${emp.reportingManager.firstName || ''} ${emp.reportingManager.lastName || ''}`.trim() + ' (Company Admin)'
+                                : `${emp.reportingManager.firstName || ''} ${emp.reportingManager.lastName || ''}`.trim() || 'Company Admin'
+                            ) : (
+                              (emp?.user?.role === 'HR' || emp?.companyRole?.name === 'HR Manager') ? 'Company Admin' : '—'
+                            )}
+                          </p>
                         </div>
                       </div>
                       <div className="row gx-2 mt-3">
                         <div className="col-6">
-                          <Link to="#" className="btn btn-dark w-100" data-bs-toggle="modal" data-inert={true} data-bs-target="#edit_employee">
+                          <Link to="#" className="btn btn-dark w-100" data-bs-toggle="modal" data-inert={true} data-bs-target="#edit_employee" onClick={() => initEditEmp(emp)}>
                             <i className="ti ti-edit me-1" />Edit Info
                           </Link>
                         </div>
@@ -311,7 +511,7 @@ const EmployeeDetails = () => {
                   <div className="p-3 border-bottom">
                     <div className="d-flex align-items-center justify-content-between mb-2">
                       <h6>Basic information</h6>
-                      <Link to="#" className="btn btn-icon btn-sm" data-bs-toggle="modal" data-inert={true} data-bs-target="#edit_employee">
+                      <Link to="#" className="btn btn-icon btn-sm" data-bs-toggle="modal" data-inert={true} data-bs-target="#edit_employee" onClick={() => initEditEmp(emp)}>
                         <i className="ti ti-edit" />
                       </Link>
                     </div>
@@ -501,6 +701,206 @@ const EmployeeDetails = () => {
                               <div className="col-md-3">
                                 <span className="d-inline-flex align-items-center">Branch</span>
                                 <h6 className="d-flex align-items-center fw-medium mt-1">{emp?.bankDetails?.branchName || '—'}</h6>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="accordion-item">
+                        <div className="accordion-header" id="headingDocs">
+                          <div className="accordion-button">
+                            <div className="d-flex align-items-center flex-fill">
+                              <h5 className="d-flex align-items-center mb-0">
+                                <i className="ti ti-file-certificate text-primary me-2 fs-20" />
+                                Onboarding &amp; Verification Documents
+                              </h5>
+                              <Link
+                                to="#"
+                                className="d-flex align-items-center collapsed collapse-arrow ms-auto"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#primaryBorderDocs"
+                                aria-expanded="false"
+                                aria-controls="primaryBorderDocs"
+                              >
+                                <i className="ti ti-chevron-down fs-18" />
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          id="primaryBorderDocs"
+                          className="accordion-collapse collapse show border-top"
+                          aria-labelledby="headingDocs"
+                          data-bs-parent="#accordionExample"
+                        >
+                          <div className="accordion-body">
+                            <div className="row g-3">
+                              {/* Aadhaar Card */}
+                              <div className="col-md-4">
+                                <div className="border rounded p-3 h-100 d-flex flex-column justify-content-between bg-light-subtle">
+                                  <div>
+                                    <div className="d-flex align-items-center justify-content-between mb-2">
+                                      <span className="badge bg-primary-transparent text-primary">Identity Proof</span>
+                                      {emp?.aadhaarPath ? (
+                                        <span className="badge bg-success-transparent text-success">
+                                          <i className="ti ti-check me-1" />Uploaded
+                                        </span>
+                                      ) : (
+                                        <span className="badge bg-danger-transparent text-danger">Missing</span>
+                                      )}
+                                    </div>
+                                    <h6 className="fw-semibold mb-1">Aadhaar Card</h6>
+                                    <p className="fs-12 text-muted mb-3">National identity verification document.</p>
+                                  </div>
+                                  <div className="d-flex flex-column gap-2 pt-2 border-top">
+                                    {emp?.aadhaarPath ? (
+                                      <a
+                                        href={`${APP_CONFIG.getBackendUrl()}${emp.aadhaarPath}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center"
+                                      >
+                                        <i className="ti ti-eye me-1" /> View / Download
+                                      </a>
+                                    ) : (
+                                      <button type="button" className="btn btn-sm btn-light text-muted" disabled>
+                                        No Document Uploaded
+                                      </button>
+                                    )}
+                                    {canEditDocs && (
+                                      <div>
+                                        <label htmlFor="upload-aadhaar-doc" className="btn btn-sm btn-primary w-100 mb-0 cursor-pointer d-flex align-items-center justify-content-center">
+                                          <i className="ti ti-upload me-1" />
+                                          {docUploading === 'aadhaar' ? 'Uploading...' : emp?.aadhaarPath ? 'Change / Replace' : 'Upload Document'}
+                                        </label>
+                                        <input
+                                          type="file"
+                                          id="upload-aadhaar-doc"
+                                          style={{ display: 'none' }}
+                                          accept=".pdf,image/*"
+                                          disabled={docUploading !== null}
+                                          onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                              handleUploadDoc('aadhaar', e.target.files[0]);
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* PAN Card */}
+                              <div className="col-md-4">
+                                <div className="border rounded p-3 h-100 d-flex flex-column justify-content-between bg-light-subtle">
+                                  <div>
+                                    <div className="d-flex align-items-center justify-content-between mb-2">
+                                      <span className="badge bg-info-transparent text-info">Tax Identification</span>
+                                      {emp?.panPath ? (
+                                        <span className="badge bg-success-transparent text-success">
+                                          <i className="ti ti-check me-1" />Uploaded
+                                        </span>
+                                      ) : (
+                                        <span className="badge bg-danger-transparent text-danger">Missing</span>
+                                      )}
+                                    </div>
+                                    <h6 className="fw-semibold mb-1">PAN Card</h6>
+                                    <p className="fs-12 text-muted mb-3">Tax compliance and payroll verification document.</p>
+                                  </div>
+                                  <div className="d-flex flex-column gap-2 pt-2 border-top">
+                                    {emp?.panPath ? (
+                                      <a
+                                        href={`${APP_CONFIG.getBackendUrl()}${emp.panPath}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center"
+                                      >
+                                        <i className="ti ti-eye me-1" /> View / Download
+                                      </a>
+                                    ) : (
+                                      <button type="button" className="btn btn-sm btn-light text-muted" disabled>
+                                        No Document Uploaded
+                                      </button>
+                                    )}
+                                    {canEditDocs && (
+                                      <div>
+                                        <label htmlFor="upload-pan-doc" className="btn btn-sm btn-primary w-100 mb-0 cursor-pointer d-flex align-items-center justify-content-center">
+                                          <i className="ti ti-upload me-1" />
+                                          {docUploading === 'pan' ? 'Uploading...' : emp?.panPath ? 'Change / Replace' : 'Upload Document'}
+                                        </label>
+                                        <input
+                                          type="file"
+                                          id="upload-pan-doc"
+                                          style={{ display: 'none' }}
+                                          accept=".pdf,image/*"
+                                          disabled={docUploading !== null}
+                                          onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                              handleUploadDoc('pan', e.target.files[0]);
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Resume / CV */}
+                              <div className="col-md-4">
+                                <div className="border rounded p-3 h-100 d-flex flex-column justify-content-between bg-light-subtle">
+                                  <div>
+                                    <div className="d-flex align-items-center justify-content-between mb-2">
+                                      <span className="badge bg-warning-transparent text-warning">Curriculum Vitae</span>
+                                      {emp?.resumePath ? (
+                                        <span className="badge bg-success-transparent text-success">
+                                          <i className="ti ti-check me-1" />Uploaded
+                                        </span>
+                                      ) : (
+                                        <span className="badge bg-secondary-transparent text-secondary">Not Provided</span>
+                                      )}
+                                    </div>
+                                    <h6 className="fw-semibold mb-1">Resume / CV</h6>
+                                    <p className="fs-12 text-muted mb-3">Employment background &amp; candidate resume.</p>
+                                  </div>
+                                  <div className="d-flex flex-column gap-2 pt-2 border-top">
+                                    {emp?.resumePath ? (
+                                      <a
+                                        href={`${APP_CONFIG.getBackendUrl()}${emp.resumePath}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center"
+                                      >
+                                        <i className="ti ti-eye me-1" /> View / Download
+                                      </a>
+                                    ) : (
+                                      <button type="button" className="btn btn-sm btn-light text-muted" disabled>
+                                        No Document Uploaded
+                                      </button>
+                                    )}
+                                    {canEditDocs && (
+                                      <div>
+                                        <label htmlFor="upload-resume-doc" className="btn btn-sm btn-primary w-100 mb-0 cursor-pointer d-flex align-items-center justify-content-center">
+                                          <i className="ti ti-upload me-1" />
+                                          {docUploading === 'resume' ? 'Uploading...' : emp?.resumePath ? 'Change / Replace' : 'Upload Document'}
+                                        </label>
+                                        <input
+                                          type="file"
+                                          id="upload-resume-doc"
+                                          style={{ display: 'none' }}
+                                          accept=".pdf,.doc,.docx"
+                                          disabled={docUploading !== null}
+                                          onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                              handleUploadDoc('resume', e.target.files[0]);
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1083,7 +1483,7 @@ const EmployeeDetails = () => {
             <div className="modal-header">
               <div className="d-flex align-items-center">
                 <h4 className="modal-title me-2">Edit Employee</h4>
-                <span>Employee ID : EMP -0024</span>
+                <span>Employee ID : {editEmp.employeeCode || emp?.employeeCode || ''}</span>
               </div>
               <button
                 type="button"
@@ -1094,15 +1494,15 @@ const EmployeeDetails = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <form>
+            <form onSubmit={handleEditEmployee}>
               <div className="contact-grids-tab">
-                <ul className="nav nav-underline" id="myTab2" role="tablist">
+                <ul className="nav nav-underline" id="myTabEditEmp" role="tablist">
                   <li className="nav-item" role="presentation">
                     <button
                       className="nav-link active"
-                      id="info-tab3"
+                      id="edit-info-tab"
                       data-bs-toggle="tab"
-                      data-bs-target="#basic-info3"
+                      data-bs-target="#edit-basic-info"
                       type="button"
                       role="tab"
                       aria-selected="true"
@@ -1110,32 +1510,47 @@ const EmployeeDetails = () => {
                       Basic Information
                     </button>
                   </li>
+                  <li className="nav-item" role="presentation">
+                    <button
+                      className="nav-link"
+                      id="edit-salary-tab"
+                      data-bs-toggle="tab"
+                      data-bs-target="#edit-salary"
+                      type="button"
+                      role="tab"
+                      aria-selected="false"
+                    >
+                      Salary Details
+                    </button>
+                  </li>
                 </ul>
               </div>
-              <div className="tab-content" id="myTabContent2">
+              <div className="tab-content" id="myTabContentEditEmp">
                 <div
                   className="tab-pane fade show active"
-                  id="basic-info3"
+                  id="edit-basic-info"
                   role="tabpanel"
-                  aria-labelledby="info-tab3"
+                  aria-labelledby="edit-info-tab"
                   tabIndex={0}
                 >
                   <div className="modal-body pb-0 ">
+                    {editErrorMsg && <div className="alert alert-danger">{editErrorMsg}</div>}
                     <div className="row">
                       <div className="col-md-12">
                         <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
                           <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                            {editPhotoFile ? (
-                              <img src={URL.createObjectURL(editPhotoFile)} alt="user" className="rounded-circle" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                            ) : photoUrl ? (
-                              <img src={photoUrl} alt="user" className="rounded-circle" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/assets/img/users/user-13.jpg'; }} />
-                            ) : (
-                              <ImageWithBasePath
-                                src="assets/img/users/user-13.jpg"
-                                alt="user"
-                                className="rounded-circle"
-                              />
-                            )}
+                            <img
+                              src={
+                                editEmpFile 
+                                  ? URL.createObjectURL(editEmpFile) 
+                                  : editEmp.profilePhotoUrl 
+                                    ? (editEmp.profilePhotoUrl.startsWith('/') ? `${apiClient.defaults.baseURL}${editEmp.profilePhotoUrl}` : `assets/img/users/${editEmp.profilePhotoUrl}`)
+                                    : "assets/img/users/user-13.jpg"
+                              }
+                              alt="user"
+                              className="rounded-circle"
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
                           </div>
                           <div className="profile-upload">
                             <div className="mb-2">
@@ -1153,16 +1568,18 @@ const EmployeeDetails = () => {
                                   accept="image/*"
                                   onChange={(e) => {
                                     if (e.target.files && e.target.files.length > 0) {
-                                      setEditPhotoFile(e.target.files[0]);
+                                      setEditEmpFile(e.target.files[0]);
                                     }
                                   }}
                                 />
                               </div>
-                              {editPhotoFile && (
-                                <button type="button" className="btn btn-light btn-sm" onClick={() => setEditPhotoFile(null)}>
-                                  Cancel
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                className="btn btn-light btn-sm"
+                                onClick={() => setEditEmpFile(null)}
+                              >
+                                Cancel
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1175,8 +1592,12 @@ const EmployeeDetails = () => {
                           <input
                             type="text"
                             className="form-control"
-                            value={emp?.firstName || ''}
-                            readOnly
+                            value={editEmp.firstName}
+                            onChange={(e) => {
+                              const firstName = e.target.value;
+                              setEditEmp({ ...editEmp, firstName, email: `${firstName.toLowerCase().replace(/\s+/g, '')}@${getAdminCompanyDomain()}` });
+                            }}
+                            required
                           />
                         </div>
                       </div>
@@ -1186,8 +1607,8 @@ const EmployeeDetails = () => {
                           <input
                             type="text"
                             className="form-control"
-                            value={emp?.lastName || ''}
-                            readOnly
+                            value={editEmp.lastName}
+                            onChange={(e) => setEditEmp({ ...editEmp, lastName: e.target.value })}
                           />
                         </div>
                       </div>
@@ -1199,7 +1620,9 @@ const EmployeeDetails = () => {
                           <input
                             type="text"
                             className="form-control"
-                            defaultValue="Emp-001"
+                            value={editEmp.employeeCode}
+                            readOnly
+                            disabled
                           />
                         </div>
                       </div>
@@ -1211,12 +1634,13 @@ const EmployeeDetails = () => {
                           <div className="input-icon-end position-relative">
                             <DatePicker
                               className="form-control datetimepicker"
-                              format={{
-                                format: "DD-MM-YYYY",
-                                type: "mask",
-                              }}
+                              format="DD-MM-YYYY"
                               getPopupContainer={getModalContainer}
                               placeholder="DD-MM-YYYY"
+                              value={editEmp.dateOfJoining ? dayjs(editEmp.dateOfJoining) : null}
+                              onChange={(_date: any, dateString: any) =>
+                                setEditEmp({ ...editEmp, dateOfJoining: typeof dateString === 'string' ? dateString.split('-').reverse().join('-') : '' })
+                              }
                             />
                             <span className="input-icon-addon">
                               <i className="ti ti-calendar text-gray-7" />
@@ -1232,7 +1656,9 @@ const EmployeeDetails = () => {
                           <input
                             type="text"
                             className="form-control"
-                            defaultValue="Anthony"
+                            value={editEmp.username}
+                            readOnly
+                            disabled
                           />
                         </div>
                       </div>
@@ -1244,14 +1670,16 @@ const EmployeeDetails = () => {
                           <input
                             type="email"
                             className="form-control"
-                            defaultValue="anthony@example.com	"
+                            value={editEmp.email}
+                            onChange={(e) => setEditEmp({ ...editEmp, email: e.target.value })}
+                            required
                           />
                         </div>
                       </div>
                       <div className="col-md-6">
                         <div className="mb-3 ">
                           <label className="form-label">
-                            Password <span className="text-danger"> *</span>
+                            Password
                           </label>
                           <div className="pass-group">
                             <input
@@ -1261,6 +1689,9 @@ const EmployeeDetails = () => {
                                   : "password"
                               }
                               className="pass-input form-control"
+                              placeholder="Leave blank to keep current"
+                              value={editEmp.password || ''}
+                              onChange={(e) => setEditEmp({ ...editEmp, password: e.target.value })}
                             />
                             <span
                               className={`ti toggle-passwords ${passwordVisibility.password
@@ -1277,8 +1708,7 @@ const EmployeeDetails = () => {
                       <div className="col-md-6">
                         <div className="mb-3 ">
                           <label className="form-label">
-                            Confirm Password{" "}
-                            <span className="text-danger"> *</span>
+                            Confirm Password
                           </label>
                           <div className="pass-group">
                             <input
@@ -1288,6 +1718,9 @@ const EmployeeDetails = () => {
                                   : "password"
                               }
                               className="pass-input form-control"
+                              placeholder="Confirm new password"
+                              value={editEmp.confirmPassword || ''}
+                              onChange={(e) => setEditEmp({ ...editEmp, confirmPassword: e.target.value })}
                             />
                             <span
                               className={`ti toggle-passwords ${passwordVisibility.confirmPassword
@@ -1309,27 +1742,9 @@ const EmployeeDetails = () => {
                           <input
                             type="text"
                             className="form-control"
-                            value={editBasic.phone}
-                            onChange={(e) => setEditBasic(p => ({ ...p, phone: e.target.value }))}
+                            value={editEmp.phone}
+                            onChange={(e) => setEditEmp({ ...editEmp, phone: e.target.value })}
                           />
-                        </div>
-                      </div>
-                      <div className="col-md-6">
-                        <div className="mb-3">
-                          <label className="form-label">Gender</label>
-                          <input type="text" className="form-control" value={editBasic.gender} onChange={(e) => setEditBasic(p => ({ ...p, gender: e.target.value }))} />
-                        </div>
-                      </div>
-                      <div className="col-md-6">
-                        <div className="mb-3">
-                          <label className="form-label">Date of Birth</label>
-                          <input type="date" className="form-control" value={editBasic.dateOfBirth} onChange={(e) => setEditBasic(p => ({ ...p, dateOfBirth: e.target.value }))} />
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <div className="mb-3">
-                          <label className="form-label">Address</label>
-                          <input type="text" className="form-control" value={editBasic.address} onChange={(e) => setEditBasic(p => ({ ...p, address: e.target.value }))} />
                         </div>
                       </div>
                       <div className="col-md-6">
@@ -1340,7 +1755,9 @@ const EmployeeDetails = () => {
                           <input
                             type="text"
                             className="form-control"
-                            defaultValue="Abac Company"
+                            value={editEmp.company || 'HGS Infotech'}
+                            readOnly
+                            disabled
                           />
                         </div>
                       </div>
@@ -1349,8 +1766,12 @@ const EmployeeDetails = () => {
                           <label className="form-label">Department</label>
                           <CommonSelect
                             className="select"
-                            options={departmentChoose}
-                            defaultValue={departmentChoose[1]}
+                            options={[{ value: '', label: '-- None --' }, ...dbDepartments]}
+                            onChange={(opt) => setEditEmp({ ...editEmp, departmentId: opt?.value || '' })}
+                            defaultValue={(() => {
+                              const allOptions = [{ value: '', label: '-- None --' }, ...dbDepartments];
+                              return allOptions.find(d => d.value === String(editEmp.departmentId)) || allOptions[0];
+                            })()}
                           />
                         </div>
                       </div>
@@ -1359,11 +1780,108 @@ const EmployeeDetails = () => {
                           <label className="form-label">Designation</label>
                           <CommonSelect
                             className="select"
-                            options={designationChoose}
-                            defaultValue={designationChoose[1]}
+                            options={[{ value: '', label: '-- None --' }, ...dbDesignations]}
+                            onChange={(opt) => setEditEmp({ ...editEmp, designationId: opt?.value || '' })}
+                            defaultValue={(() => {
+                              const allOptions = [{ value: '', label: '-- None --' }, ...dbDesignations];
+                              return allOptions.find(d => d.value === String(editEmp.designationId)) || allOptions[0];
+                            })()}
                           />
                         </div>
                       </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Role <span className="text-danger">*</span></label>
+                          <CommonSelect
+                            className="select"
+                            options={[
+                              { value: 'EMPLOYEE', label: 'Employee' },
+                              { value: 'MANAGER', label: 'Manager' },
+                              { value: 'HR', label: 'HR' }
+                            ]}
+                            onChange={(opt) => {
+                              const selectedRole = opt?.value || 'EMPLOYEE';
+                              setEditEmp((prev: any) => ({
+                                ...prev,
+                                role: selectedRole,
+                                reportingManagerId: selectedRole === 'HR' ? 'COMPANY_ADMIN' : prev.reportingManagerId
+                              }));
+                            }}
+                            defaultValue={(() => {
+                              const roles = [
+                                { value: 'EMPLOYEE', label: 'Employee' },
+                                { value: 'MANAGER', label: 'Manager' },
+                                { value: 'HR', label: 'HR' }
+                              ];
+                              return roles.find(r => r.value === editEmp.role) || roles[0];
+                            })()}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Permission Group (Role Permissions)</label>
+                          <CommonSelect
+                            className="select"
+                            options={[{ value: '', label: '-- None --' }, ...dbRoles]}
+                            onChange={(opt) => {
+                              const selectedRoleId = opt?.value || '';
+                              const selectedRoleObj = dbRoles.find(r => String(r.value) === String(selectedRoleId));
+                              const isHRRole = selectedRoleObj?.label === 'HR Manager' || selectedRoleObj?.label === 'HR';
+                              setEditEmp((prev: any) => ({
+                                ...prev,
+                                companyRoleId: selectedRoleId,
+                                role: isHRRole ? 'HR' : prev.role,
+                                reportingManagerId: isHRRole ? 'COMPANY_ADMIN' : prev.reportingManagerId
+                              }));
+                            }}
+                            defaultValue={(() => {
+                              const allOptions = [{ value: '', label: '-- None --' }, ...dbRoles];
+                              return allOptions.find(r => r.value === String(editEmp.companyRoleId)) || allOptions[0];
+                            })()}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Reporting Manager</label>
+                          {(() => {
+                            const managerOptions = [
+                              { value: '', label: '-- None --' },
+                              { value: 'COMPANY_ADMIN', label: 'Company Admin' },
+                              ...dbEmployees.filter((e: any) => e.id !== editEmp.id).map((e: any) => {
+                                const name = `${e.firstName || e.raw?.firstName || ''} ${e.lastName || e.raw?.lastName || ''}`.trim() || e.Name || e.user?.name || (e.employeeCode ? `Employee (${e.employeeCode})` : '') || 'Employee';
+                                const desig = e.designation?.name || e.raw?.designation?.name || e.Designation || '';
+                                return {
+                                  value: String(e.id),
+                                  label: desig ? `${name} (${desig})` : name
+                                };
+                              })
+                            ];
+                            const defaultVal = managerOptions.find(m => 
+                              m.value === String(editEmp.reportingManagerId) ||
+                              (m.value === 'COMPANY_ADMIN' && (
+                                editEmp.reportingManagerId === 'COMPANY_ADMIN' ||
+                                (emp?.reportingManager?.user?.role === 'COMPANY_ADMIN' && String(editEmp.reportingManagerId) === String(emp?.reportingManagerId)) ||
+                                ((editEmp.role === 'HR' || dbRoles.find(r => r.value === String(editEmp.companyRoleId))?.label === 'HR Manager') && !editEmp.reportingManagerId)
+                              ))
+                            ) || managerOptions[0];
+
+                            return (
+                              <CommonSelect
+                                key={`rm-${editEmp.id}-${editEmp.reportingManagerId}-${editEmp.companyRoleId}-${editEmp.role}`}
+                                className="select"
+                                options={managerOptions}
+                                defaultValue={defaultVal}
+                                onChange={(opt) => setEditEmp((prev: any) => ({ ...prev, reportingManagerId: opt?.value || '' }))}
+                                isDisabled={false}
+                              />
+                            );
+                          })()}
+                          <small className="text-muted">HR assigns who manages this employee</small>
+                        </div>
+                      </div>
+
                       <div className="col-md-12">
                         <div className="mb-3">
                           <label className="form-label">
@@ -1372,8 +1890,8 @@ const EmployeeDetails = () => {
                           <textarea
                             className="form-control"
                             rows={3}
-                            value={editAbout}
-                            onChange={(e) => setEditAbout(e.target.value)}
+                            value={editEmp.about || ''}
+                            onChange={(e) => setEditEmp({ ...editEmp, about: e.target.value })}
                           />
                         </div>
                       </div>
@@ -1388,701 +1906,108 @@ const EmployeeDetails = () => {
                       Cancel
                     </button>
                     <button
-                      type="button"
-                      data-bs-dismiss="modal"
+                      type="submit"
                       className="btn btn-primary"
-                      onClick={() => saveField({ ...editBasic, about: editAbout }, editPhotoFile)}
                     >
-                      Save{" "}
+                      Save
                     </button>
                   </div>
                 </div>
                 <div
                   className="tab-pane fade"
-                  id="address3"
+                  id="edit-salary"
                   role="tabpanel"
-                  aria-labelledby="address-tab3"
+                  aria-labelledby="edit-salary-tab"
                   tabIndex={0}
                 >
-                  <div className="modal-body">
-                    <div className="card bg-light-500 shadow-none">
-                      <div className="card-body d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-                        <h6>Enable Options</h6>
-                        <div className="d-flex align-items-center justify-content-end">
-                          <div className="form-check form-switch me-2">
-                            <label className="form-check-label mt-0">
-                              <input
-                                className="form-check-input me-2"
-                                type="checkbox"
-                                role="switch"
-                              />
-                              Enable all Module
-                            </label>
+                  <div className="modal-body pb-0">
+                    <div className="row">
+                      <div className="col-12 mb-3">
+                        <h6 className="fw-semibold">Allowances (Earnings)</h6>
+                      </div>
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">Basic Salary</label>
+                        <input type="number" className="form-control" required value={editEmp.basic} onChange={(e) => {
+                          setEditEmp(calculateSalary(editEmp, { basic: e.target.value }));
+                        }} />
+                      </div>
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">HRA</label>
+                        <input type="number" className="form-control" value={editEmp.hra} onChange={(e) => {
+                          setEditEmp(calculateSalary(editEmp, { hra: e.target.value }));
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Conveyance</label>
+                        <input type="number" className="form-control" value={editEmp.conveyance} onChange={(e) => {
+                          setEditEmp(calculateSalary(editEmp, { conveyance: e.target.value }));
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Medical Allowance</label>
+                        <input type="number" className="form-control" value={editEmp.medicalAllowance} onChange={(e) => {
+                          setEditEmp(calculateSalary(editEmp, { medicalAllowance: e.target.value }));
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Special Allowance</label>
+                        <input type="number" className="form-control" value={editEmp.specialAllowance} onChange={(e) => {
+                          setEditEmp(calculateSalary(editEmp, { specialAllowance: e.target.value }));
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Bonus / Incentive</label>
+                        <input type="number" className="form-control" value={editEmp.bonus} onChange={(e) => {
+                          setEditEmp(calculateSalary(editEmp, { bonus: e.target.value }));
+                        }} />
+                      </div>
+
+                      <div className="col-12 mt-3 mb-3">
+                        <h6 className="fw-semibold">Deductions</h6>
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">PF (Employee)</label>
+                        <input type="number" className="form-control" value={editEmp.pfDeduction} onChange={(e) => {
+                          setEditEmp(calculateSalary(editEmp, { pfDeduction: e.target.value }));
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">PF (Employer)</label>
+                        <input type="number" className="form-control" value={editEmp.pfEmployer} onChange={(e) => {
+                          setEditEmp(calculateSalary(editEmp, { pfEmployer: e.target.value }));
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">PF Professional Tax</label>
+                        <input type="number" className="form-control" value={editEmp.professionalTax} onChange={(e) => {
+                          setEditEmp(calculateSalary(editEmp, { professionalTax: e.target.value }));
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">TDS</label>
+                        <input type="number" className="form-control" value={editEmp.tdsDeduction} onChange={(e) => {
+                          setEditEmp(calculateSalary(editEmp, { tdsDeduction: e.target.value }));
+                        }} />
+                      </div>
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Other Deductions</label>
+                        <input type="number" className="form-control" value={editEmp.otherDeductions} onChange={(e) => {
+                          setEditEmp(calculateSalary(editEmp, { otherDeductions: e.target.value }));
+                        }} />
+                      </div>
+
+                      <div className="col-12 mt-3">
+                        <div className="d-flex justify-content-between p-3 bg-light rounded">
+                          <div>
+                            <span className="text-muted d-block">Gross Salary</span>
+                            <h4 className="text-primary mb-0">₹ {editEmp.grossSalary}</h4>
                           </div>
-                          <div className="form-check d-flex align-items-center">
-                            <label className="form-check-label mt-0">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                                defaultChecked
-                              />
-                              Select All
-                            </label>
+                          <div className="text-end">
+                            <span className="text-muted d-block">Net Salary</span>
+                            <h4 className="text-success mb-0">₹ {editEmp.netSalary}</h4>
                           </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="table-responsive border rounded">
-                      <table className="table">
-                        <tbody>
-                          <tr>
-                            <td>
-                              <div className="form-check form-switch me-2">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input me-2"
-                                    type="checkbox"
-                                    role="switch"
-                                    defaultChecked
-                                  />
-                                  Holidays
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                    defaultChecked
-                                  />
-                                  Read
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Write
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Create
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                    defaultChecked
-                                  />
-                                  Delete
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Import
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Export
-                                </label>
-                              </div>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td>
-                              <div className="form-check form-switch me-2">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input me-2"
-                                    type="checkbox"
-                                    role="switch"
-                                  />
-                                  Leaves
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Read
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Write
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Create
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Delete
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Import
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Export
-                                </label>
-                              </div>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td>
-                              <div className="form-check form-switch me-2">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input me-2"
-                                    type="checkbox"
-                                    role="switch"
-                                  />
-                                  Clients
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Read
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Write
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Create
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Delete
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Import
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Export
-                                </label>
-                              </div>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td>
-                              <div className="form-check form-switch me-2">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input me-2"
-                                    type="checkbox"
-                                    role="switch"
-                                  />
-                                  Projects
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Read
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Write
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Create
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Delete
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Import
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Export
-                                </label>
-                              </div>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td>
-                              <div className="form-check form-switch me-2">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input me-2"
-                                    type="checkbox"
-                                    role="switch"
-                                  />
-                                  Tasks
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Read
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Write
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Create
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Delete
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Import
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Export
-                                </label>
-                              </div>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td>
-                              <div className="form-check form-switch me-2">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input me-2"
-                                    type="checkbox"
-                                    role="switch"
-                                  />
-                                  Chats
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Read
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Write
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Create
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Delete
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Import
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Export
-                                </label>
-                              </div>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td>
-                              <div className="form-check form-switch me-2">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input me-2"
-                                    type="checkbox"
-                                    role="switch"
-                                    defaultChecked
-                                  />
-                                  Assets
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Read
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Write
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                    defaultChecked
-                                  />
-                                  Create
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Delete
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                    defaultChecked
-                                  />
-                                  Import
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Export
-                                </label>
-                              </div>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td>
-                              <div className="form-check form-switch me-2">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input me-2"
-                                    type="checkbox"
-                                    role="switch"
-                                  />
-                                  Timing Sheets
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Read
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Write
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Create
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Delete
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Import
-                                </label>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="form-check d-flex align-items-center">
-                                <label className="form-check-label mt-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                  />
-                                  Export
-                                </label>
-                              </div>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
                     </div>
                   </div>
                   <div className="modal-footer">
@@ -2094,13 +2019,10 @@ const EmployeeDetails = () => {
                       Cancel
                     </button>
                     <button
-                      type="button"
+                      type="submit"
                       className="btn btn-primary"
-                      data-bs-toggle="modal"
-                      data-inert={true}
-                      data-bs-target="#success_modal"
                     >
-                      Save{" "}
+                      Save
                     </button>
                   </div>
                 </div>

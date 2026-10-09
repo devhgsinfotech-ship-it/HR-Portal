@@ -43,6 +43,15 @@ const Profile = () => {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [salaryStructure, setSalaryStructure] = useState<any>(null);
+  const [documents, setDocuments] = useState<{
+    aadhaarPath: string | null;
+    panPath: string | null;
+    resumePath: string | null;
+  }>({
+    aadhaarPath: null,
+    panPath: null,
+    resumePath: null,
+  });
 
   useEffect(() => {
     fetchProfile();
@@ -70,6 +79,11 @@ const Profile = () => {
       if (res.data.salaryStructure) {
         setSalaryStructure(res.data.salaryStructure);
       }
+      setDocuments({
+        aadhaarPath: res.data.aadhaarPath || null,
+        panPath: res.data.panPath || null,
+        resumePath: res.data.resumePath || null,
+      });
     } catch (err) {
       console.error("Error fetching profile", err);
     }
@@ -387,6 +401,147 @@ const Profile = () => {
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                {/* Uploaded Documents Section */}
+                <div className="border-bottom mb-4 pb-3">
+                  <div className="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                      <h6 className="mb-1">
+                        <i className="ti ti-file-certificate text-primary me-2" />
+                        Uploaded Onboarding &amp; Identity Documents
+                      </h6>
+                      <p className="fs-12 text-muted mb-0">
+                        Official verification documents submitted during onboarding.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="row g-3">
+                    {/* Aadhaar Card */}
+                    <div className="col-md-4">
+                      <div className="card border shadow-none mb-0 h-100">
+                        <div className="card-body p-3 d-flex flex-column justify-content-between">
+                          <div className="d-flex align-items-start justify-content-between mb-2">
+                            <div className="d-flex align-items-center">
+                              <span className="avatar avatar-md bg-primary-transparent text-primary rounded me-2">
+                                <i className="ti ti-id fs-20" />
+                              </span>
+                              <div>
+                                <h6 className="fs-14 mb-0 fw-semibold">Aadhaar Card</h6>
+                                <small className="text-muted">Identity Proof</small>
+                              </div>
+                            </div>
+                            {documents.aadhaarPath ? (
+                              <span className="badge bg-success-transparent text-success">Uploaded</span>
+                            ) : (
+                              <span className="badge bg-danger-transparent text-danger">Missing</span>
+                            )}
+                          </div>
+                          <div className="mt-2 pt-2 border-top">
+                            {documents.aadhaarPath ? (
+                              <a
+                                href={`${APP_CONFIG.getBackendUrl()}${documents.aadhaarPath}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn btn-sm btn-outline-primary w-100 d-flex align-items-center justify-content-center"
+                              >
+                                <i className="ti ti-eye me-1" /> View / Download
+                              </a>
+                            ) : (
+                              <button type="button" className="btn btn-sm btn-light w-100 text-muted" disabled>
+                                Not Uploaded
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PAN Card */}
+                    <div className="col-md-4">
+                      <div className="card border shadow-none mb-0 h-100">
+                        <div className="card-body p-3 d-flex flex-column justify-content-between">
+                          <div className="d-flex align-items-start justify-content-between mb-2">
+                            <div className="d-flex align-items-center">
+                              <span className="avatar avatar-md bg-info-transparent text-info rounded me-2">
+                                <i className="ti ti-file-description fs-20" />
+                              </span>
+                              <div>
+                                <h6 className="fs-14 mb-0 fw-semibold">PAN Card</h6>
+                                <small className="text-muted">Tax Identification</small>
+                              </div>
+                            </div>
+                            {documents.panPath ? (
+                              <span className="badge bg-success-transparent text-success">Uploaded</span>
+                            ) : (
+                              <span className="badge bg-danger-transparent text-danger">Missing</span>
+                            )}
+                          </div>
+                          <div className="mt-2 pt-2 border-top">
+                            {documents.panPath ? (
+                              <a
+                                href={`${APP_CONFIG.getBackendUrl()}${documents.panPath}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn btn-sm btn-outline-primary w-100 d-flex align-items-center justify-content-center"
+                              >
+                                <i className="ti ti-eye me-1" /> View / Download
+                              </a>
+                            ) : (
+                              <button type="button" className="btn btn-sm btn-light w-100 text-muted" disabled>
+                                Not Uploaded
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Resume / CV */}
+                    <div className="col-md-4">
+                      <div className="card border shadow-none mb-0 h-100">
+                        <div className="card-body p-3 d-flex flex-column justify-content-between">
+                          <div className="d-flex align-items-start justify-content-between mb-2">
+                            <div className="d-flex align-items-center">
+                              <span className="avatar avatar-md bg-warning-transparent text-warning rounded me-2">
+                                <i className="ti ti-file-text fs-20" />
+                              </span>
+                              <div>
+                                <h6 className="fs-14 mb-0 fw-semibold">Resume / CV</h6>
+                                <small className="text-muted">Curriculum Vitae</small>
+                              </div>
+                            </div>
+                            {documents.resumePath ? (
+                              <span className="badge bg-success-transparent text-success">Uploaded</span>
+                            ) : (
+                              <span className="badge bg-secondary-transparent text-secondary">Not Provided</span>
+                            )}
+                          </div>
+                          <div className="mt-2 pt-2 border-top">
+                            {documents.resumePath ? (
+                              <a
+                                href={`${APP_CONFIG.getBackendUrl()}${documents.resumePath}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn btn-sm btn-outline-primary w-100 d-flex align-items-center justify-content-center"
+                              >
+                                <i className="ti ti-eye me-1" /> View / Download
+                              </a>
+                            ) : (
+                              <button type="button" className="btn btn-sm btn-light w-100 text-muted" disabled>
+                                Not Uploaded
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <small className="text-muted">
+                      <i className="ti ti-info-circle me-1" /> Note: To update or replace official onboarding documents, please contact your HR Manager or Company Admin.
+                    </small>
                   </div>
                 </div>
 

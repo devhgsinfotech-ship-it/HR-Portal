@@ -55,11 +55,20 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     return ["COMPANY_ADMIN", "HR"];
   }
 
+  // --- 0.1 EXCLUSIVELY SUPER ADMIN ROUTES ---
+  if (p.startsWith("/super-admin") || p.includes("super-admin") || p.includes("superadmin")) {
+    return ["SUPER_ADMIN"];
+  }
+
+  // --- 0.2 HIDE AI CENTER FROM COMPANY ADMIN ---
+  if (p.startsWith("/ai-") || p.includes("ai-center")) {
+    return ["SUPER_ADMIN"];
+  }
+
   // --- 1. SUPER ADMIN EXPLICIT ALLOW LIST ---
   // Paths related to Super Admin responsibilities: 
   // Companies, Plans & Subscriptions, Billing, Platform Users, Roles, Settings, Integrations, Audit Logs
   const superAdminAllowed = [
-    "super-admin", "superadmin", 
     "compan", "plan", "subscription", "package", 
     "billing", "payment", "tax", "currency", // Billing & Financial Settings
     "platform-user", 
@@ -157,8 +166,31 @@ const getRouteRoles = (path: string | undefined): Role[] => {
 const filterMenu = (items: SidebarMenuItem[] | undefined, role: Role): SidebarMenuItem[] => {
   if (!items) return [];
   return items.filter(item => {
+    const normalizedRole = (role || "").toUpperCase();
+    const labelLower = (item.label || "").toLowerCase();
+    const baseLower = (item.base || "").toLowerCase();
+    const linkLower = (item.link || "").toLowerCase();
+
+    // Explicitly hide "Authentication" & "CRM" parent menu and demo submenus for ALL roles
+    if (labelLower === "authentication" && baseLower !== "authentication-settings") {
+      return false;
+    }
+    if (labelLower === "crm" || baseLower === "crm") {
+      return false;
+    }
+
+    // Explicitly hide "Deals Dashboard" and "Leads Dashboard" under Dashboard for ALL roles
+    if (
+      labelLower === "deals dashboard" ||
+      labelLower === "leads dashboard" ||
+      linkLower.includes("deals-dashboard") ||
+      linkLower.includes("leads-dashboard")
+    ) {
+      return false;
+    }
+
     // Explicitly hide "User Management" parent menu for SUPER_ADMIN
-    if (role === "SUPER_ADMIN") {
+    if (normalizedRole === "SUPER_ADMIN") {
       const labelLower = (item.label || "").toLowerCase();
       const baseLower = (item.base || "").toLowerCase();
       if (labelLower === "user management" || baseLower === "user-management") {
@@ -166,9 +198,26 @@ const filterMenu = (items: SidebarMenuItem[] | undefined, role: Role): SidebarMe
       }
     }
 
+    // Explicitly hide "Super Admin" parent menu and all super-admin routes for non-SUPER_ADMIN users (including COMPANY_ADMIN)
+    if (normalizedRole !== "SUPER_ADMIN") {
+      const labelLower = (item.label || "").toLowerCase();
+      const baseLower = (item.base || "").toLowerCase();
+      const linkLower = (item.link || "").toLowerCase();
+      if (
+        labelLower === "super admin" ||
+        labelLower.includes("super admin") ||
+        baseLower.includes("super-admin") ||
+        linkLower.includes("super-admin") ||
+        baseLower.includes("superadmin") ||
+        linkLower.includes("superadmin")
+      ) {
+        return false;
+      }
+    }
+
     // Explicitly for EMPLOYEE role: under Dashboard menu, ONLY "Employee Dashboard" is visible.
     // Hide all other dashboard sub-routes!
-    if (role === "EMPLOYEE") {
+    if (normalizedRole === "EMPLOYEE") {
       const labelLower = (item.label || "").toLowerCase();
       const linkLower = (item.link || "").toLowerCase();
       const baseLower = (item.base || "").toLowerCase();
@@ -183,6 +232,34 @@ const filterMenu = (items: SidebarMenuItem[] | undefined, role: Role): SidebarMe
         ) {
           return false;
         }
+      }
+    }
+
+    // Explicitly for COMPANY_ADMIN role: under Dashboard menu, ONLY "Admin Dashboard" is visible.
+    // Hide all other dashboard sub-routes!
+    if (normalizedRole === "COMPANY_ADMIN") {
+      const labelLower = (item.label || "").trim().toLowerCase();
+      const linkLower = (item.link || "").trim().toLowerCase();
+      const baseLower = (item.base || "").trim().toLowerCase();
+      if (
+        (labelLower.includes("dashboard") || linkLower.includes("dashboard") || baseLower.includes("dashboard")) &&
+        labelLower !== "dashboard" && item.link !== "index"
+      ) {
+        if (labelLower !== "admin dashboard") {
+          return false;
+        }
+      }
+
+      // Explicitly hide "AI Center" menu and all its children for COMPANY_ADMIN
+      if (
+        labelLower === "ai center" ||
+        labelLower.includes("ai center") ||
+        baseLower.includes("ai-center") ||
+        linkLower.includes("ai-center") ||
+        baseLower.startsWith("/ai-") ||
+        linkLower.startsWith("/ai-")
+      ) {
+        return false;
       }
     }
 
@@ -317,9 +394,13 @@ const Sidebar = React.memo(() => {
 
   // Filter sidebar data deeply based on role
   const filteredSidebarData = useMemo(() => {
-    const dataCopy = JSON.parse(JSON.stringify(SidebarDataTest)) as SidebarMainMenu[];
-    return dataCopy
-      .filter((mainMenu) => !(currentRole === "SUPER_ADMIN" && mainMenu.tittle === "HRM"))
+    return (JSON.parse(JSON.stringify(SidebarDataTest)) as SidebarMainMenu[])
+      .filter((mainMenu) => {
+        const titleLower = (mainMenu.tittle || "").toLowerCase();
+        if (titleLower === "authentication" || titleLower === "crm") return false;
+        if (currentRole === "SUPER_ADMIN" && mainMenu.tittle === "HRM") return false;
+        return true;
+      })
       .map(mainMenu => {
         mainMenu.submenuItems = filterMenu(mainMenu.submenuItems, currentRole);
         return mainMenu;
