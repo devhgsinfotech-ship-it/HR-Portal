@@ -635,10 +635,7 @@ async function convertToEmployee(req, res) {
       select: { name: true, subdomain: true }
     });
 
-    const companyName = company?.name || 'HGS-HRMS';
-    const workspaceUrl = company?.subdomain
-      ? `${protocol}://${company.subdomain}.${baseDomain}`
-      : (process.env.APP_URL || `${protocol}://${baseDomain}`);
+    const workspaceUrl = process.env.APP_URL || `${protocol}://${baseDomain}`;
 
     await sendEmployeeInviteEmail(
       applicant.email,

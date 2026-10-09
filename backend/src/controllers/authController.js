@@ -9,7 +9,7 @@ const { generateCompanyCode, autoAssignEmployeeDefaults } = require('../utils/co
 
 async function login(req, res) {
     try {
-        const { email, password, subdomain } = req.body;
+        const { email, password } = req.body;
 
         if (!email || !password) {
             return res.status(400).json({ message: 'Email and password are required' });
@@ -34,13 +34,6 @@ async function login(req, res) {
 
         if (!user) {
             return res.status(401).json({ message: 'Invalid credentials' });
-        }
-
-        // 2. Subdomain & Role Validation (Optional validation if subdomain provided)
-        if (subdomain) {
-            if (user.company && user.company.subdomain !== subdomain && user.role !== 'SUPER_ADMIN') {
-                return res.status(403).json({ message: 'You do not have access to this workspace' });
-            }
         }
 
         // 3. Check account status (Must be email verified)
@@ -575,10 +568,7 @@ async function acceptInvite(req, res) {
             { expiresIn: '7d' }
         );
 
-        const companySubdomain = updatedUser.company?.subdomain;
-        const redirectUrl = companySubdomain
-            ? `${protocol}://${companySubdomain}.${baseDomain}/onboarding`
-            : `${protocol}://${baseDomain}/onboarding`;
+        const redirectUrl = `${protocol}://${baseDomain}/onboarding`;
 
         return res.json({
             success: true,
@@ -590,7 +580,8 @@ async function acceptInvite(req, res) {
                 email: updatedUser.email,
                 role: updatedUser.role,
                 companyId: updatedUser.companyId,
-                subdomain: companySubdomain || null,
+                companyCode: updatedUser.company?.companyCode || null,
+                companyName: updatedUser.company?.name || null,
                 companyLogoUrl: updatedUser.company?.logoUrl || null,
                 profilePhotoUrl: updatedUser.employee?.profilePhotoUrl || null,
                 onboardingStatus: (updatedUser.role === 'SUPER_ADMIN' || updatedUser.role === 'COMPANY_ADMIN') ? 'COMPLETED' : (updatedUser.employee?.onboardingStatus || 'INVITED'),
@@ -651,33 +642,20 @@ async function resendVerification(req, res) {
 
 async function forgotPassword(req, res) {
     try {
-        const { email, subdomain } = req.body;
+        const { email } = req.body;
         if (!email) {
             return res.status(400).json({ message: 'Email is required' });
         }
+        const cleanEmail = email.trim().toLowerCase();
 
         const user = await prisma.user.findUnique({
-            where: { email },
+            where: { email: cleanEmail },
             include: { company: true }
         });
 
         if (!user) {
             // Return success even if not found to prevent email enumeration
             return res.json({ message: 'If your email is registered, a password reset link has been sent.' });
-        }
-
-        // Subdomain & Role validation for forgot password
-        if (subdomain) {
-            // Trying to reset password from a specific company workspace
-            if (!user.company || user.company.subdomain !== subdomain) {
-                return res.status(403).json({ message: 'This account does not belong to this workspace / subdomain' });
-            }
-        } else {
-            // Resetting from the main domain
-            // ONLY Super Admins are allowed here.
-            if (user.role !== 'SUPER_ADMIN') {
-                return res.status(403).json({ message: 'Please request password reset from your company\'s specific workspace URL.' });
-            }
         }
 
         // Generate a 32-byte hex token (64 characters)
@@ -702,17 +680,13 @@ async function forgotPassword(req, res) {
         const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
         const protocol = domain.includes('localhost') ? 'http' : 'https';
 
-        let workspaceUrl = '';
+        const workspaceUrl = `${protocol}://${domain}`;
         const companyName = user.company ? user.company.name : 'HGS-HRMS';
-        const logoUrl = user.company?.logoUrl ? (user.company.logoUrl.startsWith('http') ? user.company.logoUrl : `https://api.aaups.com${user.company.logoUrl}`) : null;
+        const logoUrl = user.company?.logoUrl 
+            ? (user.company.logoUrl.startsWith('http') ? user.company.logoUrl : `${protocol}://api.${domain}${user.company.logoUrl}`) 
+            : null;
 
-        if (user.company && user.company.subdomain) {
-            workspaceUrl = `${protocol}://${user.company.subdomain}.${domain}`;
-        } else {
-            workspaceUrl = `${protocol}://${domain}`;
-        }
-
-        await emailService.sendPasswordResetEmail(email, resetToken, workspaceUrl, user.name, companyName, logoUrl);
+        await emailService.sendPasswordResetEmail(cleanEmail, resetToken, workspaceUrl, user.name, companyName, logoUrl);
 
         res.json({ message: 'If your email is registered, a password reset link has been sent.' });
     } catch (error) {
@@ -794,6 +768,14 @@ async function getCompanyLogo(req, res) {
                 });
                 if (inviteRecord?.user?.company) {
                     company = inviteRecord.user.company;
+                } else {
+                    const resetRecord = await prisma.passwordResetToken.findFirst({
+                        where: { token },
+                        include: { user: { include: { company: true } } }
+                    });
+                    if (resetRecord?.user?.company) {
+                        company = resetRecord.user.company;
+                    }
                 }
             }
         }

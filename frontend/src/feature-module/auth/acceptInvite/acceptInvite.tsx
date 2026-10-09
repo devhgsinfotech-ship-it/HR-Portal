@@ -4,7 +4,6 @@ import axios from 'axios';
 import { all_routes } from '../../../router/all_routes';
 import ImageWithBasePath from '../../../core/common/imageWithBasePath';
 import { APP_CONFIG } from '../../../environment';
-import apiClient, { getSubdomain } from '../../../core/utils/apiClient';
 
 const AcceptInvite = () => {
   const { token } = useParams();
@@ -15,27 +14,9 @@ const AcceptInvite = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const subdomain = getSubdomain();
   const [resolvedLogo, setResolvedLogo] = useState<string | null>(null);
   const [resolvedCompanyName, setResolvedCompanyName] = useState<string | null>(null);
   const [logoError, setLogoError] = useState(false);
-
-  useEffect(() => {
-    const fetchSubdomainLogo = async () => {
-      if (!subdomain) return;
-      try {
-        setLogoError(false);
-        const res = await apiClient.get(`/auth/company-logo?subdomain=${subdomain}`);
-        if (res.data?.success) {
-          setResolvedLogo(res.data.logoUrl);
-          setResolvedCompanyName(res.data.companyName);
-        }
-      } catch (err) {
-        console.error("Failed to fetch subdomain logo:", err);
-      }
-    };
-    fetchSubdomainLogo();
-  }, [subdomain]);
 
   useEffect(() => {
     const verifyToken = async () => {
@@ -118,7 +99,7 @@ const AcceptInvite = () => {
                       <div className="mx-auto mb-5 text-center">
                         {resolvedLogo && !logoError ? (
                           <img 
-                            src={resolvedLogo.startsWith('http') ? resolvedLogo : `${apiClient.defaults.baseURL || 'https://api.aaups.com'}${resolvedLogo}`} 
+                            src={resolvedLogo.startsWith('http') ? resolvedLogo : `${APP_CONFIG.getBackendUrl()}${resolvedLogo}`} 
                             alt={resolvedCompanyName || "Logo"} 
                             className="img-fluid" 
                             style={{ maxHeight: '60px', width: 'auto', objectFit: 'contain' }}

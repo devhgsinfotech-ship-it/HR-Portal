@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
-import apiClient, { getSubdomain } from "../../../core/utils/apiClient";
+import apiClient from "../../../core/utils/apiClient";
 import { APP_CONFIG } from "../../../environment";
 
 const ForgotPassword = () => {
@@ -11,28 +11,10 @@ const ForgotPassword = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const subdomain = getSubdomain();
 
   const [resolvedLogo, setResolvedLogo] = useState<string | null>(null);
   const [resolvedCompanyName, setResolvedCompanyName] = useState<string | null>(null);
   const [logoError, setLogoError] = useState(false);
-
-  useEffect(() => {
-    const fetchSubdomainLogo = async () => {
-      if (!subdomain) return;
-      try {
-        setLogoError(false);
-        const res = await apiClient.get(`/auth/company-logo?subdomain=${subdomain}`);
-        if (res.data?.success) {
-          setResolvedLogo(res.data.logoUrl);
-          setResolvedCompanyName(res.data.companyName);
-        }
-      } catch (err) {
-        console.error("Failed to fetch subdomain logo:", err);
-      }
-    };
-    fetchSubdomainLogo();
-  }, [subdomain]);
 
   // Resolve logo by email domain on blur
   const handleEmailBlur = async () => {
@@ -62,7 +44,7 @@ const ForgotPassword = () => {
     setLoading(true);
 
     try {
-      const response = await apiClient.post("/auth/forgot-password", { email, subdomain });
+      const response = await apiClient.post("/auth/forgot-password", { email });
       setSuccess(response.data.message || "A password reset link has been sent to your email address.");
       setEmail("");
     } catch (err: any) {

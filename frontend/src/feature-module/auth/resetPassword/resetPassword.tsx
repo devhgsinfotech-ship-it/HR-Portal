@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
-import apiClient, { getSubdomain } from "../../../core/utils/apiClient";
+import apiClient from "../../../core/utils/apiClient";
 import { APP_CONFIG } from "../../../environment";
 
 type PasswordField = "password" | "confirmPassword";
@@ -22,28 +22,27 @@ const ResetPassword = () => {
   const navigation = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
-  const subdomain = getSubdomain();
 
   const [resolvedLogo, setResolvedLogo] = useState<string | null>(null);
   const [resolvedCompanyName, setResolvedCompanyName] = useState<string | null>(null);
   const [logoError, setLogoError] = useState(false);
 
   useEffect(() => {
-    const fetchSubdomainLogo = async () => {
-      if (!subdomain) return;
+    const fetchLogoByToken = async () => {
+      if (!token) return;
       try {
         setLogoError(false);
-        const res = await apiClient.get(`/auth/company-logo?subdomain=${subdomain}`);
+        const res = await apiClient.get(`/auth/company-logo?token=${encodeURIComponent(token)}`);
         if (res.data?.success) {
           setResolvedLogo(res.data.logoUrl);
           setResolvedCompanyName(res.data.companyName);
         }
       } catch (err) {
-        console.error("Failed to fetch subdomain logo:", err);
+        console.error("Failed to fetch token logo:", err);
       }
     };
-    fetchSubdomainLogo();
-  }, [subdomain]);
+    fetchLogoByToken();
+  }, [token]);
 
   const [passwordVisibility, setPasswordVisibility] = useState<PasswordVisibility>({
     password: false,
@@ -131,7 +130,6 @@ const ResetPassword = () => {
       const response = await apiClient.post("/auth/reset-password", {
         token,
         password,
-        subdomain,
       });
       setSuccess(response.data.message || "Password reset successful.");
       setTimeout(() => {
