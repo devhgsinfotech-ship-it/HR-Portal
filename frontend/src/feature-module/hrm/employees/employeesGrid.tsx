@@ -5,7 +5,7 @@ import ImageWithBasePath from '../../../core/common/imageWithBasePath';
 import CommonSelect from '../../../core/common/commonSelect';
 import { DatePicker } from 'antd';
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
-import apiClient, { getSubdomain } from '../../../core/utils/apiClient';
+import apiClient from '../../../core/utils/apiClient';
 import dayjs from 'dayjs';
 
 import VerifyEmployeeModal from './VerifyEmployeeModal';
@@ -97,8 +97,7 @@ const EmployeesGrid = () => {
                 }
             }
         } catch {}
-        const sub = getSubdomain();
-        return sub ? `${sub}.com` : 'hgsinfotech.com';
+        return 'hgsinfotech.com';
     }, []);
 
     const calculateSalary = (empState: any, fieldUpdates: any) => {
@@ -1495,7 +1494,7 @@ const EmployeesGrid = () => {
                                                         value={editEmp.firstName}
                                                         onChange={(e) => {
                                                             const firstName = e.target.value;
-                                                            setEditEmp({...editEmp, firstName, email: `${firstName.toLowerCase().replace(/\s+/g, '')}@${getSubdomain() || 'hgs'}.com`})
+                                                            setEditEmp({...editEmp, firstName, email: `${firstName.toLowerCase().replace(/\s+/g, '')}@${getAdminCompanyDomain()}`})
                                                         }}
                                                         required
                                                     />

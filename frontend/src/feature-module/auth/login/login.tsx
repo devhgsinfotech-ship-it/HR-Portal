@@ -1,5 +1,4 @@
-import { getSubdomain } from '../../../core/utils/apiClient';
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { APP_CONFIG } from "../../../environment";
 import { Link, useNavigate } from "react-router-dom";
@@ -15,32 +14,12 @@ const Login = () => {
   const dispatch = useAppDispatch();
   const apiUrl = APP_CONFIG.getBackendUrl();
 
-  const subdomain = getSubdomain();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [resolvedLogo, setResolvedLogo] = useState<string | null>(null);
   const [resolvedCompanyName, setResolvedCompanyName] = useState<string | null>(null);
   const [logoError, setLogoError] = useState(false);
-
-  // Auto-resolve logo by subdomain on mount
-  useEffect(() => {
-    const fetchSubdomainLogo = async () => {
-      if (!subdomain) return;
-      try {
-        setLogoError(false);
-        const res = await apiClient.get(`/auth/company-logo?subdomain=${subdomain}`);
-        if (res.data?.success) {
-          setResolvedLogo(res.data.logoUrl);
-          setResolvedCompanyName(res.data.companyName);
-        }
-      } catch (err) {
-        console.error("Failed to fetch subdomain logo:", err);
-      }
-    };
-    fetchSubdomainLogo();
-  }, [subdomain]);
 
   // Resolve logo by email domain on blur
   const handleEmailBlur = async () => {
@@ -73,7 +52,6 @@ const Login = () => {
       const response = await apiClient.post("/auth/login", {
         email,
         password,
-        subdomain, // Will be null on main site, "techcorp" on company workspace
       });
 
       // If successful, store the token in localStorage

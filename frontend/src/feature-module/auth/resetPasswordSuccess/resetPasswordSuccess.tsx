@@ -1,8 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
-import { useState, useEffect } from "react";
-import { getSubdomain } from "../../../core/utils/apiClient";
+import { useState } from "react";
 import apiClient from "../../../core/utils/apiClient";
 import { APP_CONFIG } from "../../../environment";
 
@@ -11,27 +10,9 @@ const ResetPasswordSuccess = () => {
   const navigation = useNavigate();
   const apiUrl = APP_CONFIG.getBackendUrl();
 
-  const subdomain = getSubdomain();
   const [resolvedLogo, setResolvedLogo] = useState<string | null>(null);
   const [resolvedCompanyName, setResolvedCompanyName] = useState<string | null>(null);
   const [logoError, setLogoError] = useState(false);
-
-  useEffect(() => {
-    const fetchSubdomainLogo = async () => {
-      if (!subdomain) return;
-      try {
-        setLogoError(false);
-        const res = await apiClient.get(`/auth/company-logo?subdomain=${subdomain}`);
-        if (res.data?.success) {
-          setResolvedLogo(res.data.logoUrl);
-          setResolvedCompanyName(res.data.companyName);
-        }
-      } catch (err) {
-        console.error("Failed to fetch subdomain logo:", err);
-      }
-    };
-    fetchSubdomainLogo();
-  }, [subdomain]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();

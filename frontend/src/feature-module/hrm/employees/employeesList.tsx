@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { all_routes } from "../../../router/all_routes";
 import { Link } from "react-router-dom";
-import { getSubdomain } from "../../../core/utils/apiClient";
 import apiClient from "../../../core/utils/apiClient";
 import { useEffect } from "react";
 import Table from "../../../core/common/dataTable/index";
@@ -70,8 +69,7 @@ const EmployeeList = () => {
         }
       }
     } catch {}
-    const sub = getSubdomain();
-    return sub ? `${sub}.com` : 'hgsinfotech.com';
+    return 'hgsinfotech.com';
   }, []);
 
   const [allData] = useState<Employee[]>(employee_list_details);
@@ -1675,7 +1673,7 @@ const EmployeeList = () => {
                             value={editEmp.firstName}
                             onChange={(e) => {
                               const firstName = e.target.value;
-                              setEditEmp({...editEmp, firstName, email: `${firstName.toLowerCase().replace(/\s+/g, '')}@${getSubdomain() || 'hgs'}.com`})
+                              setEditEmp({...editEmp, firstName, email: `${firstName.toLowerCase().replace(/\s+/g, '')}@${getAdminCompanyDomain()}`})
                             }}
                             required
                           />

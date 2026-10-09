@@ -2,19 +2,9 @@ import axios from 'axios';
 import { APP_CONFIG } from '../../environment';
 
 /**
- * Reads the company subdomain from the current hostname.
- * e.g., "techcorp.yourhrms.com" → "techcorp"
- * e.g., "localhost" or "yourhrms.com" → null (main site, no company)
+ * Subdomain system is deprecated — all tenants and features now run directly on the main domain.
  */
 export function getSubdomain(): string | null {
-    const host = window.location.hostname;
-    const parts = host.split('.');
-    if (parts.length >= 2 && parts[0] !== 'www' && parts[0] !== 'app') {
-        const knownRoots = ['localhost', 'yourhrms', 'aaups'];
-        if (!knownRoots.includes(parts[0])) {
-            return parts[0];
-        }
-    }
     return null;
 }
 
