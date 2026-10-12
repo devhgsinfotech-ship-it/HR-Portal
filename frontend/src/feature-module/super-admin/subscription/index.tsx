@@ -67,7 +67,7 @@ const Subscription = () => {
             Plan: `${sub.planName} (${sub.billingCycle})`,
             BillCycle: sub.billingCycle === 'YEARLY' ? '365' : '30',
             PaymentMethod: sub.lastInvoice?.paymentMethod || 'Credit Card / Stripe',
-            Amount: `₹${(sub.billingCycle === 'YEARLY' ? sub.priceYearly : sub.priceMonthly).toLocaleString('en-IN')}`,
+            Amount: `${sub.currencySymbol || sub.plan?.currencySymbol || '₹'}${(sub.billingCycle === 'YEARLY' ? sub.priceYearly : sub.priceMonthly).toLocaleString()}`,
             CreatedDate: sub.startDate ? new Date(sub.startDate).toLocaleDateString() : 'N/A',
             ExpiringDate: sub.trialEndsAt ? new Date(sub.trialEndsAt).toLocaleDateString() : 'N/A',
             Status: sub.status,

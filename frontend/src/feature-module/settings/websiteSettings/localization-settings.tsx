@@ -1,12 +1,47 @@
 
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import CommonSelect from "../../../core/common/commonSelect";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
-
+import apiClient from "../../../core/utils/apiClient";
 
 const Localizationsettings = () => {
   const routes = all_routes;
+  const [selectedCurrency, setSelectedCurrency] = useState<string>("INR");
+  const [saving, setSaving] = useState<boolean>(false);
+  const [alert, setAlert] = useState<{ type: "success" | "danger"; message: string } | null>(null);
+
+  useEffect(() => {
+    const fetchCurr = async () => {
+      try {
+        const res = await apiClient.get("/system-settings");
+        if (res.data?.success && res.data.settings?.currency) {
+          setSelectedCurrency(res.data.settings.currency);
+        }
+      } catch (e) {
+        console.error("Failed to load system settings in localization:", e);
+      }
+    };
+    fetchCurr();
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      setAlert(null);
+      const res = await apiClient.post("/system-settings/set-default-currency", { code: selectedCurrency });
+      if (res.data?.success) {
+        setAlert({ type: "success", message: `System currency updated to ${selectedCurrency} successfully!` });
+      }
+    } catch (err: any) {
+      setAlert({ type: "danger", message: err.response?.data?.message || "Failed to update currency." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const languageOptions = [
     { value: "english", label: "English" },
     { value: "spanish", label: "Spanish" },
@@ -35,12 +70,18 @@ const Localizationsettings = () => {
     { value: "March", label: "March" },
   ];
   const currencyOptions = [
-    { value: "USD", label: "USD" },
-    { value: "EURO", label: "EURO" },
+    { value: "INR", label: "INR (Indian Rupee)" },
+    { value: "USD", label: "USD (US Dollar)" },
+    { value: "EUR", label: "EUR (Euro)" },
+    { value: "GBP", label: "GBP (British Pound)" },
+    { value: "AED", label: "AED (UAE Dirham)" },
   ];
   const symbols = [
-    { value: "$", label: "$" },
-    { value: "€", label: "€" },
+    { value: "₹", label: "₹ (INR)" },
+    { value: "$", label: "$ (USD)" },
+    { value: "€", label: "€ (EUR)" },
+    { value: "£", label: "£ (GBP)" },
+    { value: "د.إ", label: "د.إ (AED)" },
   ];
   const symbolsandvalue = [
     { value: "$100", label: "$100" },
@@ -137,10 +178,10 @@ const Localizationsettings = () => {
                   <div className="card-body">
                     <div className="d-flex flex-column list-group settings-list">
                       <Link
-                        to={routes.businessSettings}
+                        to={routes.companySettings}
                         className="d-inline-flex align-items-center rounded py-2 px-3"
                       >
-                        Business Settings
+                        Company Settings
                       </Link>
                       <Link
                         to={routes.seoSettings}
@@ -201,7 +242,13 @@ const Localizationsettings = () => {
                     <div className="border-bottom mb-3 pb-3">
                       <h4>Localization</h4>
                     </div>
-                    <form>
+                    {alert && (
+                      <div className={`alert alert-${alert.type} alert-dismissible fade show`} role="alert">
+                        {alert.message}
+                        <button type="button" className="btn-close" onClick={() => setAlert(null)} aria-label="Close" />
+                      </div>
+                    )}
+                    <form onSubmit={handleSave}>
                       <div className="border-bottom mb-3">
                         <div className="row">
                           <div className="col-md-6">
@@ -309,10 +356,17 @@ const Localizationsettings = () => {
                                 <label className="form-label mb-md-0">Currency</label>
                               </div>
                               <div className="col-md-7">
-                                <CommonSelect
-                                  className="select"
-                                  options={currencyOptions}
-                                />
+                                <select
+                                  className="form-select"
+                                  value={selectedCurrency}
+                                  onChange={(e) => setSelectedCurrency(e.target.value)}
+                                >
+                                  {currencyOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
                             </div>
                           </div>
@@ -441,8 +495,8 @@ const Localizationsettings = () => {
                         >
                           Cancel
                         </button>
-                        <button type="submit" className="btn btn-primary">
-                          Save
+                        <button type="submit" className="btn btn-primary" disabled={saving}>
+                          {saving ? "Saving..." : "Save Localization & Currency"}
                         </button>
                       </div>
                     </form>

@@ -60,6 +60,7 @@ import {
   PackagesGrid,
   Domain,
   PurchaseTransaction,
+  SuperAdminSettings,
   LayoutDemo,
   ClienttGrid,
   ClientList,
@@ -1055,8 +1056,8 @@ export const publicRoutes = [
     route: Route,
   },
   {
-    path: routes.businessSettings,
-    element: <Bussinesssettings />,
+    path: "/website-settings/business-settings",
+    element: <Navigate to={routes.companySettings} replace />,
     route: Route,
   },
   {
@@ -1749,6 +1750,11 @@ export const publicRoutes = [
   {
     path: routes.superAdminPurchaseTransaction,
     element: <PurchaseTransaction />,
+    route: Route,
+  },
+  {
+    path: routes.superAdminSettings,
+    element: <SuperAdminSettings />,
     route: Route,
   },
   {

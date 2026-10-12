@@ -29,12 +29,34 @@ function resolveFeatures(planFeatures, customFeatures) {
   return baseMap;
 }
 
+const CURRENCY_SYMBOLS = {
+  INR: '₹',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  AED: 'د.إ',
+  CAD: 'CA$',
+  AUD: 'AU$'
+};
+
+function resolveCurrencySymbol(currency, symbol) {
+  if (symbol && typeof symbol === 'string' && symbol.trim()) return symbol.trim();
+  if (currency && CURRENCY_SYMBOLS[currency.toUpperCase()]) {
+    return CURRENCY_SYMBOLS[currency.toUpperCase()];
+  }
+  return '₹';
+}
+
 // ============================================================
 // PLAN MANAGEMENT (Super Admin)
 // ============================================================
 
 async function getPlans(req, res) {
   try {
+    const sysSetting = await prisma.systemSetting.findFirst();
+    const sysCurrency = sysSetting?.currency || 'INR';
+    const sysSymbol = sysSetting?.currencySymbol || '₹';
+
     const plans = await prisma.subscriptionPlan.findMany({
       include: {
         _count: {
@@ -44,7 +66,7 @@ async function getPlans(req, res) {
       orderBy: { priceMonthly: 'asc' }
     });
 
-    // Format response with subscriber count
+    // Format response with subscriber count & currency info
     const formatted = plans.map(p => ({
       id: p.id,
       name: p.name,
@@ -52,6 +74,8 @@ async function getPlans(req, res) {
       description: p.description,
       priceMonthly: p.priceMonthly,
       priceYearly: p.priceYearly,
+      currency: p.currency || sysCurrency,
+      currencySymbol: p.currencySymbol || sysSymbol,
       maxEmployees: p.maxEmployees,
       maxStorageGb: p.maxStorageGb,
       features: resolveFeatures(p.features),
@@ -70,7 +94,7 @@ async function getPlans(req, res) {
 
 async function createPlan(req, res) {
   try {
-    const { name, code, description, priceMonthly, priceYearly, maxEmployees, maxStorageGb, features, isActive } = req.body;
+    const { name, code, description, priceMonthly, priceYearly, maxEmployees, maxStorageGb, features, isActive, currency, currencySymbol } = req.body;
 
     if (!name || !code || priceMonthly === undefined || priceYearly === undefined) {
       return res.status(400).json({ message: 'Name, code, priceMonthly, and priceYearly are required' });
@@ -89,6 +113,9 @@ async function createPlan(req, res) {
       features.forEach(f => { parsedFeatures[f] = true; });
     }
 
+    const chosenCurrency = (currency || 'INR').toUpperCase();
+    const chosenSymbol = resolveCurrencySymbol(chosenCurrency, currencySymbol);
+
     const plan = await prisma.subscriptionPlan.create({
       data: {
         name,
@@ -96,6 +123,8 @@ async function createPlan(req, res) {
         description: description || '',
         priceMonthly: parseFloat(priceMonthly),
         priceYearly: parseFloat(priceYearly),
+        currency: chosenCurrency,
+        currencySymbol: chosenSymbol,
         maxEmployees: maxEmployees ? parseInt(maxEmployees, 10) : 10,
         maxStorageGb: maxStorageGb ? parseFloat(maxStorageGb) : 5.0,
         features: parsedFeatures,
@@ -116,13 +145,19 @@ async function updatePlan(req, res) {
     const planId = parseInt(id, 10);
     if (isNaN(planId)) return res.status(400).json({ message: 'Invalid plan ID' });
 
-    const { name, description, priceMonthly, priceYearly, maxEmployees, maxStorageGb, features, isActive } = req.body;
+    const { name, description, priceMonthly, priceYearly, maxEmployees, maxStorageGb, features, isActive, currency, currencySymbol } = req.body;
 
     const dataToUpdate = {};
     if (name !== undefined) dataToUpdate.name = name;
     if (description !== undefined) dataToUpdate.description = description;
     if (priceMonthly !== undefined) dataToUpdate.priceMonthly = parseFloat(priceMonthly);
     if (priceYearly !== undefined) dataToUpdate.priceYearly = parseFloat(priceYearly);
+    if (currency !== undefined) {
+      dataToUpdate.currency = currency.toUpperCase();
+      dataToUpdate.currencySymbol = resolveCurrencySymbol(dataToUpdate.currency, currencySymbol);
+    } else if (currencySymbol !== undefined) {
+      dataToUpdate.currencySymbol = currencySymbol;
+    }
     if (maxEmployees !== undefined) dataToUpdate.maxEmployees = parseInt(maxEmployees, 10);
     if (maxStorageGb !== undefined) dataToUpdate.maxStorageGb = parseFloat(maxStorageGb);
     if (features !== undefined) {
@@ -224,6 +259,9 @@ async function getSubscriptions(req, res) {
         planCode: sub.plan.code,
         priceMonthly: sub.plan.priceMonthly,
         priceYearly: sub.plan.priceYearly,
+        currency: sub.plan.currency || 'INR',
+        currencySymbol: sub.plan.currencySymbol || '₹',
+        plan: sub.plan,
         maxEmployees: sub.plan.maxEmployees,
         currentEmployeeCount: sub.company._count.users,
         features: resolveFeatures(sub.plan.features, sub.customFeatures),
@@ -545,6 +583,10 @@ async function getCompanySubscription(req, res) {
     const trialDaysLeft = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
     const isExpired = sub.status === 'TRIAL' && diffTime <= 0;
 
+    const sysSetting = await prisma.systemSetting.findFirst();
+    const sysCurrency = sysSetting?.currency || 'INR';
+    const sysSymbol = sysSetting?.currencySymbol || '₹';
+
     res.json({
       subscriptionId: sub.id,
       companyId: sub.companyId,
@@ -556,6 +598,8 @@ async function getCompanySubscription(req, res) {
         description: sub.plan.description,
         priceMonthly: sub.plan.priceMonthly,
         priceYearly: sub.plan.priceYearly,
+        currency: sub.plan.currency || sysCurrency,
+        currencySymbol: sub.plan.currencySymbol || sysSymbol,
         maxEmployees: sub.plan.maxEmployees,
         maxStorageGb: sub.plan.maxStorageGb,
         features: resolveFeatures(sub.plan.features, sub.customFeatures)
@@ -736,7 +780,7 @@ async function changeCompanyPlan(req, res) {
         subscriptionId: sub.id,
         invoiceNumber,
         amount,
-        currency: 'INR',
+        currency: targetPlan.currency || 'INR',
         status: 'PAID',
         dueDate: now,
         paidAt: now,

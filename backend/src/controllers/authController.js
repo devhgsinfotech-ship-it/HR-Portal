@@ -104,6 +104,12 @@ async function login(req, res) {
         }
         const permissions = companyRole?.permissions || [];
 
+        let superAdminLogo = null;
+        if (user.role === 'SUPER_ADMIN') {
+            const sys = await prisma.systemSetting.findFirst();
+            superAdminLogo = sys?.logoUrl || null;
+        }
+
         res.json({
             message: 'Login successful',
             token,
@@ -116,7 +122,7 @@ async function login(req, res) {
                 companyCode: user.company?.companyCode || null,
                 companyName: user.company?.name || null,
                 subdomain: user.company?.subdomain || null,
-                companyLogoUrl: user.company?.logoUrl || null,
+                companyLogoUrl: user.role === 'SUPER_ADMIN' ? superAdminLogo : (user.company?.logoUrl || null),
                 profilePhotoUrl: user.employee?.profilePhotoUrl || null,
                 onboardingStatus: (user.role === 'SUPER_ADMIN' || user.role === 'COMPANY_ADMIN') ? 'COMPLETED' : (user.employee?.onboardingStatus || 'INVITED'),
                 companyRoleName: companyRole?.name || user.employee?.companyRole?.name || null,
@@ -806,6 +812,10 @@ async function getCompanyLogo(req, res) {
                 const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
                 if (token) {
                     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretkey');
+                    if (decoded?.role === 'SUPER_ADMIN') {
+                        const sys = await prisma.systemSetting.findFirst();
+                        return res.json({ success: true, logoUrl: sys?.logoUrl || null, companyName: sys?.systemName || 'HR Portal' });
+                    }
                     if (decoded?.companyId) {
                         company = await prisma.company.findUnique({
                             where: { id: decoded.companyId },
@@ -868,8 +878,8 @@ async function updateCompanySettings(req, res) {
             return res.status(400).json({ message: 'No company associated with user account' });
         }
 
-        if (req.user.role !== 'COMPANY_ADMIN' && req.user.role !== 'SUPER_ADMIN') {
-            return res.status(403).json({ message: 'Unauthorized: Only Company Admins can modify company settings' });
+        if (req.user.role !== 'COMPANY_ADMIN') {
+            return res.status(403).json({ message: 'Unauthorized: Only Company Admins can modify their company settings' });
         }
 
         const { name, phone, email, address, industry, companySize, logoUrl } = req.body;
@@ -915,6 +925,12 @@ async function getProfile(req, res) {
             return res.status(404).json({ message: 'User not found' });
         }
 
+        let superAdminLogo = null;
+        if (user.role === 'SUPER_ADMIN') {
+            const sys = await prisma.systemSetting.findFirst();
+            superAdminLogo = sys?.logoUrl || null;
+        }
+
         const profileData = {
             id: user.id,
             name: user.name,
@@ -922,7 +938,7 @@ async function getProfile(req, res) {
             role: user.role,
             companyName: user.company?.name || null,
             subdomain: user.company?.subdomain || null,
-            companyLogoUrl: user.company?.logoUrl || null,
+            companyLogoUrl: user.role === 'SUPER_ADMIN' ? superAdminLogo : (user.company?.logoUrl || null),
             firstName: user.employee?.firstName || user.name.split(' ')[0] || '',
             lastName: user.employee?.lastName || user.name.split(' ').slice(1).join(' ') || '',
             phone: user.employee?.phone || user.company?.phone || '',

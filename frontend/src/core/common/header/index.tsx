@@ -186,8 +186,10 @@ const Header = React.memo(() => {
       }
     };
     window.addEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
+    window.addEventListener("systemLogoUpdated", handleLogoUpdate as EventListener);
     return () => {
       window.removeEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
+      window.removeEventListener("systemLogoUpdated", handleLogoUpdate as EventListener);
     };
   }, []);
 

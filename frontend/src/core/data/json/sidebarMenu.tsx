@@ -202,6 +202,11 @@ export const SidebarDataTest = [
             base: routes.superAdminPurchaseTransaction,
           },
           {
+            label: 'Platform Settings',
+            link: routes.superAdminSettings,
+            base: routes.superAdminSettings,
+          },
+          {
             label: 'Tenant Usage Metrics',
             link: routes.tenantUsageMetrics,
             base: routes.tenantUsageMetrics,
@@ -1101,16 +1106,6 @@ export const SidebarDataTest = [
                 label: 'Company Settings',
                 link: routes.companySettings,
                 base: 'company-settings',
-              },
-              {
-                label: 'Membership Plans',
-                link: routes.membershipplan,
-                base: 'membership-plans',
-              },
-              {
-                label: 'Business Settings',
-                link: routes.businessSettings,
-                base: 'bussiness-settings',
               },
               {
                 label: 'SEO Settings',
