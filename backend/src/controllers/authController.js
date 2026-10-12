@@ -800,6 +800,24 @@ async function getCompanyLogo(req, res) {
             });
         }
 
+        if (!company && req.headers.authorization) {
+            try {
+                const authHeader = req.headers.authorization;
+                const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+                if (token) {
+                    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretkey');
+                    if (decoded?.companyId) {
+                        company = await prisma.company.findUnique({
+                            where: { id: decoded.companyId },
+                            select: { logoUrl: true, name: true }
+                        });
+                    }
+                }
+            } catch (authErr) {
+                // Token invalid or expired, ignore in logo lookup
+            }
+        }
+
         if (!company) {
             return res.json({ success: false, logoUrl: null });
         }
@@ -904,6 +922,7 @@ async function getProfile(req, res) {
             role: user.role,
             companyName: user.company?.name || null,
             subdomain: user.company?.subdomain || null,
+            companyLogoUrl: user.company?.logoUrl || null,
             firstName: user.employee?.firstName || user.name.split(' ')[0] || '',
             lastName: user.employee?.lastName || user.name.split(' ').slice(1).join(' ') || '',
             phone: user.employee?.phone || user.company?.phone || '',
