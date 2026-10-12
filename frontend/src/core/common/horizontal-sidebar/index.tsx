@@ -22,6 +22,7 @@ interface SubMenuTwo {
 interface SubMenu {
   menuValue: string;
   route?: string;
+  base?: string;
   customSubmenuTwo?: boolean;
   subMenusTwo?: SubMenuTwo[];
 }
@@ -156,7 +157,28 @@ const HorizontalSidebar: React.FC = () => {
             </li>
 
             {(HorizontalSidebarData as MenuGroup[])?.map((group, groupIdx) =>
-              group.menu?.map((menuItem, i) => {
+              group.menu?.filter((menuItem) => {
+                const valLower = (menuItem.menuValue || "").toLowerCase();
+                const baseLower = (menuItem.base || "").toLowerCase();
+                if (valLower === "authentication" && baseLower !== "authentication-settings") {
+                  return false;
+                }
+                if (valLower === "crm" || baseLower === "crm") {
+                  return false;
+                }
+                const normRole = (currentRole || "").toUpperCase();
+                if (normRole !== "SUPER_ADMIN") {
+                  if (valLower === "super admin" || baseLower === "super-admin" || baseLower.includes("super-admin")) {
+                    return false;
+                  }
+                }
+                if (normRole === "COMPANY_ADMIN") {
+                  if (valLower === "ai center" || valLower.includes("ai center") || baseLower.includes("ai-center")) {
+                    return false;
+                  }
+                }
+                return true;
+              }).map((menuItem, i) => {
                 const hasSubmenu =
                   menuItem.subMenus && menuItem.subMenus.length > 0;
                 const isOpen = openMenus.has(menuItem.menuValue);
@@ -187,8 +209,30 @@ const HorizontalSidebar: React.FC = () => {
                     {hasSubmenu && (
                       <ul style={{ display: isOpen ? "block" : "none" }}>
                         {menuItem.subMenus?.filter(subItem => {
-                          if (currentRole === "EMPLOYEE" && menuItem.menuValue === "Dashboard") {
+                          const subValLower = (subItem.menuValue || "").toLowerCase();
+                          const authSubmenuList = [
+                            "login", "register", "forgot password", "reset password",
+                            "email verification", "2 step verification"
+                          ];
+                          if (authSubmenuList.includes(subValLower)) {
+                            return false;
+                          }
+                          if (subValLower === "crm" || subItem.base === "crm") {
+                            return false;
+                          }
+                          if (
+                            subValLower === "deals dashboard" ||
+                            subValLower === "leads dashboard" ||
+                            (subItem.route && (subItem.route.includes("deals-dashboard") || subItem.route.includes("leads-dashboard")))
+                          ) {
+                            return false;
+                          }
+                          const normRole = (currentRole || "").toUpperCase();
+                          if (normRole === "EMPLOYEE" && menuItem.menuValue === "Dashboard") {
                             return subItem.menuValue === "Employee Dashboard";
+                          }
+                          if (normRole === "COMPANY_ADMIN" && menuItem.menuValue === "Dashboard") {
+                            return subItem.menuValue === "Admin Dashboard";
                           }
                           return true;
                         }).map((subItem, j) => {

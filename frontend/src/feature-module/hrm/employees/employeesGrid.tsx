@@ -712,7 +712,9 @@ const EmployeesGrid = () => {
                                                                         company: emp.user?.company?.name || '',
                                                                         role: emp.user?.role || 'EMPLOYEE',
                                                                         companyRoleId: emp.companyRoleId || '',
-                                                                        reportingManagerId: emp.reportingManagerId || (emp.companyRole?.name === 'HR Manager' ? String(dbEmployees.find((e: any) => e.user?.role === 'COMPANY_ADMIN')?.id || '') : ''),
+                                                                        reportingManagerId: (emp.reportingManager?.user?.role === 'COMPANY_ADMIN' || emp.reportingManagerId === 'COMPANY_ADMIN')
+                                                                          ? 'COMPANY_ADMIN'
+                                                                          : (emp.reportingManagerId ? String(emp.reportingManagerId) : ((emp.companyRole?.name === 'HR Manager' || emp.user?.role === 'HR') ? 'COMPANY_ADMIN' : '')),
                                                                         password: '',
                                                                         confirmPassword: '',
                                                                         basic: emp.salaryStructure?.basic || 0,
@@ -1203,7 +1205,12 @@ const EmployeesGrid = () => {
                                                             { value: 'HR', label: 'HR' }
                                                         ]}
                                                         onChange={(opt) => {
-                                                            setNewEmp({...newEmp, role: opt?.value || 'EMPLOYEE'});
+                                                            const selectedRole = opt?.value || 'EMPLOYEE';
+                                                            setNewEmp((prev: any) => ({
+                                                                ...prev,
+                                                                role: selectedRole,
+                                                                reportingManagerId: selectedRole === 'HR' ? 'COMPANY_ADMIN' : prev.reportingManagerId
+                                                            }));
                                                         }}
                                                     />
                                                 </div>
@@ -1215,12 +1222,22 @@ const EmployeesGrid = () => {
                                                         const managerOptions = [
                                                             { value: '', label: '-- None --' },
                                                             { value: 'COMPANY_ADMIN', label: 'Company Admin' },
-                                                            ...dbEmployees.map((emp: any) => ({
-                                                                value: String(emp.id),
-                                                                label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed'
-                                                            }))
+                                                            ...dbEmployees.map((emp: any) => {
+                                                                const name = `${emp.firstName || emp.raw?.firstName || ''} ${emp.lastName || emp.raw?.lastName || ''}`.trim() || emp.Name || emp.user?.name || (emp.employeeCode ? `Employee (${emp.employeeCode})` : '') || 'Employee';
+                                                                const desig = emp.Designation || emp.designation?.name || emp.raw?.designation?.name || '';
+                                                                return {
+                                                                    value: String(emp.id),
+                                                                    label: desig ? `${name} (${desig})` : name
+                                                                };
+                                                            })
                                                         ];
-                                                        const defaultVal = managerOptions.find(m => m.value === String(newEmp.reportingManagerId)) || managerOptions[0];
+                                                        const defaultVal = managerOptions.find(m => 
+                                                            m.value === String(newEmp.reportingManagerId) ||
+                                                            (m.value === 'COMPANY_ADMIN' && (
+                                                                newEmp.reportingManagerId === 'COMPANY_ADMIN' ||
+                                                                (newEmp.role === 'HR' && !newEmp.reportingManagerId)
+                                                            ))
+                                                        ) || managerOptions[0];
 
                                                         return (
                                                             <CommonSelect
@@ -1228,7 +1245,7 @@ const EmployeesGrid = () => {
                                                                 className="select"
                                                                 options={managerOptions}
                                                                 defaultValue={defaultVal}
-                                                                onChange={(opt) => setNewEmp({...newEmp, reportingManagerId: opt?.value || ''})}
+                                                                onChange={(opt) => setNewEmp((prev: any) => ({ ...prev, reportingManagerId: opt?.value || '' }))}
                                                                 isDisabled={false}
                                                             />
                                                         );
@@ -1685,7 +1702,14 @@ const EmployeesGrid = () => {
                                                             { value: 'HR', label: 'HR' }
                                                         ]}
                                                         defaultValue={{ value: editEmp.role, label: editEmp.role }}
-                                                        onChange={(opt) => setEditEmp({...editEmp, role: opt?.value || 'EMPLOYEE'})}
+                                                        onChange={(opt) => {
+                                                            const selectedRole = opt?.value || 'EMPLOYEE';
+                                                            setEditEmp((prev: any) => ({
+                                                                ...prev,
+                                                                role: selectedRole,
+                                                                reportingManagerId: selectedRole === 'HR' ? 'COMPANY_ADMIN' : prev.reportingManagerId
+                                                            }));
+                                                        }}
                                                     />
                                                 </div>
                                             </div>
@@ -1696,12 +1720,23 @@ const EmployeesGrid = () => {
                                                         const managerOptions = [
                                                             { value: '', label: '-- None --' },
                                                             { value: 'COMPANY_ADMIN', label: 'Company Admin' },
-                                                            ...dbEmployees.filter((e: any) => e.id !== editEmp.id).map((emp: any) => ({
-                                                                value: String(emp.id),
-                                                                label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.Name || 'Unnamed'
-                                                            }))
+                                                            ...dbEmployees.filter((e: any) => e.id !== editEmp.id).map((emp: any) => {
+                                                                const name = `${emp.firstName || emp.raw?.firstName || ''} ${emp.lastName || emp.raw?.lastName || ''}`.trim() || emp.Name || emp.user?.name || (emp.employeeCode ? `Employee (${emp.employeeCode})` : '') || 'Employee';
+                                                                const desig = emp.Designation || emp.designation?.name || emp.raw?.designation?.name || '';
+                                                                return {
+                                                                    value: String(emp.id),
+                                                                    label: desig ? `${name} (${desig})` : name
+                                                                };
+                                                            })
                                                         ];
-                                                        const defaultVal = managerOptions.find(m => m.value === String(editEmp.reportingManagerId)) || managerOptions[0];
+                                                        const defaultVal = managerOptions.find(m => 
+                                                            m.value === String(editEmp.reportingManagerId) ||
+                                                            (m.value === 'COMPANY_ADMIN' && (
+                                                                editEmp.reportingManagerId === 'COMPANY_ADMIN' ||
+                                                                (editEmp.reportingManager?.user?.role === 'COMPANY_ADMIN') ||
+                                                                (editEmp.role === 'HR' && !editEmp.reportingManagerId)
+                                                            ))
+                                                        ) || managerOptions[0];
 
                                                         return (
                                                             <CommonSelect
@@ -1709,7 +1744,7 @@ const EmployeesGrid = () => {
                                                                 className="select"
                                                                 options={managerOptions}
                                                                 defaultValue={defaultVal}
-                                                                onChange={(opt) => setEditEmp({...editEmp, reportingManagerId: opt?.value || ''})}
+                                                                onChange={(opt) => setEditEmp((prev: any) => ({ ...prev, reportingManagerId: opt?.value || '' }))}
                                                                 isDisabled={false}
                                                             />
                                                         );

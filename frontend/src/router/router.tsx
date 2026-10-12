@@ -20,6 +20,9 @@ const getRouteRoles = (path: string | undefined): Role[] => {
   // 1. Super Admin ONLY routes
   if (p.startsWith("/super-admin")) return ["SUPER_ADMIN"];
 
+  // AI Center routes (Hide from Company Admin)
+  if (p.startsWith("/ai-") || p.includes("ai-center")) return ["SUPER_ADMIN"];
+
   // Company User Management Module (Hide from Super Admin)
   if (p.includes("user-management") || p.includes("manage-users") || p === "/users" || p.includes("roles-permissions")) {
     return ["COMPANY_ADMIN", "HR"];

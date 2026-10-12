@@ -94,9 +94,25 @@ const StackedSidebar = () => {
                         <div className="nav flex-column align-items-center nav-pills" role="tablist"
                             aria-orientation="vertical">
                             <div className="row g-2">
-                            {TowColData.map((mainMenu, index) => (
+                            {TowColData.filter((mainMenu: any) => { const t = (mainMenu.tittle || "").toLowerCase(); return t !== "authentication" && t !== "crm"; }).map((mainMenu, index) => (
                                 <React.Fragment key={`main-${index}`}>
-                                {mainMenu.menu.map((title,i)=>(
+                                {mainMenu.menu.filter((title: any) => {
+                                    const valLower = (title.menuValue || "").toLowerCase();
+                                    if (valLower === "authentication" && title.base !== "authentication-settings") {
+                                        return false;
+                                    }
+                                    if (valLower === "crm" || title.base === "crm") {
+                                        return false;
+                                    }
+                                    const normRole = (role || "").toUpperCase();
+                                    if (normRole !== "SUPER_ADMIN" && (title.menuValue === "Super Admin" || (title.menuValue || "").toLowerCase().includes("super admin"))) {
+                                        return false;
+                                    }
+                                    if (normRole === "COMPANY_ADMIN" && (title.menuValue === "AI Center" || (title.menuValue || "").toLowerCase().includes("ai center"))) {
+                                        return false;
+                                    }
+                                    return true;
+                                }).map((title,i)=>(
                                     <div className="col-6" key={`col-${index}-${i}`}>
                                     <Link to="#" role="tab" onClick={()=>{showTabs(title);SetShowSubMenusTab(!showSubMenusTab)}} className={`nav-link ${
                                 title?.subMenus
@@ -120,16 +136,44 @@ const StackedSidebar = () => {
                         <div className="tab-content">
                             <div className={`tab-pane ${showSubMenusTab ? 'd-block':'d-none'}`} id="menu-dashboard">
                                 <ul className="stack-submenu">
-                                {TowColData.map((mainMenu, index) => (
+                                {TowColData.filter((mainMenu: any) => { const t = (mainMenu.tittle || "").toLowerCase(); return t !== "authentication" && t !== "crm"; }).map((mainMenu, index) => (
                                     <React.Fragment key={`main-${index}`}>
-                                        {mainMenu.menu.map((title: any, i: number) => (
+                                        {mainMenu.menu.filter((title: any) => {
+                                            const valLower = (title.menuValue || "").toLowerCase();
+                                            if (valLower === "authentication" && title.base !== "authentication-settings") {
+                                                return false;
+                                            }
+                                            if (valLower === "crm" || title.base === "crm") {
+                                                return false;
+                                            }
+                                            const normRole = (role || "").toUpperCase();
+                                            if (normRole !== "SUPER_ADMIN" && (title.menuValue === "Super Admin" || (title.menuValue || "").toLowerCase().includes("super admin"))) {
+                                                return false;
+                                            }
+                                            if (normRole === "COMPANY_ADMIN" && (title.menuValue === "AI Center" || (title.menuValue || "").toLowerCase().includes("ai center"))) {
+                                                return false;
+                                            }
+                                            return true;
+                                        }).map((title: any, i: number) => (
                                         <React.Fragment key={`title-${index}-${i}`}>
                                             {title.showMyTab === true && (
                                             <>
                                             
                                                 {title.subMenus.filter((s: any) => {
-                                                    if (role === "EMPLOYEE" && title.menuValue === "Dashboard") {
+                                                    const sLower = (s.menuValue || "").toLowerCase();
+                                                    if (
+                                                        sLower === "deals dashboard" ||
+                                                        sLower === "leads dashboard" ||
+                                                        (s.route && (s.route.includes("deals-dashboard") || s.route.includes("leads-dashboard")))
+                                                    ) {
+                                                        return false;
+                                                    }
+                                                    const normRole = (role || "").toUpperCase();
+                                                    if (normRole === "EMPLOYEE" && title.menuValue === "Dashboard") {
                                                         return s.menuValue === "Employee Dashboard";
+                                                    }
+                                                    if (normRole === "COMPANY_ADMIN" && title.menuValue === "Dashboard") {
+                                                        return s.menuValue === "Admin Dashboard";
                                                     }
                                                     return true;
                                                 }).map((subMenus: any, j: number) => (

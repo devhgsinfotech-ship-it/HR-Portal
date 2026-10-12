@@ -115,7 +115,9 @@ const VerifyEmployeeModal: React.FC<VerifyEmployeeModalProps> = ({ employee, onS
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content">
           <div className="modal-header bg-primary text-white">
-            <h5 className="modal-title text-white">Review Employee Verification</h5>
+            <h5 className="modal-title text-white">
+              {currentEmployee?.onboardingStatus === 'COMPLETED' ? 'Employee Documents & Verification' : 'Review Employee Verification'}
+            </h5>
             <button type="button" className="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onClick={() => onSuccess()} />
           </div>
           {currentEmployee ? (
@@ -302,10 +304,17 @@ const VerifyEmployeeModal: React.FC<VerifyEmployeeModalProps> = ({ employee, onS
               </div>
             </div>
 
-            <div className="alert alert-warning mb-0">
-              <i className="ti ti-info-circle me-2"></i>
-              Please carefully review the bank details and documents. Clicking "Approve" will mark this employee's profile as fully active.
-            </div>
+            {currentEmployee.onboardingStatus === 'COMPLETED' ? (
+              <div className="alert alert-success mb-0">
+                <i className="ti ti-check me-2"></i>
+                This employee is fully onboarded and active. HR and Admins can view, download, or replace any documents above at any time.
+              </div>
+            ) : (
+              <div className="alert alert-warning mb-0">
+                <i className="ti ti-info-circle me-2"></i>
+                Please carefully review the bank details and documents. Clicking "Approve" will mark this employee's profile as fully active.
+              </div>
+            )}
 
             {showRejectReason && (
               <div className="mt-3 p-3 bg-light rounded border border-danger">
@@ -314,7 +323,7 @@ const VerifyEmployeeModal: React.FC<VerifyEmployeeModalProps> = ({ employee, onS
                   className="form-control border-danger" 
                   rows={3} 
                   placeholder="Tell the employee what they need to fix (e.g. 'Please upload a clear picture of your PAN card. The current one is blurred.')" 
-                  value={rejectReason}
+                  value={rejectReason} 
                   onChange={(e) => setRejectReason(e.target.value)}
                 />
               </div>
@@ -322,33 +331,41 @@ const VerifyEmployeeModal: React.FC<VerifyEmployeeModalProps> = ({ employee, onS
             
           </div>
           <div className="modal-footer d-flex justify-content-between">
-            <div>
-              <button 
-                type="button" 
-                className={`btn ${showRejectReason ? 'btn-danger' : 'btn-outline-danger'}`} 
-                onClick={handleRequestCorrection} 
-                disabled={loading || rejectLoading}
-              >
-                {rejectLoading ? (
-                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                ) : (
-                  <i className="ti ti-alert-triangle me-2"></i>
-                )}
-                {showRejectReason ? 'Submit Correction Request' : 'Request Correction'}
-              </button>
-              {showRejectReason && (
-                <button type="button" className="btn btn-link text-muted ms-2" onClick={() => setShowRejectReason(false)}>Cancel</button>
-              )}
-            </div>
-            <div>
-              <button type="button" className="btn btn-light me-2" data-bs-dismiss="modal">Close</button>
-              {!showRejectReason && (
-                <button type="button" className="btn btn-success" onClick={handleApprove} disabled={loading || rejectLoading}>
-                  {loading ? <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> : <i className="ti ti-check me-2"></i>}
-                  Approve Verification
-                </button>
-              )}
-            </div>
+            {currentEmployee.onboardingStatus === 'COMPLETED' ? (
+              <div className="ms-auto">
+                <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <button 
+                    type="button" 
+                    className={`btn ${showRejectReason ? 'btn-danger' : 'btn-outline-danger'}`} 
+                    onClick={handleRequestCorrection} 
+                    disabled={loading || rejectLoading}
+                  >
+                    {rejectLoading ? (
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    ) : (
+                      <i className="ti ti-alert-triangle me-2"></i>
+                    )}
+                    {showRejectReason ? 'Submit Correction Request' : 'Request Correction'}
+                  </button>
+                  {showRejectReason && (
+                    <button type="button" className="btn btn-link text-muted ms-2" onClick={() => setShowRejectReason(false)}>Cancel</button>
+                  )}
+                </div>
+                <div>
+                  <button type="button" className="btn btn-light me-2" data-bs-dismiss="modal">Close</button>
+                  {!showRejectReason && (
+                    <button type="button" className="btn btn-success" onClick={handleApprove} disabled={loading || rejectLoading}>
+                      {loading ? <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> : <i className="ti ti-check me-2"></i>}
+                      Approve Verification
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
           </>
           ) : (

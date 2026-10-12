@@ -72,6 +72,7 @@ const Header = React.memo(() => {
     (state: RootState) => state.themeSetting.dataLayout,
   );
   const user = useSelector((state: RootState) => state.auth.user) as any;
+  const userRole = (user?.role || "").toUpperCase();
   const Location = useLocation();
   const apiUrl = APP_CONFIG.getBackendUrl();
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
@@ -853,49 +854,51 @@ const Header = React.memo(() => {
               <HorizontalSignalSidebar />
               {/* /Horizontal Single */}
               <div className="d-flex align-items-center">
-                <div className="dropdown ai-dropdown me-2">
-                  <Link
-                    to="#"
-                    className="dropdown-toggle d-flex align-items-center btn btn-primary-gradient"
-                    data-bs-toggle="dropdown"
-                  >
-                    <i className="ti ti-sparkles me-1" />
-                    AI Center
-                    <i className="ti ti-chevron-down ms-1" />
-                  </Link>
-                  <div className="dropdown-menu shadow-none p-3">
+                {userRole !== "COMPANY_ADMIN" && (
+                  <div className="dropdown ai-dropdown me-2">
                     <Link
-                      className="dropdown-item rounded"
-                      to={all_routes.aiAttendanceInsights}
+                      to="#"
+                      className="dropdown-toggle d-flex align-items-center btn btn-primary-gradient"
+                      data-bs-toggle="dropdown"
                     >
-                      AI Attendance Insights
+                      <i className="ti ti-sparkles me-1" />
+                      AI Center
+                      <i className="ti ti-chevron-down ms-1" />
                     </Link>
-                    <Link
-                      className="dropdown-item rounded"
-                      to={all_routes.aiPayrollForecast}
-                    >
-                      AI Payroll Forecast
-                    </Link>
-                    <Link
-                      className="dropdown-item rounded"
-                      to={all_routes.aiHiringForecast}
-                    >
-                      AI Hiring Forecast
-                    </Link>
-                    <Link
-                      className="dropdown-item rounded"
-                      to={all_routes.aiTeamPerformanceInsights}
-                    >
-                      AI Team Performance Insights
-                    </Link>
-                    <Link
-                      className="dropdown-item rounded"
-                      to={all_routes.aiConfiguration}
-                    >
-                      AI Settings
-                    </Link>
+                    <div className="dropdown-menu shadow-none p-3">
+                      <Link
+                        className="dropdown-item rounded"
+                        to={all_routes.aiAttendanceInsights}
+                      >
+                        AI Attendance Insights
+                      </Link>
+                      <Link
+                        className="dropdown-item rounded"
+                        to={all_routes.aiPayrollForecast}
+                      >
+                        AI Payroll Forecast
+                      </Link>
+                      <Link
+                        className="dropdown-item rounded"
+                        to={all_routes.aiHiringForecast}
+                      >
+                        AI Hiring Forecast
+                      </Link>
+                      <Link
+                        className="dropdown-item rounded"
+                        to={all_routes.aiTeamPerformanceInsights}
+                      >
+                        AI Team Performance Insights
+                      </Link>
+                      <Link
+                        className="dropdown-item rounded"
+                        to={all_routes.aiConfiguration}
+                      >
+                        AI Settings
+                      </Link>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="me-2">
                   <Link

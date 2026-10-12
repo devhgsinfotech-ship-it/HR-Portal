@@ -17,6 +17,55 @@ function getCompanyPrefix(companyName) {
     return cleanPrefix || 'EMP';
 }
 
+async function getOrCreateCompanyAdminEmployee(companyId) {
+    if (!companyId) return null;
+    try {
+        const companyAdmin = await prisma.user.findFirst({
+            where: { companyId, role: 'COMPANY_ADMIN' },
+            include: { employee: true, company: true }
+        });
+        if (!companyAdmin) return null;
+        if (companyAdmin.employee) return companyAdmin.employee;
+
+        // Auto-create employee record for company admin so other employees can report to them
+        const names = (companyAdmin.name || 'Company Admin').trim().split(/\s+/);
+        const firstName = names[0] || 'Company';
+        const lastName = names.slice(1).join(' ') || 'Admin';
+        const compCode = companyAdmin.company?.companyCode || 'ADM';
+        const empCode = `${compCode}-0001`;
+
+        try {
+            return await prisma.employee.create({
+                data: {
+                    userId: companyAdmin.id,
+                    employeeCode: empCode,
+                    firstName,
+                    lastName,
+                    phone: companyAdmin.company?.phone || '0000000000',
+                    address: 'Headquarters',
+                    onboardingStatus: 'COMPLETED'
+                }
+            });
+        } catch (collisionErr) {
+            return await prisma.employee.create({
+                data: {
+                    userId: companyAdmin.id,
+                    employeeCode: `${compCode}-${Date.now().toString().slice(-4)}`,
+                    firstName,
+                    lastName,
+                    phone: companyAdmin.company?.phone || '0000000000',
+                    address: 'Headquarters',
+                    onboardingStatus: 'COMPLETED'
+                }
+            });
+        }
+    } catch (err) {
+        console.error('Error getting or creating Company Admin employee:', err);
+        return null;
+    }
+}
+
+
 
 async function checkEmailAvailability(req, res) {
     try {
@@ -93,16 +142,14 @@ async function createEmployee(req, res) {
         let finalReportingManagerId = null;
         if (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null' && reportingManagerId !== '') {
             if (reportingManagerId === 'COMPANY_ADMIN') {
-                const companyAdmin = await prisma.user.findFirst({
-                    where: { companyId, role: 'COMPANY_ADMIN' },
-                    include: { employee: true }
-                });
-                if (companyAdmin && companyAdmin.employee) {
-                    finalReportingManagerId = companyAdmin.employee.id;
-                }
+                const adminEmp = await getOrCreateCompanyAdminEmployee(companyId);
+                finalReportingManagerId = adminEmp ? adminEmp.id : null;
             } else if (!isNaN(parseInt(reportingManagerId, 10))) {
                 finalReportingManagerId = parseInt(reportingManagerId, 10);
             }
+        } else if (role === 'HR') {
+            const adminEmp = await getOrCreateCompanyAdminEmployee(companyId);
+            finalReportingManagerId = adminEmp ? adminEmp.id : null;
         }
 
         // Use a transaction to create User and Employee
@@ -235,7 +282,10 @@ async function getEmployees(req, res) {
                 designation: true,
                 companyRole: true,
                 bankDetails: true,
-                salaryStructure: true
+                salaryStructure: true,
+                reportingManager: {
+                    include: { user: true }
+                }
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -352,13 +402,17 @@ async function updateEmployee(req, res) {
 
         if (reportingManagerId !== undefined) {
             if (reportingManagerId === 'COMPANY_ADMIN') {
-                const companyAdmin = await prisma.user.findFirst({
-                    where: { companyId, role: 'COMPANY_ADMIN' },
-                    include: { employee: true }
-                });
-                dataToUpdate.reportingManagerId = (companyAdmin && companyAdmin.employee) ? companyAdmin.employee.id : null;
+                const adminEmp = await getOrCreateCompanyAdminEmployee(companyId);
+                dataToUpdate.reportingManagerId = adminEmp ? adminEmp.id : null;
+            } else if (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null' && reportingManagerId !== '') {
+                dataToUpdate.reportingManagerId = parseInt(reportingManagerId, 10);
             } else {
-                dataToUpdate.reportingManagerId = (reportingManagerId && reportingManagerId !== 'undefined' && reportingManagerId !== 'null' && reportingManagerId !== '') ? parseInt(reportingManagerId, 10) : null;
+                dataToUpdate.reportingManagerId = null;
+            }
+        } else if ((role === 'HR' || isHrManagerRole) && !existing.reportingManagerId) {
+            const adminEmp = await getOrCreateCompanyAdminEmployee(companyId);
+            if (adminEmp) {
+                dataToUpdate.reportingManagerId = adminEmp.id;
             }
         }
         if (companyRoleId !== undefined) {
@@ -417,6 +471,10 @@ async function updateEmployee(req, res) {
                 },
                 department: true,
                 designation: true,
+                companyRole: true,
+                reportingManager: {
+                    include: { user: true }
+                }
             }
         });
 
@@ -1167,7 +1225,7 @@ async function updateEmployeeDocuments(req, res) {
             include: { user: true }
         });
 
-        if (!employee || employee.user.companyId !== companyId) {
+        if (!employee || (companyId && employee.user.companyId !== companyId)) {
             return res.status(404).json({ message: 'Employee not found' });
         }
 
