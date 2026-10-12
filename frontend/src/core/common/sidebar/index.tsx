@@ -9,6 +9,7 @@ import { SidebarDataTest } from "../../data/json/sidebarMenu";
 import { all_routes } from "../../../router/all_routes";
 import { useAppSelector } from "../../data/redux/store";
 import type { AppDispatch } from "../../data/redux/store";
+import { updateUser } from "../../data/redux/authSlice";
 import apiClient from "../../../core/utils/apiClient";
 
 // Define flexible types for sidebar data
@@ -372,25 +373,54 @@ const Sidebar = React.memo(() => {
 
   const user = useAppSelector((state) => state.auth.user) as any;
   const currentRole = (user?.role as Role) || "EMPLOYEE";
-  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [companyLogo, setCompanyLogo] = useState<string | null>(user?.companyLogoUrl || null);
+
+  const getLogoSrc = (logoPath: string | null | undefined) => {
+    if (!logoPath) return "";
+    if (logoPath.startsWith("http://") || logoPath.startsWith("https://") || logoPath.startsWith("blob:")) {
+      return logoPath;
+    }
+    const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+    const cleanPath = logoPath.startsWith("/") ? logoPath : `/${logoPath}`;
+    return `${base}${cleanPath}`;
+  };
+
+  useEffect(() => {
+    if (user?.companyLogoUrl) {
+      setCompanyLogo(user.companyLogoUrl);
+    }
+  }, [user?.companyLogoUrl]);
+
+  useEffect(() => {
+    const handleLogoUpdate = (event: any) => {
+      const newLogo = event?.detail;
+      if (newLogo) {
+        setCompanyLogo(newLogo);
+      }
+    };
+    window.addEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
+    return () => {
+      window.removeEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchLogo = async () => {
-      const currentSub = window.location.hostname.split('.')[0];
-      const sub = currentSub && currentSub !== 'localhost' && currentSub !== 'www' ? currentSub : user?.subdomain;
-      
-      if (!sub) return;
       try {
-        const res = await apiClient.get(`/auth/company-logo?subdomain=${sub}`);
+        const sub = user?.subdomain;
+        const res = await apiClient.get(`/auth/company-logo${sub ? `?subdomain=${encodeURIComponent(sub)}` : ''}`);
         if (res.data?.success && res.data.logoUrl) {
           setCompanyLogo(res.data.logoUrl);
+          if (user && res.data.logoUrl !== user.companyLogoUrl) {
+            dispatch(updateUser({ companyLogoUrl: res.data.logoUrl }));
+          }
         }
       } catch (err) {
         console.error("Failed to load company logo in sidebar:", err);
       }
     };
     fetchLogo();
-  }, [user]);
+  }, [user?.subdomain, dispatch]);
 
   // Filter sidebar data deeply based on role
   const filteredSidebarData = useMemo(() => {
@@ -579,9 +609,12 @@ const Sidebar = React.memo(() => {
         <Link to={all_routes.adminDashboard} className="logo logo-normal">
           {companyLogo || user?.companyLogoUrl ? (
             <img
-              src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiClient.defaults.baseURL || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
+              src={getLogoSrc(companyLogo || user?.companyLogoUrl)}
               alt="Logo"
               style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "/assets/img/hgs-logo-HR.webp";
+              }}
             />
           ) : (
             <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
@@ -590,9 +623,12 @@ const Sidebar = React.memo(() => {
         <Link to={all_routes.adminDashboard} className="logo-small">
           {companyLogo || user?.companyLogoUrl ? (
             <img
-              src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiClient.defaults.baseURL || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
+              src={getLogoSrc(companyLogo || user?.companyLogoUrl)}
               alt="Logo"
               style={{ maxHeight: "25px", maxWidth: "25px", objectFit: "contain", borderRadius: "4px" }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "/assets/img/hgs-logo-HR.webp";
+              }}
             />
           ) : (
             <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "25px", maxWidth: "25px", objectFit: "contain", borderRadius: "4px" }} />
@@ -601,9 +637,12 @@ const Sidebar = React.memo(() => {
         <Link to={all_routes.adminDashboard} className="dark-logo">
           {companyLogo || user?.companyLogoUrl ? (
             <img
-              src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiClient.defaults.baseURL || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
+              src={getLogoSrc(companyLogo || user?.companyLogoUrl)}
               alt="Logo"
               style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "/assets/img/hgs-logo-HR.webp";
+              }}
             />
           ) : (
             <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />

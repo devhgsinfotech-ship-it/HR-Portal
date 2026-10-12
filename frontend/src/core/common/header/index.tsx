@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { setDataLayout } from "../../data/redux/themeSettingSlice";
-import { logout } from "../../data/redux/authSlice";
+import { logout, updateUser } from "../../data/redux/authSlice";
 import ImageWithBasePath from "../imageWithBasePath";
 import {
   setMobileSidebar,
@@ -75,7 +75,17 @@ const Header = React.memo(() => {
   const userRole = (user?.role || "").toUpperCase();
   const Location = useLocation();
   const apiUrl = APP_CONFIG.getBackendUrl();
-  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [companyLogo, setCompanyLogo] = useState<string | null>(user?.companyLogoUrl || null);
+
+  const getLogoSrc = (logoPath: string | null | undefined) => {
+    if (!logoPath) return "";
+    if (logoPath.startsWith("http://") || logoPath.startsWith("https://") || logoPath.startsWith("blob:")) {
+      return logoPath;
+    }
+    const base = (apiUrl || "http://localhost:5000").replace(/\/+$/, "");
+    const cleanPath = logoPath.startsWith("/") ? logoPath : `/${logoPath}`;
+    return `${base}${cleanPath}`;
+  };
 
   // ── Notifications System State & Fetching ────────────────────
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -163,22 +173,41 @@ const Header = React.memo(() => {
   };
 
   useEffect(() => {
+    if (user?.companyLogoUrl) {
+      setCompanyLogo(user.companyLogoUrl);
+    }
+  }, [user?.companyLogoUrl]);
+
+  useEffect(() => {
+    const handleLogoUpdate = (event: any) => {
+      const newLogo = event?.detail;
+      if (newLogo) {
+        setCompanyLogo(newLogo);
+      }
+    };
+    window.addEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
+    return () => {
+      window.removeEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
     const fetchLogo = async () => {
-      const currentSub = window.location.hostname.split('.')[0];
-      const sub = currentSub && currentSub !== 'localhost' && currentSub !== 'www' ? currentSub : user?.subdomain;
-      
-      if (!sub) return;
       try {
-        const res = await apiClient.get(`/auth/company-logo?subdomain=${sub}`);
+        const sub = user?.subdomain;
+        const res = await apiClient.get(`/auth/company-logo${sub ? `?subdomain=${encodeURIComponent(sub)}` : ''}`);
         if (res.data?.success && res.data.logoUrl) {
           setCompanyLogo(res.data.logoUrl);
+          if (user && res.data.logoUrl !== user.companyLogoUrl) {
+            dispatch(updateUser({ companyLogoUrl: res.data.logoUrl }));
+          }
         }
       } catch (err) {
         console.error("Failed to load company logo in header:", err);
       }
     };
     fetchLogo();
-  }, [user]);
+  }, [user?.subdomain, dispatch]);
 
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -664,9 +693,12 @@ const Header = React.memo(() => {
             <Link to={routes.adminDashboard} className="logo">
               {companyLogo || user?.companyLogoUrl ? (
                 <img
-                  src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiUrl || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
+                  src={getLogoSrc(companyLogo || user?.companyLogoUrl)}
                   alt="Company Logo"
                   style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "/assets/img/hgs-logo-HR.webp";
+                  }}
                 />
               ) : (
                 <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
@@ -675,9 +707,12 @@ const Header = React.memo(() => {
             <Link to={routes.adminDashboard} className="dark-logo">
               {companyLogo || user?.companyLogoUrl ? (
                 <img
-                  src={(companyLogo || user?.companyLogoUrl).startsWith("http") ? (companyLogo || user?.companyLogoUrl) : `${apiUrl || "http://localhost:5000"}${companyLogo || user?.companyLogoUrl}`}
+                  src={getLogoSrc(companyLogo || user?.companyLogoUrl)}
                   alt="Company Logo"
                   style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "/assets/img/hgs-logo-HR.webp";
+                  }}
                 />
               ) : (
                 <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />

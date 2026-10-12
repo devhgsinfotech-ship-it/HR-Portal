@@ -4,6 +4,9 @@ import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { all_routes } from "../../../router/all_routes";
 import { OverlayTrigger, Tooltip } from "react-bootstrap";
 import apiClient from "../../../core/utils/apiClient";
+import { useDispatch } from "react-redux";
+import { updateUser } from "../../../core/data/redux/authSlice";
+import type { AppDispatch } from "../../../core/data/redux/store";
 
 const resolveImageUrl = (url: string | null | undefined) => {
   if (!url) return null;
@@ -25,6 +28,7 @@ const getFeatureList = (features: any): string[] => {
 
 const CompanySettings = () => {
   const routes = all_routes;
+  const dispatch = useDispatch<AppDispatch>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'danger'; text: string } | null>(null);
@@ -43,7 +47,6 @@ const CompanySettings = () => {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [previewLogo, setPreviewLogo] = useState<string | null>(null);
   const [subscriptionData, setSubscriptionData] = useState<any>(null);
-
   const [availablePlans, setAvailablePlans] = useState<any[]>([]);
   const [billingCycleToggle, setBillingCycleToggle] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [upgradingPlanId, setUpgradingPlanId] = useState<number | null>(null);
@@ -78,6 +81,7 @@ const CompanySettings = () => {
           });
           if (comp.logoUrl) {
             setPreviewLogo(comp.logoUrl);
+            dispatch(updateUser({ companyLogoUrl: comp.logoUrl, subdomain: comp.subdomain }));
           }
         }
 
@@ -96,7 +100,7 @@ const CompanySettings = () => {
       }
     };
     fetchCompanySettings();
-  }, []);
+  }, [dispatch]);
 
   const handleUpgradePlan = async (targetPlanId: number) => {
     try {
@@ -151,9 +155,13 @@ const CompanySettings = () => {
 
       if (res.data?.success) {
         setMessage({ type: 'success', text: "Company settings updated and saved successfully!" });
-        if (res.data.company?.logoUrl) {
-          setFormData(prev => ({ ...prev, logoUrl: res.data.company.logoUrl }));
-          setPreviewLogo(res.data.company.logoUrl);
+        const updatedLogo = res.data.company?.logoUrl;
+        if (updatedLogo) {
+          setFormData(prev => ({ ...prev, logoUrl: updatedLogo }));
+          setPreviewLogo(updatedLogo);
+          setLogoFile(null);
+          dispatch(updateUser({ companyLogoUrl: updatedLogo, subdomain: res.data.company?.subdomain || formData.subdomain }));
+          window.dispatchEvent(new CustomEvent('companyLogoUpdated', { detail: updatedLogo }));
         }
       }
     } catch (err: any) {
