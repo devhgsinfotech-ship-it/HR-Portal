@@ -25,6 +25,8 @@ export interface AuthUser {
     onboardingStatus?: string;
     companyRoleName?: string | null;
     permissions?: RolePermission[];
+    currency?: string;
+    currencySymbol?: string;
 }
 
 export interface AuthState {

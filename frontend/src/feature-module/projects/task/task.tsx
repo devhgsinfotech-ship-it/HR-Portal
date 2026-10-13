@@ -56,6 +56,7 @@ interface TaskItem {
 
 const Task = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
+  const currencySymbol = currentUser?.currencySymbol || (currentUser?.currency === 'USD' ? '$' : '₹');
   const canWriteTasks = currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "HR" || currentUser?.role === "COMPANY_ADMIN" || currentUser?.permissions?.some((p: any) => p.module === 'TASKS' && p.canWrite);
   const canDeleteTasks = currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "HR" || currentUser?.role === "COMPANY_ADMIN" || currentUser?.permissions?.some((p: any) => p.module === 'TASKS' && p.canDelete);
 
@@ -438,7 +439,7 @@ const Task = () => {
                         <div className="col-3">
                           <span className="fs-10 text-muted d-block uppercase fw-semibold tracking-wide">Value</span>
                           <span className="fs-12 fw-bold text-dark">
-                            {proj.budget ? `₹${proj.budget.toLocaleString()}` : "—"}
+                            {proj.budget ? `${currencySymbol}${proj.budget.toLocaleString()}` : "—"}
                           </span>
                         </div>
                         <div className="col-3">

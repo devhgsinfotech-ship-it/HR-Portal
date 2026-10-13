@@ -218,6 +218,12 @@ async function checkOut(req, res) {
 async function breakIn(req, res) {
     try {
         const userId = req.user.id;
+        const role = req.user.role;
+
+        if (role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN') {
+            return res.status(400).json({ message: 'Attendance tracking is not applicable for Administrator accounts.' });
+        }
+
         let employee = await prisma.employee.findUnique({ where: { userId } });
         if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
 
@@ -257,6 +263,12 @@ async function breakIn(req, res) {
 async function breakOut(req, res) {
     try {
         const userId = req.user.id;
+        const role = req.user.role;
+
+        if (role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN') {
+            return res.status(400).json({ message: 'Attendance tracking is not applicable for Administrator accounts.' });
+        }
+
         let employee = await prisma.employee.findUnique({ where: { userId } });
         if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
 
@@ -301,6 +313,11 @@ async function getAttendanceLogs(req, res) {
         // Employee always sees only their own. HR/Manager sees all unless ?mine=true
         const shouldFilterByEmployee = role === 'EMPLOYEE' || isMine;
 
+        // Company Admin and Super Admin do not have personal employee attendance tracking
+        if ((role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN') && isMine) {
+            return res.json([]);
+        }
+
         let whereClause = {};
         let employee = null;
 
@@ -317,14 +334,12 @@ async function getAttendanceLogs(req, res) {
             };
         } else {
             // HR/Admin: filter by company and exclude Administrator accounts from employee tracking
-            if (companyId) {
-                whereClause.employee = {
-                    user: {
-                        companyId,
-                        role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] }
-                    }
-                };
-            }
+            whereClause.employee = {
+                user: {
+                    ...(companyId ? { companyId } : {}),
+                    role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] }
+                }
+            };
         }
 
         const records = await prisma.attendanceRecord.findMany({
@@ -502,7 +517,12 @@ async function getAttendanceLogs(req, res) {
 
         // For Team / Admin Logs (multiple employees across company/department), generate full day-wise logs
         const allEmployees = await prisma.employee.findMany({
-            where: companyId ? { user: { companyId } } : {},
+            where: {
+                user: {
+                    ...(companyId ? { companyId } : {}),
+                    role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] }
+                }
+            },
             include: {
                 user: { select: { id: true, name: true, email: true, role: true } },
                 department: true,
@@ -513,7 +533,12 @@ async function getAttendanceLogs(req, res) {
         const approvedLeaves = await prisma.leaveRequest.findMany({
             where: {
                 status: 'APPROVED',
-                ...(companyId ? { employee: { user: { companyId } } } : {})
+                employee: {
+                    user: {
+                        ...(companyId ? { companyId } : {}),
+                        role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] }
+                    }
+                }
             }
         });
 
@@ -653,6 +678,11 @@ async function submitRegularization(req, res) {
     try {
         const { recordId, requestedCheckIn, requestedCheckOut, requestedBreakOut, requestedBreakDuration, reason } = req.body;
         const userId = req.user.id;
+        const role = req.user.role;
+
+        if (role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN') {
+            return res.status(400).json({ message: 'Attendance regularization is not applicable for Administrator accounts.' });
+        }
         
         const employee = await prisma.employee.findUnique({ where: { userId } });
         if (!employee) return res.status(404).json({ message: 'Employee not found' });

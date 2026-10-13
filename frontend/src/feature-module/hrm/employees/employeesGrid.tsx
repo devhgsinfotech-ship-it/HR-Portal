@@ -14,6 +14,7 @@ type PasswordField = "password" | "confirmPassword";
 
 const EmployeesGrid = () => {
     const currentUser = (() => { try { return JSON.parse(localStorage.getItem('authUser') || '{}'); } catch { return {}; } })();
+    const currencySymbol = currentUser?.currencySymbol || (currentUser?.currency === 'USD' ? '$' : '₹');
     const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'COMPANY_ADMIN';
     const employeePermissions = currentUser?.permissions?.find((p: any) => p.module === 'EMPLOYEES') || {
       canRead: false,
@@ -1357,11 +1358,11 @@ const EmployeesGrid = () => {
                                                 <div className="d-flex justify-content-between p-3 bg-light rounded">
                                                     <div>
                                                         <span className="text-muted d-block">Gross Salary</span>
-                                                        <h4 className="text-primary mb-0">₹ {newEmp.grossSalary}</h4>
+                                                        <h4 className="text-primary mb-0">{currencySymbol} {newEmp.grossSalary}</h4>
                                                     </div>
                                                     <div className="text-end">
                                                         <span className="text-muted d-block">Net Salary</span>
-                                                        <h4 className="text-success mb-0">₹ {newEmp.netSalary}</h4>
+                                                        <h4 className="text-success mb-0">{currencySymbol} {newEmp.netSalary}</h4>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1856,11 +1857,11 @@ const EmployeesGrid = () => {
                                                 <div className="d-flex justify-content-between p-3 bg-light rounded">
                                                     <div>
                                                         <span className="text-muted d-block">Gross Salary</span>
-                                                        <h4 className="text-primary mb-0">₹ {editEmp.grossSalary}</h4>
+                                                        <h4 className="text-primary mb-0">{currencySymbol} {editEmp.grossSalary}</h4>
                                                     </div>
                                                     <div className="text-end">
                                                         <span className="text-muted d-block">Net Salary</span>
-                                                        <h4 className="text-success mb-0">₹ {editEmp.netSalary}</h4>
+                                                        <h4 className="text-success mb-0">{currencySymbol} {editEmp.netSalary}</h4>
                                                     </div>
                                                 </div>
                                             </div>

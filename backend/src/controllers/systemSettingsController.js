@@ -1,6 +1,7 @@
 // backend/src/controllers/systemSettingsController.js
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { getUsdToInrRate, convertInrToUsd, convertUsdToInr } = require('../utils/currencyRate');
 
 // Helper to ensure at least one default system setting exists
 async function getOrCreateSystemSetting() {
@@ -16,6 +17,80 @@ async function getOrCreateSystemSetting() {
         });
     }
     return setting;
+}
+
+// Convert all subscription plans and sync currency table
+async function applyCurrencyChange(targetCode) {
+    const cleanCode = (targetCode || 'INR').toUpperCase();
+    if (cleanCode !== 'INR' && cleanCode !== 'USD') {
+        throw new Error('Only INR (₹) and USD ($) currencies are supported.');
+    }
+
+    const isUSD = cleanCode === 'USD';
+    const cleanSymbol = isUSD ? '$' : '₹';
+
+    // 1. Fetch live exchange rate from free Currency API
+    let usdRate = 84.0;
+    if (isUSD) {
+        usdRate = await getUsdToInrRate();
+    }
+
+    // 2. Mark active currency in Currency table
+    await prisma.currency.updateMany({
+        data: { isDefault: false }
+    });
+
+    await prisma.currency.upsert({
+        where: { code: cleanCode },
+        update: {
+            isDefault: true,
+            symbol: cleanSymbol,
+            exchangeRate: isUSD ? usdRate : 1.0,
+            status: 'Active'
+        },
+        create: {
+            name: isUSD ? 'US Dollar' : 'Indian Rupee',
+            code: cleanCode,
+            symbol: cleanSymbol,
+            symbolPosition: 'Front',
+            exchangeRate: isUSD ? usdRate : 1.0,
+            isDefault: true,
+            status: 'Active'
+        }
+    });
+
+    // 3. Convert all subscription plans
+    const plans = await prisma.subscriptionPlan.findMany();
+    for (const p of plans) {
+        // Base Rupee price is the single source of truth
+        let baseMonthly = p.basePriceMonthly;
+        let baseYearly = p.basePriceYearly;
+
+        if (!baseMonthly || isNaN(baseMonthly)) {
+            baseMonthly = (p.currency === 'USD') ? convertUsdToInr(p.priceMonthly, usdRate) : p.priceMonthly;
+        }
+        if (!baseYearly || isNaN(baseYearly)) {
+            baseYearly = (p.currency === 'USD') ? convertUsdToInr(p.priceYearly, usdRate) : p.priceYearly;
+        }
+
+        const newMonthly = isUSD ? convertInrToUsd(baseMonthly, usdRate) : baseMonthly;
+        const newYearly = isUSD ? convertInrToUsd(baseYearly, usdRate) : baseYearly;
+
+        await prisma.subscriptionPlan.update({
+            where: { id: p.id },
+            data: {
+                priceMonthly: newMonthly,
+                priceYearly: newYearly,
+                basePriceMonthly: baseMonthly,
+                basePriceYearly: baseYearly,
+                currency: cleanCode,
+                currencySymbol: cleanSymbol
+            }
+        });
+    }
+
+    console.log(`[Currency] Applied ${cleanCode} (${cleanSymbol}) with live USD->INR rate ${usdRate}. Converted ${plans.length} plans.`);
+    return { cleanCode, cleanSymbol, usdRate };
 }
 
 // GET /api/system-settings - public or authenticated
@@ -46,7 +121,7 @@ async function updateSystemSettings(req, res) {
         }
 
         const current = await getOrCreateSystemSetting();
-        const { systemName, currency, currencySymbol, logoUrl } = req.body;
+        const { systemName, currency, logoUrl } = req.body;
 
         let newLogoUrl = logoUrl;
         if (req.file) {
@@ -56,46 +131,21 @@ async function updateSystemSettings(req, res) {
         const updateData = {};
         if (systemName !== undefined) updateData.systemName = systemName;
         if (newLogoUrl !== undefined) updateData.logoUrl = newLogoUrl;
-        if (currency !== undefined) updateData.currency = currency.toUpperCase();
-        if (currencySymbol !== undefined) updateData.currencySymbol = currencySymbol;
+
+        if (currency) {
+            const cleanCode = currency.toUpperCase();
+            if (cleanCode !== 'INR' && cleanCode !== 'USD') {
+                return res.status(400).json({ success: false, message: 'Only INR (₹) and USD ($) currencies are supported.' });
+            }
+            const { cleanSymbol } = await applyCurrencyChange(cleanCode);
+            updateData.currency = cleanCode;
+            updateData.currencySymbol = cleanSymbol;
+        }
 
         const updated = await prisma.systemSetting.update({
             where: { id: current.id },
             data: updateData,
         });
-
-        // If currency changed, also sync Currency model default flag and update all subscription plans
-        if (currency) {
-            const cleanCode = currency.toUpperCase();
-            const cleanSymbol = updateData.currencySymbol || current.currencySymbol;
-            await prisma.currency.updateMany({
-                data: { isDefault: false }
-            });
-            await prisma.currency.upsert({
-                where: { code: cleanCode },
-                update: {
-                    isDefault: true,
-                    symbol: cleanSymbol,
-                    status: 'Active'
-                },
-                create: {
-                    name: cleanCode,
-                    code: cleanCode,
-                    symbol: cleanSymbol,
-                    symbolPosition: 'Front',
-                    isDefault: true,
-                    status: 'Active'
-                }
-            });
-
-            // Update all subscription plans so membership plans display the selected currency
-            await prisma.subscriptionPlan.updateMany({
-                data: {
-                    currency: cleanCode,
-                    currencySymbol: cleanSymbol,
-                }
-            });
-        }
 
         res.json({
             success: true,
@@ -104,7 +154,7 @@ async function updateSystemSettings(req, res) {
         });
     } catch (err) {
         console.error('Error updating system settings:', err);
-        res.status(500).json({ success: false, message: 'Failed to update system settings' });
+        res.status(500).json({ success: false, message: err.message || 'Failed to update system settings' });
     }
 }
 
@@ -112,6 +162,7 @@ async function updateSystemSettings(req, res) {
 async function getCurrencies(req, res) {
     try {
         const currencies = await prisma.currency.findMany({
+            where: { code: { in: ['INR', 'USD'] } },
             orderBy: [
                 { isDefault: 'desc' },
                 { name: 'asc' }
@@ -131,41 +182,22 @@ async function createCurrency(req, res) {
             return res.status(403).json({ success: false, message: 'Unauthorized' });
         }
 
-        const { name, code, symbol, symbolPosition, isDefault, status } = req.body;
-        if (!name || !code || !symbol) {
-            return res.status(400).json({ success: false, message: 'Name, code, and symbol are required' });
-        }
+        const { name, code, symbol, isDefault } = req.body;
+        const cleanCode = (code || '').toUpperCase().trim();
 
-        const cleanCode = code.toUpperCase().trim();
-        const existing = await prisma.currency.findUnique({ where: { code: cleanCode } });
-        if (existing) {
-            return res.status(400).json({ success: false, message: `Currency ${cleanCode} already exists` });
+        if (cleanCode !== 'INR' && cleanCode !== 'USD') {
+            return res.status(400).json({ success: false, message: 'Only INR (₹) and USD ($) currencies are supported.' });
         }
 
         if (isDefault) {
-            await prisma.currency.updateMany({ data: { isDefault: false } });
-            const currentSetting = await getOrCreateSystemSetting();
-            await prisma.systemSetting.update({
-                where: { id: currentSetting.id },
-                data: { currency: cleanCode, currencySymbol: symbol }
-            });
+            await applyCurrencyChange(cleanCode);
         }
 
-        const currency = await prisma.currency.create({
-            data: {
-                name,
-                code: cleanCode,
-                symbol,
-                symbolPosition: symbolPosition || 'Front',
-                isDefault: Boolean(isDefault),
-                status: status || 'Active',
-            }
-        });
-
-        res.json({ success: true, message: 'Currency created successfully', currency });
+        const currency = await prisma.currency.findUnique({ where: { code: cleanCode } });
+        res.json({ success: true, message: 'Currency updated successfully', currency });
     } catch (err) {
         console.error('Error creating currency:', err);
-        res.status(500).json({ success: false, message: 'Failed to create currency' });
+        res.status(500).json({ success: false, message: err.message || 'Failed to create currency' });
     }
 }
 
@@ -177,37 +209,35 @@ async function updateCurrency(req, res) {
         }
 
         const id = parseInt(req.params.id, 10);
-        const { name, code, symbol, symbolPosition, isDefault, status } = req.body;
+        const { isDefault, exchangeRate } = req.body;
 
-        const updateData = {};
-        if (name !== undefined) updateData.name = name;
-        if (code !== undefined) updateData.code = code.toUpperCase().trim();
-        if (symbol !== undefined) updateData.symbol = symbol;
-        if (symbolPosition !== undefined) updateData.symbolPosition = symbolPosition;
-        if (status !== undefined) updateData.status = status;
+        const current = await prisma.currency.findUnique({ where: { id } });
+        if (!current) {
+            return res.status(404).json({ success: false, message: 'Currency not found' });
+        }
 
         if (isDefault) {
-            updateData.isDefault = true;
-            await prisma.currency.updateMany({ data: { isDefault: false } });
+            await applyCurrencyChange(current.code);
             const currentSetting = await getOrCreateSystemSetting();
             await prisma.systemSetting.update({
                 where: { id: currentSetting.id },
                 data: {
-                    currency: updateData.code || undefined,
-                    currencySymbol: updateData.symbol || undefined,
+                    currency: current.code,
+                    currencySymbol: current.code === 'USD' ? '$' : '₹'
                 }
+            });
+        } else if (exchangeRate !== undefined) {
+            await prisma.currency.update({
+                where: { id },
+                data: { exchangeRate: parseFloat(exchangeRate) }
             });
         }
 
-        const updated = await prisma.currency.update({
-            where: { id },
-            data: updateData,
-        });
-
+        const updated = await prisma.currency.findUnique({ where: { id } });
         res.json({ success: true, message: 'Currency updated successfully', currency: updated });
     } catch (err) {
         console.error('Error updating currency:', err);
-        res.status(500).json({ success: false, message: 'Failed to update currency' });
+        res.status(500).json({ success: false, message: err.message || 'Failed to update currency' });
     }
 }
 
@@ -218,18 +248,7 @@ async function deleteCurrency(req, res) {
             return res.status(403).json({ success: false, message: 'Unauthorized' });
         }
 
-        const id = parseInt(req.params.id, 10);
-        const existing = await prisma.currency.findUnique({ where: { id } });
-        if (!existing) {
-            return res.status(404).json({ success: false, message: 'Currency not found' });
-        }
-
-        if (existing.isDefault) {
-            return res.status(400).json({ success: false, message: 'Cannot delete the default active currency' });
-        }
-
-        await prisma.currency.delete({ where: { id } });
-        res.json({ success: true, message: 'Currency deleted successfully' });
+        return res.status(400).json({ success: false, message: 'Default INR and USD currencies cannot be deleted.' });
     } catch (err) {
         console.error('Error deleting currency:', err);
         res.status(500).json({ success: false, message: 'Failed to delete currency' });
@@ -244,52 +263,43 @@ async function setDefaultCurrency(req, res) {
         }
 
         const { currencyId, code } = req.body;
-        let target = null;
+        let cleanCode = 'INR';
+
         if (currencyId) {
-            target = await prisma.currency.findUnique({ where: { id: parseInt(currencyId, 10) } });
+            const target = await prisma.currency.findUnique({ where: { id: parseInt(currencyId, 10) } });
+            if (target) cleanCode = target.code;
         } else if (code) {
-            target = await prisma.currency.findUnique({ where: { code: code.toUpperCase() } });
+            cleanCode = code.toUpperCase().trim();
         }
 
-        if (!target) {
-            return res.status(404).json({ success: false, message: 'Currency not found' });
+        if (cleanCode !== 'INR' && cleanCode !== 'USD') {
+            return res.status(400).json({ success: false, message: 'Only INR (₹) and USD ($) currencies are supported.' });
         }
 
-        // Make all non-default
-        await prisma.currency.updateMany({ data: { isDefault: false } });
-        // Set target as default and active
-        const updatedTarget = await prisma.currency.update({
-            where: { id: target.id },
-            data: { isDefault: true, status: 'Active' }
-        });
+        // Apply conversion across all membership plans using the currency API rate
+        const { cleanSymbol } = await applyCurrencyChange(cleanCode);
 
         // Update SystemSetting
         const currentSetting = await getOrCreateSystemSetting();
         const updatedSetting = await prisma.systemSetting.update({
             where: { id: currentSetting.id },
             data: {
-                currency: target.code,
-                currencySymbol: target.symbol,
+                currency: cleanCode,
+                currencySymbol: cleanSymbol,
             }
         });
 
-        // Update all subscription plans so membership plans display the selected currency
-        await prisma.subscriptionPlan.updateMany({
-            data: {
-                currency: target.code,
-                currencySymbol: target.symbol,
-            }
-        });
+        const updatedCurrency = await prisma.currency.findUnique({ where: { code: cleanCode } });
 
         res.json({
             success: true,
-            message: `Default currency successfully changed to ${target.name} (${target.symbol} ${target.code})`,
-            currency: updatedTarget,
+            message: `Default currency changed to ${cleanCode} (${cleanSymbol}). Plan prices converted successfully!`,
+            currency: updatedCurrency,
             settings: updatedSetting,
         });
     } catch (err) {
         console.error('Error setting default currency:', err);
-        res.status(500).json({ success: false, message: 'Failed to set default currency' });
+        res.status(500).json({ success: false, message: err.message || 'Failed to set default currency' });
     }
 }
 

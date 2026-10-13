@@ -6,13 +6,8 @@ import { useAppDispatch, useAppSelector } from "../../../core/data/redux/store";
 import { updateUser } from "../../../core/data/redux/authSlice";
 
 const POPULAR_CURRENCIES = [
-  { code: "INR", symbol: "₹", name: "Indian Rupee" },
-  { code: "USD", symbol: "$", name: "US Dollar" },
-  { code: "EUR", symbol: "€", name: "Euro" },
-  { code: "GBP", symbol: "£", name: "British Pound" },
-  { code: "AED", symbol: "د.إ", name: "UAE Dirham" },
-  { code: "CAD", symbol: "$", name: "Canadian Dollar" },
-  { code: "AUD", symbol: "$", name: "Australian Dollar" },
+  { code: "INR", symbol: "₹", name: "Indian Rupee (Default)" },
+  { code: "USD", symbol: "$", name: "US Dollar (Converted)" },
 ];
 
 const SuperAdminSettings: React.FC = () => {
@@ -221,11 +216,6 @@ const SuperAdminSettings: React.FC = () => {
               </ol>
             </nav>
           </div>
-          <div className="d-flex align-items-center gap-2">
-            <Link to={routes.currencies} className="btn btn-outline-primary btn-sm">
-              <i className="ti ti-currency-dollar me-1" /> Manage Currencies Table
-            </Link>
-          </div>
         </div>
 
         {/* Tenant Isolation Banner */}
@@ -383,120 +373,100 @@ const SuperAdminSettings: React.FC = () => {
                         Configure the default billing &amp; display currency for packages and membership plans.
                       </p>
                     </div>
-                    <span className="badge bg-success-transparent text-success">
+                    <span className="badge bg-success-transparent text-success fw-semibold">
                       Active: {currencySymbol} {currency}
                     </span>
                   </div>
                 </div>
-                <div className="card-body">
-                  <div className="mb-4">
-                    <label className="form-label fw-semibold mb-2">Current Active Currency</label>
-                    <div className="p-3 bg-light rounded border d-flex align-items-center justify-content-between">
-                      <div className="d-flex align-items-center gap-3">
-                        <div
-                          className="avatar avatar-md rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fs-18 fw-bold"
-                          style={{ width: "42px", height: "42px" }}
-                        >
-                          {currencySymbol}
-                        </div>
-                        <div>
-                          <h6 className="mb-0 fw-bold text-dark">{currency}</h6>
-                          <span className="text-muted fs-12">
-                            Symbol: <strong>{currencySymbol}</strong> • System Default
+                <div className="card-body d-flex flex-column justify-content-between">
+                  <div>
+                    {/* Current Active Currency Summary */}
+                    <div className="mb-4">
+                      <label className="form-label fw-semibold text-muted fs-12 text-uppercase mb-2">
+                        Current Active Currency
+                      </label>
+                      <div className="d-flex align-items-center justify-content-between p-3 bg-light rounded-3 border">
+                        <div className="d-flex align-items-center gap-3">
+                          <span
+                            className="avatar avatar-lg rounded-circle text-white fw-bold fs-20 d-flex align-items-center justify-content-center shadow-xs"
+                            style={{
+                              backgroundColor: currency === "USD" ? "#198754" : "#e65f2b",
+                              width: "48px",
+                              height: "48px",
+                            }}
+                          >
+                            {currencySymbol}
                           </span>
+                          <div>
+                            <div className="fw-bold text-dark fs-16">
+                              {currency === "USD" ? "USD - US Dollar" : "INR - Indian Rupee"}
+                            </div>
+                            <div className="fs-12 text-muted">
+                              Symbol: {currencySymbol} • {currency === "USD" ? "Live Exchange Converted" : "System Default Base"}
+                            </div>
+                          </div>
+                        </div>
+                        <span className="badge bg-success text-white py-1 px-2 fw-medium fs-12">
+                          <i className="ti ti-check me-1" /> Active Default
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Simple Dropdown & Select */}
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold text-dark">
+                        Select Platform Currency
+                      </label>
+                      <div className="row g-2">
+                        <div className="col-sm-8">
+                          <select
+                            className="form-select form-select-lg"
+                            value={currency}
+                            onChange={(e) => {
+                              const newCode = e.target.value;
+                              setCurrency(newCode);
+                              setCurrencySymbol(newCode === "USD" ? "$" : "₹");
+                            }}
+                          >
+                            <option value="INR">Indian Rupee (₹ INR)</option>
+                            <option value="USD">US Dollar ($ USD)</option>
+                          </select>
+                        </div>
+                        <div className="col-sm-4">
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-lg w-100 fw-semibold"
+                            onClick={() => handleSaveCurrency(currency, currencySymbol)}
+                            disabled={savingCurrency}
+                          >
+                            {savingCurrency ? (
+                              <>
+                                <span className="spinner-border spinner-border-sm me-1" role="status" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                <i className="ti ti-check me-1" /> Set Active
+                              </>
+                            )}
+                          </button>
                         </div>
                       </div>
-                      <div className="text-end">
-                        <span className="badge bg-success">Active Default</span>
-                        <div className="text-muted fs-11 mt-1">Applied across SaaS packages</div>
+                      <div className="form-text text-muted mt-2 fs-12">
+                        Membership plans and SaaS invoices will calculate in this currency.
                       </div>
                     </div>
                   </div>
 
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold mb-2">Change Currency Quickly</label>
-                    <div className="row g-2 mb-3">
-                      {POPULAR_CURRENCIES.map((c) => {
-                        const isSelected = currency === c.code;
-                        return (
-                          <div className="col-6 col-sm-4" key={c.code}>
-                            <button
-                              type="button"
-                              className={`btn w-100 text-start p-2 border rounded ${
-                                isSelected
-                                  ? "btn-primary shadow-xs"
-                                  : "btn-outline-light text-dark bg-white"
-                              }`}
-                              onClick={() => {
-                                setCurrency(c.code);
-                                setCurrencySymbol(c.symbol);
-                                handleSaveCurrency(c.code, c.symbol);
-                              }}
-                              disabled={savingCurrency}
-                            >
-                              <div className="d-flex align-items-center justify-content-between">
-                                <span className="fw-bold">{c.code}</span>
-                                <span className="badge bg-light text-dark">{c.symbol}</span>
-                              </div>
-                              <div className="fs-11 text-truncate" style={{ opacity: 0.85 }}>
-                                {c.name}
-                              </div>
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Custom Currency Selection</label>
-                    <div className="input-group">
-                      <select
-                        className="form-select"
-                        value={currency}
-                        onChange={(e) => {
-                          const code = e.target.value;
-                          const found =
-                            allCurrencies.find((c: any) => c.code === code) ||
-                            POPULAR_CURRENCIES.find((c) => c.code === code);
-                          setCurrency(code);
-                          if (found) setCurrencySymbol(found.symbol);
-                        }}
-                      >
-                        {allCurrencies.length > 0
-                          ? allCurrencies.map((c: any) => (
-                              <option key={c.id || c.code} value={c.code}>
-                                {c.name} ({c.symbol} {c.code})
-                              </option>
-                            ))
-                          : POPULAR_CURRENCIES.map((c) => (
-                              <option key={c.code} value={c.code}>
-                                {c.name} ({c.symbol} {c.code})
-                              </option>
-                            ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => handleSaveCurrency()}
-                        disabled={savingCurrency}
-                      >
-                        {savingCurrency ? (
-                          <span className="spinner-border spinner-border-sm" role="status" />
-                        ) : (
-                          "Set Active Currency"
-                        )}
-                      </button>
-                    </div>
-                    <small className="text-muted d-block mt-1">
-                      Membership plans and SaaS invoices will calculate in this currency.
-                    </small>
+                  <div className="alert alert-light border py-2 px-3 fs-12 mt-3 mb-0 text-muted">
+                    <i className="ti ti-info-circle text-primary me-1" />
+                    Only <strong>INR (₹)</strong> and <strong>USD ($)</strong> are supported across the platform. Company admins can choose their display currency in their company settings.
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* General Platform Info Card */}
+            {/* General Platform Info Card (No Bottom Currency Selection) */}
             <div className="col-12">
               <div className="card shadow-sm border">
                 <div className="card-header bg-white border-bottom py-3">
@@ -504,8 +474,8 @@ const SuperAdminSettings: React.FC = () => {
                 </div>
                 <div className="card-body">
                   <form onSubmit={handleSaveGeneral}>
-                    <div className="row g-3">
-                      <div className="col-md-6">
+                    <div className="row g-3 align-items-end">
+                      <div className="col-md-8">
                         <label className="form-label fw-semibold">Platform Name</label>
                         <input
                           type="text"
@@ -514,45 +484,28 @@ const SuperAdminSettings: React.FC = () => {
                           onChange={(e) => setSystemName(e.target.value)}
                           placeholder="e.g. HR Portal / SaaS HRMS"
                         />
+                        <div className="form-text text-muted">
+                          The official title displayed across the platform and notification emails.
+                        </div>
                       </div>
-                      <div className="col-md-3">
-                        <label className="form-label fw-semibold">System Currency Code</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={currency}
-                          onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-                          placeholder="INR, USD, etc."
-                        />
+                      <div className="col-md-4 text-md-end">
+                        <button
+                          type="submit"
+                          className="btn btn-primary px-4 py-2"
+                          disabled={savingGeneral}
+                        >
+                          {savingGeneral ? (
+                            <>
+                              <span className="spinner-border spinner-border-sm me-2" role="status" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <i className="ti ti-device-floppy me-1" /> Save Platform Details
+                            </>
+                          )}
+                        </button>
                       </div>
-                      <div className="col-md-3">
-                        <label className="form-label fw-semibold">System Currency Symbol</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={currencySymbol}
-                          onChange={(e) => setCurrencySymbol(e.target.value)}
-                          placeholder="₹, $, €, etc."
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-4 text-end">
-                      <button
-                        type="submit"
-                        className="btn btn-primary"
-                        disabled={savingGeneral}
-                      >
-                        {savingGeneral ? (
-                          <>
-                            <span className="spinner-border spinner-border-sm me-2" role="status" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <i className="ti ti-device-floppy me-1" /> Save Platform Details
-                          </>
-                        )}
-                      </button>
                     </div>
                   </form>
                 </div>

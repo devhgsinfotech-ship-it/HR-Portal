@@ -3,6 +3,7 @@
 // Copyright (c) 2025 HGS Infotech Private Limited. All rights reserved.
 
 import { useState, useEffect, useCallback } from "react";
+import { useSelector } from "react-redux";
 import apiClient from "../../../core/utils/apiClient";
 import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
@@ -10,8 +11,6 @@ import { all_routes } from "../../../router/all_routes";
 const routes = all_routes;
 
 const MONTHS = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
-const fmt = (n: number | string) =>
-  "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface Payslip {
   id: number;
@@ -38,6 +37,12 @@ interface Payslip {
 }
 
 const PayrollPayslips = () => {
+  const user = useSelector((state: any) => state.auth?.user);
+  const currencySymbol = user?.currencySymbol || (user?.currency === "USD" ? "$" : "₹");
+  const isUSD = (user?.currency || "").toUpperCase() === "USD";
+  const fmt = (n: number | string) =>
+    currencySymbol + Number(n).toLocaleString(isUSD ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const currentUser = (() => { try { return JSON.parse(localStorage.getItem("authUser") || "{}"); } catch { return {}; } })();
   const isEmployee = currentUser?.role === "EMPLOYEE";
   const path = window.location.pathname;

@@ -19,7 +19,11 @@ async function login(req, res) {
         const user = await prisma.user.findUnique({
             where: { email },
             include: {
-                company: true,
+                company: {
+                    include: {
+                        settings: true
+                    }
+                },
                 employee: {
                     include: {
                         companyRole: {
@@ -123,6 +127,8 @@ async function login(req, res) {
                 companyName: user.company?.name || null,
                 subdomain: user.company?.subdomain || null,
                 companyLogoUrl: user.role === 'SUPER_ADMIN' ? superAdminLogo : (user.company?.logoUrl || null),
+                currency: user.company?.settings?.currency || 'INR',
+                currencySymbol: user.company?.settings?.currencySymbol || (user.company?.settings?.currency === 'USD' ? '$' : '₹'),
                 profilePhotoUrl: user.employee?.profilePhotoUrl || null,
                 onboardingStatus: (user.role === 'SUPER_ADMIN' || user.role === 'COMPANY_ADMIN') ? 'COMPLETED' : (user.employee?.onboardingStatus || 'INVITED'),
                 companyRoleName: companyRole?.name || user.employee?.companyRole?.name || null,
@@ -847,24 +853,49 @@ async function getCompanySettings(req, res) {
         }
         const company = await prisma.company.findUnique({
             where: { id: companyId },
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                phone: true,
-                subdomain: true,
-                emailDomain: true,
-                industry: true,
-                companySize: true,
-                address: true,
-                logoUrl: true,
-                createdAt: true,
+            include: {
+                settings: true
             }
         });
         if (!company) {
             return res.status(404).json({ message: 'Company not found' });
         }
-        res.json({ success: true, company });
+
+        let settings = company.settings;
+        if (!settings) {
+            settings = await prisma.companySetting.create({
+                data: {
+                    companyId: company.id,
+                    currency: 'INR',
+                    currencySymbol: '₹',
+                    timezone: 'Asia/Kolkata',
+                    workingDays: 'Mon,Tue,Wed,Thu,Fri',
+                    officeStartTime: '09:00',
+                    officeEndTime: '18:00',
+                    payrollCycleStartDay: 1
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            company: {
+                id: company.id,
+                name: company.name,
+                email: company.email,
+                phone: company.phone,
+                subdomain: company.subdomain,
+                emailDomain: company.emailDomain,
+                industry: company.industry,
+                companySize: company.companySize,
+                address: company.address,
+                logoUrl: company.logoUrl,
+                createdAt: company.createdAt,
+                currency: settings.currency || 'INR',
+                currencySymbol: settings.currencySymbol || (settings.currency === 'USD' ? '$' : '₹'),
+                settings
+            }
+        });
     } catch (err) {
         console.error('Error fetching company settings:', err);
         res.status(500).json({ message: 'Failed to fetch company settings' });
@@ -882,7 +913,7 @@ async function updateCompanySettings(req, res) {
             return res.status(403).json({ message: 'Unauthorized: Only Company Admins can modify their company settings' });
         }
 
-        const { name, phone, email, address, industry, companySize, logoUrl } = req.body;
+        const { name, phone, email, address, industry, companySize, logoUrl, currency } = req.body;
         
         let newLogoUrl = logoUrl;
         if (req.file) {
@@ -903,7 +934,36 @@ async function updateCompanySettings(req, res) {
             data: updateData,
         });
 
-        res.json({ success: true, message: 'Company settings updated successfully', company: updatedCompany });
+        let updatedSettings = null;
+        if (currency !== undefined) {
+            const cleanCurr = currency.toUpperCase() === 'USD' ? 'USD' : 'INR';
+            const cleanSym = cleanCurr === 'USD' ? '$' : '₹';
+            updatedSettings = await prisma.companySetting.upsert({
+                where: { companyId },
+                update: {
+                    currency: cleanCurr,
+                    currencySymbol: cleanSym
+                },
+                create: {
+                    companyId,
+                    currency: cleanCurr,
+                    currencySymbol: cleanSym
+                }
+            });
+        } else {
+            updatedSettings = await prisma.companySetting.findUnique({ where: { companyId } });
+        }
+
+        res.json({
+            success: true,
+            message: 'Company settings updated successfully',
+            company: {
+                ...updatedCompany,
+                currency: updatedSettings?.currency || 'INR',
+                currencySymbol: updatedSettings?.currencySymbol || (updatedSettings?.currency === 'USD' ? '$' : '₹'),
+                settings: updatedSettings
+            }
+        });
     } catch (err) {
         console.error('Error updating company settings:', err);
         res.status(500).json({ message: 'Failed to update company settings' });
@@ -916,7 +976,11 @@ async function getProfile(req, res) {
         const user = await prisma.user.findUnique({
             where: { id: userId },
             include: {
-                company: true,
+                company: {
+                    include: {
+                        settings: true
+                    }
+                },
                 employee: true,
             }
         });
@@ -939,6 +1003,8 @@ async function getProfile(req, res) {
             companyName: user.company?.name || null,
             subdomain: user.company?.subdomain || null,
             companyLogoUrl: user.role === 'SUPER_ADMIN' ? superAdminLogo : (user.company?.logoUrl || null),
+            currency: user.company?.settings?.currency || 'INR',
+            currencySymbol: user.company?.settings?.currencySymbol || (user.company?.settings?.currency === 'USD' ? '$' : '₹'),
             firstName: user.employee?.firstName || user.name.split(' ')[0] || '',
             lastName: user.employee?.lastName || user.name.split(' ').slice(1).join(' ') || '',
             phone: user.employee?.phone || user.company?.phone || '',

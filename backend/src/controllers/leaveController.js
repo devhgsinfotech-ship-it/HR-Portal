@@ -49,10 +49,19 @@ async function getLeaveRequests(req, res) {
         const userId = req.user.id;
         const role = req.user.role;
 
+        // Company Admin and Super Admin do not have personal employee leaves
+        if ((role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN') && req.query.mine === 'true') {
+            return res.json([]);
+        }
+
         let whereClause = {};
         if (companyId) {
             whereClause.employee = {
-                user: { companyId }
+                user: { companyId, role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } }
+            };
+        } else {
+            whereClause.employee = {
+                user: { role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } }
             };
         }
 
@@ -339,6 +348,13 @@ async function updateLeaveStatus(req, res) {
 async function getLeaveBalances(req, res) {
     try {
         const userId = req.user.id;
+        const role = req.user.role;
+
+        // Leave balances are not applicable for Administrator accounts
+        if (role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN') {
+            return res.json([]);
+        }
+
         const currentYear = new Date().getFullYear();
 
         const employee = await prisma.employee.findUnique({ where: { userId } });
@@ -597,9 +613,9 @@ async function getLeaveAdminSummary(req, res) {
     try {
         const companyId = parseInt(req.user.companyId, 10);
 
-        // 1. Total active employees in the company
+        // 1. Total active employees in the company (excluding administrators)
         const totalEmployees = await prisma.employee.count({
-            where: { user: { companyId } }
+            where: { user: { companyId, role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } } }
         });
 
         // 2. Count of employees present today
@@ -610,7 +626,7 @@ async function getLeaveAdminSummary(req, res) {
 
         const presentToday = await prisma.attendanceRecord.count({
             where: {
-                employee: { user: { companyId } },
+                employee: { user: { companyId, role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } } },
                 date: { gte: todayStart, lte: todayEnd }
             }
         });
@@ -619,7 +635,7 @@ async function getLeaveAdminSummary(req, res) {
         const pendingCount = await prisma.leaveRequest.count({
             where: {
                 status: 'PENDING',
-                employee: { user: { companyId } }
+                employee: { user: { companyId, role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } } }
             }
         });
 
@@ -627,7 +643,7 @@ async function getLeaveAdminSummary(req, res) {
         const activeLeavesToday = await prisma.leaveRequest.findMany({
             where: {
                 status: 'APPROVED',
-                employee: { user: { companyId } },
+                employee: { user: { companyId, role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } } },
                 startDate: { lte: todayEnd },
                 endDate: { gte: todayStart }
             },

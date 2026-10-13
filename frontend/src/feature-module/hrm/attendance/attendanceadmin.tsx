@@ -12,15 +12,25 @@ import CollapseHeader from '../../../core/common/collapse-header/collapse-header
 
 // Define a type for attendance admin data
 interface AttendanceAdminData {
+  key?: string | number;
   Employee: string;
   Image: string;
   Role: string;
+  Date: string;
+  dayName?: string;
+  formattedDate?: string;
   Status: string;
   CheckIn: string;
   CheckOut: string;
   Break: string;
   Late: string;
+  Overtime?: string;
   ProductionHours: string;
+  _rawDate?: string;
+  _rawCheckIn?: string;
+  _rawCheckOut?: string;
+  _rawBreakMinutes?: number;
+  _rawLateMinutes?: number;
 }
 
 const AttendanceAdmin = () => {
@@ -103,26 +113,39 @@ const AttendanceAdmin = () => {
         return `${h}h ${m}m`;
       };
 
-      const mapped = res.data.map((rec: any) => ({
-        key: rec.id,
-        Employee: `${rec.employee?.firstName || ''} ${rec.employee?.lastName || ''}`.trim() || 'Employee',
-        Role: rec.employee?.designation?.name || 'Staff',
-        Department: rec.employee?.department?.name || rec.departmentName || 'Operations',
-        DepartmentId: rec.employee?.departmentId || rec.employee?.department?.id,
-        Image: rec.employee?.profilePhotoUrl ? (rec.employee.profilePhotoUrl.startsWith('/') ? rec.employee.profilePhotoUrl.substring(1) : rec.employee.profilePhotoUrl) : 'user-01.jpg',
-        Status: rec.status,
-        CheckIn: rec.checkIn ? new Date(rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
-        CheckOut: rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
-        Break: rec.breakMinutes ? `${rec.breakMinutes} Min` : '0 Min',
-        Late: rec.lateMinutes ? `${rec.lateMinutes} Min` : '0 Min',
-        Overtime: formatHrs(rec.overtimeHours),
-        ProductionHours: formatHrs(rec.workingHours),
-        _rawCheckIn: rec.checkIn,
-        _rawCheckOut: rec.checkOut,
-        _rawBreakMinutes: rec.breakMinutes,
-        _rawLateMinutes: rec.lateMinutes || 0,
-        _rawDate: rec.date
-      }));
+      const mapped = res.data.map((rec: any) => {
+        const rawDate = rec.date || rec.checkIn;
+        const d = rawDate ? new Date(rawDate) : new Date();
+        const dayNum = String(d.getDate()).padStart(2, '0');
+        const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
+        const yearNum = d.getFullYear();
+        const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' });
+        const formattedDate = `${dayNum} ${monthShort} ${yearNum}`;
+
+        return {
+          key: rec.id,
+          Employee: `${rec.employee?.firstName || ''} ${rec.employee?.lastName || ''}`.trim() || 'Employee',
+          Role: rec.employee?.designation?.name || 'Staff',
+          Department: rec.employee?.department?.name || rec.departmentName || 'Operations',
+          DepartmentId: rec.employee?.departmentId || rec.employee?.department?.id,
+          Image: rec.employee?.profilePhotoUrl ? (rec.employee.profilePhotoUrl.startsWith('/') ? rec.employee.profilePhotoUrl.substring(1) : rec.employee.profilePhotoUrl) : 'user-01.jpg',
+          Date: formattedDate,
+          dayName: dayOfWeek,
+          formattedDate: formattedDate,
+          Status: rec.status,
+          CheckIn: rec.checkIn ? new Date(rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+          CheckOut: rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+          Break: rec.breakMinutes ? `${rec.breakMinutes} Min` : '0 Min',
+          Late: rec.lateMinutes ? `${rec.lateMinutes} Min` : '0 Min',
+          Overtime: formatHrs(rec.overtimeHours),
+          ProductionHours: formatHrs(rec.workingHours),
+          _rawCheckIn: rec.checkIn,
+          _rawCheckOut: rec.checkOut,
+          _rawBreakMinutes: rec.breakMinutes,
+          _rawLateMinutes: rec.lateMinutes || 0,
+          _rawDate: rec.date
+        };
+      });
       setDbLogs(mapped);
     } catch (err) {
       console.error(err);
@@ -353,7 +376,9 @@ const AttendanceAdmin = () => {
         const role = String(rec.Role || '').toLowerCase();
         const dept = String(rec.Department || '').toLowerCase();
         const status = String(rec.Status || '').toLowerCase();
-        return empName.includes(q) || role.includes(q) || dept.includes(q) || status.includes(q);
+        const dateStr = String(rec.formattedDate || rec.Date || '').toLowerCase();
+        const dayStr = String(rec.dayName || '').toLowerCase();
+        return empName.includes(q) || role.includes(q) || dept.includes(q) || status.includes(q) || dateStr.includes(q) || dayStr.includes(q);
       });
     }
 
@@ -400,6 +425,87 @@ const AttendanceAdmin = () => {
         </div>
       ),
       sorter: (a: AttendanceAdminData, b: AttendanceAdminData) => a.Employee.length - b.Employee.length,
+    },
+    {
+      title: "Date & Day",
+      dataIndex: "Date",
+      render: (_text: string, record: AttendanceAdminData) => {
+        const rawDateVal = record._rawDate || record.Date;
+        if (!rawDateVal) return <span className="text-muted">N/A</span>;
+        const d = new Date(rawDateVal);
+        if (isNaN(d.getTime())) return <span className="text-muted">N/A</span>;
+
+        const now = new Date();
+        const isToday =
+          d.getDate() === now.getDate() &&
+          d.getMonth() === now.getMonth() &&
+          d.getFullYear() === now.getFullYear();
+
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        const isYesterday =
+          d.getDate() === yesterday.getDate() &&
+          d.getMonth() === yesterday.getMonth() &&
+          d.getFullYear() === yesterday.getFullYear();
+
+        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+
+        const dayNum = String(d.getDate()).padStart(2, '0');
+        const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
+        const yearNum = d.getFullYear();
+        const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' });
+        const fullDateStr = `${dayNum} ${monthShort} ${yearNum}`;
+
+        return (
+          <div className="d-flex align-items-center">
+            {/* Attractive Mini Calendar Block */}
+            <div
+              className="d-flex flex-column align-items-center justify-content-center rounded-2 me-2 border text-center flex-shrink-0 shadow-xs"
+              style={{
+                width: '44px',
+                height: '44px',
+                background: isToday ? '#ecfdf5' : isWeekend ? '#f8fafc' : '#ffffff',
+                borderColor: isToday ? '#10b981' : isWeekend ? '#cbd5e1' : '#e2e8f0',
+                lineHeight: 1
+              }}
+              title={`${dayOfWeek}, ${fullDateStr}`}
+            >
+              <span
+                className={`text-uppercase fw-bold ${isToday ? 'text-success' : isWeekend ? 'text-secondary' : 'text-muted'}`}
+                style={{ fontSize: '9px', letterSpacing: '0.5px' }}
+              >
+                {monthShort}
+              </span>
+              <span
+                className={`fw-bold fs-15 mt-1 ${isToday ? 'text-success' : isWeekend ? 'text-secondary' : 'text-dark'}`}
+              >
+                {dayNum}
+              </span>
+            </div>
+            <div>
+              <div className="d-flex align-items-center gap-1">
+                <span className="fw-semibold text-dark fs-13 mb-0">{dayOfWeek}</span>
+                {isToday && (
+                  <span className="badge bg-success-transparent text-success border border-success-subtle fs-10 px-1.5 py-0.5 rounded-pill">
+                    Today
+                  </span>
+                )}
+                {isYesterday && (
+                  <span className="badge bg-primary-transparent text-primary border border-primary-subtle fs-10 px-1.5 py-0.5 rounded-pill">
+                    Yesterday
+                  </span>
+                )}
+              </div>
+              <span className="fs-12 text-muted d-block mt-0.5">
+                <i className="ti ti-calendar me-1 fs-11 text-secondary" />
+                {fullDateStr}
+              </span>
+            </div>
+          </div>
+        );
+      },
+      sorter: (a: AttendanceAdminData, b: AttendanceAdminData) =>
+        new Date(a._rawDate || a.Date || 0).getTime() - new Date(b._rawDate || b.Date || 0).getTime(),
     },
     {
       title: "Status",
@@ -581,11 +687,13 @@ const AttendanceAdmin = () => {
       alert('No attendance data available to export.');
       return;
     }
-    const headers = ["Employee", "Role", "Department", "Status", "Check In", "Check Out", "Break", "Late", "Production Hours"];
+    const headers = ["Employee", "Role", "Department", "Date", "Day", "Status", "Check In", "Check Out", "Break", "Late", "Production Hours"];
     const rows = filteredAndSortedLogs.map(rec => [
       `"${rec.Employee || ''}"`,
       `"${rec.Role || ''}"`,
       `"${rec.Department || ''}"`,
+      `"${rec.formattedDate || rec.Date || ''}"`,
+      `"${rec.dayName || ''}"`,
       `"${rec.Status || ''}"`,
       `"${rec.CheckIn || ''}"`,
       `"${rec.CheckOut || ''}"`,
@@ -635,6 +743,7 @@ const AttendanceAdmin = () => {
                 <th>Employee</th>
                 <th>Role</th>
                 <th>Department</th>
+                <th>Date & Day</th>
                 <th>Status</th>
                 <th>Check In</th>
                 <th>Check Out</th>
@@ -649,6 +758,7 @@ const AttendanceAdmin = () => {
                   <td>${rec.Employee}</td>
                   <td>${rec.Role}</td>
                   <td>${rec.Department}</td>
+                  <td>${rec.formattedDate || rec.Date || ''} (${rec.dayName || ''})</td>
                   <td>${rec.Status}</td>
                   <td>${rec.CheckIn}</td>
                   <td>${rec.CheckOut}</td>

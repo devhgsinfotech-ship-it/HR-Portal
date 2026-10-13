@@ -3,13 +3,12 @@
 // Copyright (c) 2025 HGS Infotech Private Limited. All rights reserved.
 
 import { useState, useEffect, useCallback } from "react";
+import { useSelector } from "react-redux";
 import apiClient from "../../../core/utils/apiClient";
 import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 
 const routes = all_routes;
-const fmt = (n: number | string) =>
-  "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface Employee { id: number; firstName: string; lastName: string; employeeCode: string; department?: { name: string }; designation?: { name: string }; }
 interface SalaryStructure {
@@ -23,6 +22,11 @@ interface SalaryStructure {
 const emptyForm = { basic: "", hra: "", conveyance: "", medicalAllowance: "", specialAllowance: "", bonus: "", pfDeduction: "", pfEmployer: "", professionalTax: "", tdsDeduction: "", otherDeductions: "" };
 
 const PayrollSalaryConfig = () => {
+  const user = useSelector((state: any) => state.auth?.user);
+  const currencySymbol = user?.currencySymbol || (user?.currency === "USD" ? "$" : "₹");
+  const isUSD = (user?.currency || "").toUpperCase() === "USD";
+  const fmt = (n: number | string) =>
+    currencySymbol + Number(n).toLocaleString(isUSD ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const [structures, setStructures] = useState<SalaryStructure[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
@@ -273,7 +277,7 @@ const PayrollSalaryConfig = () => {
                       <div className="col-md-4" key={f.key}>
                         <label className="form-label small">{f.label}</label>
                         <div className="input-group input-group-sm">
-                          <span className="input-group-text">₹</span>
+                          <span className="input-group-text">{currencySymbol}</span>
                           <input type="number" min={0} step={0.01} className="form-control"
                             value={(form as any)[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
                         </div>
@@ -293,7 +297,7 @@ const PayrollSalaryConfig = () => {
                       <div className="col-md-4" key={f.key}>
                         <label className="form-label small">{f.label}</label>
                         <div className="input-group input-group-sm">
-                          <span className="input-group-text">₹</span>
+                          <span className="input-group-text">{currencySymbol}</span>
                           <input type="number" min={0} step={0.01} className="form-control"
                             value={(form as any)[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
                         </div>

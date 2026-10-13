@@ -573,6 +573,17 @@ async function getHrDashboardSummary(req, res) {
         }
 
         let totalBenefitsDeductions = 0;
+        let companySetting = null;
+        try {
+            if (companyId) {
+                companySetting = await prisma.companySetting.findUnique({ where: { companyId } });
+            }
+        } catch (csErr) {}
+
+        const dashCurrencySymbol = companySetting?.currencySymbol || (companySetting?.currency === 'USD' ? '$' : '₹');
+        const isDashUSD = (companySetting?.currency || '').toUpperCase() === 'USD';
+        const dashLocale = isDashUSD ? 'en-US' : 'en-IN';
+
         try {
             const compSalaries = await prisma.salaryStructure.findMany({
                 where: {
@@ -594,7 +605,7 @@ async function getHrDashboardSummary(req, res) {
 
         const benefitsDeductions = {
             amount: totalBenefitsDeductions,
-            formattedAmount: `₹ ${Number(totalBenefitsDeductions.toFixed(2)).toLocaleString('en-IN', { minimumFractionDigits: totalBenefitsDeductions % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 })}`,
+            formattedAmount: `${dashCurrencySymbol} ${Number(totalBenefitsDeductions.toFixed(2)).toLocaleString(dashLocale, { minimumFractionDigits: totalBenefitsDeductions % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 })}`,
             subtitle: 'PF, Tax & Insurance Deductions'
         };
 
@@ -650,7 +661,7 @@ async function getHrDashboardSummary(req, res) {
         }
 
         const displaySalaryAmount = thisMonthSalaryTotal;
-        const formattedSalaryAmount = `₹ ${Number(displaySalaryAmount.toFixed(2)).toLocaleString('en-IN', { minimumFractionDigits: displaySalaryAmount % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 })}`;
+        const formattedSalaryAmount = `${dashCurrencySymbol} ${Number(displaySalaryAmount.toFixed(2)).toLocaleString(dashLocale, { minimumFractionDigits: displaySalaryAmount % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 })}`;
 
         const payrollStats = {
             amount: displaySalaryAmount,
