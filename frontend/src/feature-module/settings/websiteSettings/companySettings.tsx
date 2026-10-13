@@ -26,6 +26,40 @@ const getFeatureList = (features: any): string[] => {
   return [];
 };
 
+const getPlanDisplayPrice = (plan: any, cycle: 'MONTHLY' | 'YEARLY', targetCurrency: string) => {
+  if (!plan) return { symbol: '₹', amount: '0' };
+  const isUSD = (targetCurrency || 'INR').toUpperCase() === 'USD';
+  const symbol = isUSD ? '$' : '₹';
+  const rate = plan.exchangeRate || 84.0;
+
+  // Base price in INR
+  const baseMonthly = plan.basePriceMonthly != null 
+    ? Number(plan.basePriceMonthly) 
+    : (plan.currency === 'USD' ? Number(plan.priceMonthly) * rate : Number(plan.priceMonthly || 0));
+
+  const baseYearly = plan.basePriceYearly != null 
+    ? Number(plan.basePriceYearly) 
+    : (plan.currency === 'USD' ? Number(plan.priceYearly) * rate : Number(plan.priceYearly || 0));
+
+  let val = cycle === 'YEARLY' ? baseYearly : baseMonthly;
+
+  if (isUSD) {
+    if (plan.currency === 'USD' && plan.priceMonthly !== undefined && plan.basePriceMonthly !== undefined) {
+      val = cycle === 'YEARLY' ? Number(plan.priceYearly) : Number(plan.priceMonthly);
+    } else {
+      val = Number((val / rate).toFixed(2));
+    }
+    const formatted = val.toLocaleString('en-US', {
+      minimumFractionDigits: val % 1 === 0 ? 0 : 2,
+      maximumFractionDigits: 2,
+    });
+    return { symbol, amount: formatted };
+  } else {
+    val = Math.round(val);
+    return { symbol, amount: val.toLocaleString('en-IN') };
+  }
+};
+
 const CompanySettings = () => {
   const routes = all_routes;
   const dispatch = useDispatch<AppDispatch>();
@@ -44,6 +78,7 @@ const CompanySettings = () => {
     industry: "",
     companySize: "",
     logoUrl: "",
+    currency: "INR",
   });
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -53,9 +88,12 @@ const CompanySettings = () => {
   const [billingCycleToggle, setBillingCycleToggle] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [upgradingPlanId, setUpgradingPlanId] = useState<number | null>(null);
 
-  const fetchAvailablePlans = async () => {
+  const fetchAvailablePlans = async (currencyCode?: string) => {
     try {
-      const res = await apiClient.get('/super-admin/plans');
+      const activeCurr = currencyCode || formData.currency || 'INR';
+      const res = await apiClient.get('/super-admin/plans', {
+        params: { currency: activeCurr }
+      });
       if (Array.isArray(res.data)) {
         setAvailablePlans(res.data.filter((p: any) => p.isActive));
       }
@@ -73,8 +111,11 @@ const CompanySettings = () => {
       try {
         setLoading(true);
         const res = await apiClient.get('/auth/company-settings');
+        let activeCompCurrency = "INR";
         if (res.data?.success && res.data.company) {
           const comp = res.data.company;
+          activeCompCurrency = comp.currency || comp.settings?.currency || "INR";
+          const compSymbol = comp.currencySymbol || (activeCompCurrency === "USD" ? "$" : "₹");
           setFormData({
             name: comp.name || "",
             email: comp.email || "",
@@ -84,11 +125,17 @@ const CompanySettings = () => {
             industry: comp.industry || "",
             companySize: comp.companySize || "",
             logoUrl: comp.logoUrl || "",
+            currency: activeCompCurrency,
           });
           if (comp.logoUrl) {
             setPreviewLogo(comp.logoUrl);
-            dispatch(updateUser({ companyLogoUrl: comp.logoUrl, subdomain: comp.subdomain }));
           }
+          dispatch(updateUser({
+            companyLogoUrl: comp.logoUrl || null,
+            subdomain: comp.subdomain,
+            currency: activeCompCurrency,
+            currencySymbol: compSymbol
+          }));
         }
 
         // Fetch company subscription details
@@ -97,7 +144,7 @@ const CompanySettings = () => {
           setSubscriptionData(subRes.data);
         }
 
-        fetchAvailablePlans();
+        fetchAvailablePlans(activeCompCurrency);
       } catch (err: any) {
         console.error("Failed to load company settings:", err);
         setMessage({ type: 'danger', text: err.response?.data?.message || "Failed to load company settings." });
@@ -118,6 +165,7 @@ const CompanySettings = () => {
       alert(res.data?.message || 'Plan updated successfully!');
       const subRes = await apiClient.get('/subscriptions/company');
       if (subRes.data) setSubscriptionData(subRes.data);
+      fetchAvailablePlans(formData.currency);
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to update plan');
     } finally {
@@ -128,6 +176,9 @@ const CompanySettings = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (name === 'currency') {
+      fetchAvailablePlans(value);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,6 +202,7 @@ const CompanySettings = () => {
       submitData.append("address", formData.address);
       submitData.append("industry", formData.industry);
       submitData.append("companySize", formData.companySize);
+      submitData.append("currency", formData.currency);
       if (logoFile) {
         submitData.append("logo", logoFile);
       }
@@ -162,13 +214,26 @@ const CompanySettings = () => {
       if (res.data?.success) {
         setMessage({ type: 'success', text: "Company settings updated and saved successfully!" });
         const updatedLogo = res.data.company?.logoUrl;
+        const updatedCurrency = res.data.company?.currency || formData.currency;
+        const updatedSymbol = res.data.company?.currencySymbol || (updatedCurrency === "USD" ? "$" : "₹");
         if (updatedLogo) {
           setFormData(prev => ({ ...prev, logoUrl: updatedLogo }));
           setPreviewLogo(updatedLogo);
           setLogoFile(null);
-          dispatch(updateUser({ companyLogoUrl: updatedLogo, subdomain: res.data.company?.subdomain || formData.subdomain }));
           window.dispatchEvent(new CustomEvent('companyLogoUpdated', { detail: updatedLogo }));
         }
+        dispatch(updateUser({
+          companyLogoUrl: updatedLogo || formData.logoUrl,
+          subdomain: res.data.company?.subdomain || formData.subdomain,
+          currency: updatedCurrency,
+          currencySymbol: updatedSymbol
+        }));
+        window.dispatchEvent(new CustomEvent('companyCurrencyUpdated', { detail: { currency: updatedCurrency, currencySymbol: updatedSymbol } }));
+
+        // Refresh subscription & available plans with saved currency
+        const subRes = await apiClient.get('/api/subscription/company');
+        if (subRes.data) setSubscriptionData(subRes.data);
+        fetchAvailablePlans(updatedCurrency);
       }
     } catch (err: any) {
       console.error("Failed to save company settings:", err);
@@ -466,6 +531,45 @@ const CompanySettings = () => {
                             </div>
                           </div>
                         </div>
+
+                        {/* Company Operating Currency Card */}
+                        <div className="card">
+                          <div className="card-header d-flex align-items-center justify-content-between">
+                            <h5 className="mb-0">Company Operating Currency</h5>
+                            <span className="badge bg-primary-transparent text-primary fw-semibold">
+                              Active: {formData.currency === "USD" ? "$ USD" : "₹ INR"}
+                            </span>
+                          </div>
+                          <div className="card-body">
+                            <p className="text-muted fs-12 mb-3">
+                              Configure the currency in which your company operates. All employee salary structures, payroll calculations, leave deductions, bonuses, payslips, and project budgets will be computed and displayed in this currency.
+                            </p>
+                            <div className="row g-3">
+                              <div className="col-sm-6">
+                                <label className="form-label fw-semibold">Operating Currency</label>
+                                <select
+                                  name="currency"
+                                  className="form-select"
+                                  value={formData.currency}
+                                  onChange={handleChange}
+                                >
+                                  <option value="INR">INR (₹) - Indian Rupee</option>
+                                  <option value="USD">USD ($) - US Dollar</option>
+                                </select>
+                              </div>
+                              <div className="col-sm-6">
+                                <label className="form-label fw-semibold">Currency Symbol</label>
+                                <input
+                                  type="text"
+                                  className="form-control bg-light"
+                                  value={formData.currency === "USD" ? "$ (USD)" : "₹ (INR)"}
+                                  readOnly
+                                  disabled
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       <div className="settings-right-sidebar ms-md-3">
@@ -527,7 +631,14 @@ const CompanySettings = () => {
                             <div className="card-body">
                               <div className="d-flex align-items-center justify-content-between mb-2">
                                 <span className="fw-bold text-dark fs-16">{subscriptionData.plan?.name}</span>
-                                <span className="text-primary fw-medium">{subscriptionData.plan?.currencySymbol || '₹'}{subscriptionData.plan?.priceMonthly}/mo</span>
+                                {(() => {
+                                  const activePlanPrice = getPlanDisplayPrice(subscriptionData.plan, 'MONTHLY', formData.currency);
+                                  return (
+                                    <span className="text-primary fw-medium">
+                                      {activePlanPrice.symbol}{activePlanPrice.amount}/mo
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <p className="fs-12 text-muted mb-3">{subscriptionData.plan?.description}</p>
                               
@@ -626,7 +737,7 @@ const CompanySettings = () => {
                 <div className="row">
                   {availablePlans.map((p) => {
                     const isCurrent = subscriptionData?.plan?.id === p.id && subscriptionData?.status === 'ACTIVE';
-                    const price = billingCycleToggle === 'YEARLY' ? p.priceYearly : p.priceMonthly;
+                    const planPrice = getPlanDisplayPrice(p, billingCycleToggle, formData.currency);
                     const isUpgradingThis = upgradingPlanId === p.id;
 
                     return (
@@ -641,7 +752,7 @@ const CompanySettings = () => {
 
                             <div className="mb-3">
                               <h3 className="fw-bold mb-0">
-                                ${price} <span className="fs-13 text-muted fw-normal">/{billingCycleToggle === 'YEARLY' ? 'year' : 'month'}</span>
+                                {planPrice.symbol}{planPrice.amount} <span className="fs-13 text-muted fw-normal">/{billingCycleToggle === 'YEARLY' ? 'year' : 'month'}</span>
                               </h3>
                               <span className="fs-12 text-primary fw-medium">Max {p.maxEmployees} Employees</span>
                             </div>

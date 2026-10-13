@@ -119,6 +119,7 @@ const defaultDash: DashData = {
 
 const HrDashboard = () => {
   const user = useSelector((state: any) => state.auth?.user) as any
+  const currencySymbol = user?.currencySymbol || (user?.currency === "USD" ? "$" : "₹")
   const userName = user?.name || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (localStorage.getItem("userName") || "Vikramjeet"))
 
   const [dashData, setDashData] = useState<DashData>(defaultDash)
@@ -833,7 +834,7 @@ const HrDashboard = () => {
                 </div>
 
                 <div className="mt-3">
-                  <h4 className="fw-bold text-dark m-0">{dashData.benefitsDeductions?.formattedAmount || '₹ 0'}</h4>
+                  <h4 className="fw-bold text-dark m-0">{dashData.benefitsDeductions?.formattedAmount || `${currencySymbol} 0`}</h4>
                   <span className="fs-11 text-muted">Total deductions</span>
                 </div>
               </div>
@@ -860,7 +861,7 @@ const HrDashboard = () => {
                 </div>
 
                 <div className="mt-3">
-                  <h4 className="fw-bold text-dark m-0">{dashData.payrollStats?.formattedAmount || '₹ 0'}</h4>
+                  <h4 className="fw-bold text-dark m-0">{dashData.payrollStats?.formattedAmount || `${currencySymbol} 0`}</h4>
                   <span className="fs-11 text-muted">Total Distributed Salary (This month)</span>
                 </div>
               </div>

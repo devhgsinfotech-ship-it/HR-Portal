@@ -60,6 +60,8 @@ model SubscriptionPlan {
   description   String?        @db.Text
   priceMonthly  Float
   priceYearly   Float
+  basePriceMonthly Float?
+  basePriceYearly  Float?
   maxEmployees  Int            @default(10)
   maxStorageGb  Float          @default(5)
   features      Json?
@@ -563,6 +565,7 @@ model CompanySetting {
   officeEndTime        String  @default("18:00")
   timezone             String  @default("Asia/Kolkata")
   currency             String  @default("INR")
+  currencySymbol       String  @default("₹")
   payrollCycleStartDay Int     @default(1)
   company              Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -1324,6 +1327,7 @@ model Currency {
   code           String   @unique
   symbol         String
   symbolPosition String   @default("Front")
+  exchangeRate   Float    @default(1.0)
   isDefault      Boolean  @default(false)
   status         String   @default("Active")
   createdAt      DateTime @default(now())

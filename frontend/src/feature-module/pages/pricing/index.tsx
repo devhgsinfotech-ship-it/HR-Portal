@@ -78,8 +78,8 @@ const Pricing = () => {
     { value: "3", label: "3" },
   ];
   const planCurrency = [
-    { value: "USD", label: "USD" },
-    { value: "EURO", label: "EURO" },
+    { value: "INR", label: "INR (₹)" },
+    { value: "USD", label: "USD ($)" },
   ];
 
   const discountType = [

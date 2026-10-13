@@ -18,6 +18,7 @@ const EmployeeDetails = () => {
   const employeeId = searchParams.get('id');
 
   const currentUser = useSelector((state: any) => state.auth?.user);
+  const currencySymbol = currentUser?.currencySymbol || (currentUser?.currency === 'USD' ? '$' : '₹');
   const canEditDocs = ['HR', 'COMPANY_ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role || '');
 
   const [emp, setEmp] = useState<any>(null);
@@ -2000,11 +2001,11 @@ const EmployeeDetails = () => {
                         <div className="d-flex justify-content-between p-3 bg-light rounded">
                           <div>
                             <span className="text-muted d-block">Gross Salary</span>
-                            <h4 className="text-primary mb-0">₹ {editEmp.grossSalary}</h4>
+                            <h4 className="text-primary mb-0">{currencySymbol} {editEmp.grossSalary}</h4>
                           </div>
                           <div className="text-end">
                             <span className="text-muted d-block">Net Salary</span>
-                            <h4 className="text-success mb-0">₹ {editEmp.netSalary}</h4>
+                            <h4 className="text-success mb-0">{currencySymbol} {editEmp.netSalary}</h4>
                           </div>
                         </div>
                       </div>

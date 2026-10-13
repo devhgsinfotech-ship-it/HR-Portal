@@ -28,7 +28,8 @@ const PackagesGrid = () => {
     { value: "Yearly", label: "Yearly" },
   ];
   const currency = [
-    { value: "INR", label: "INR (₹)" },
+    { value: "INR", label: "INR (₹) - Indian Rupee" },
+    { value: "USD", label: "USD ($) - US Dollar" },
   ];
   const planPosition = [
     { value: "1", label: "1" },
@@ -517,7 +518,7 @@ const PackagesGrid = () => {
                     <div className="mb-3">
                       <div className="d-flex justify-content-between">
                         <label className="form-label">
-                          Plan Currency<span className="text-danger"> *</span>
+                          Price Type<span className="text-danger"> *</span>
                         </label>
                         <span className="text-primary">
                           <i className="fa-solid fa-circle-exclamation me-2" />
@@ -899,7 +900,7 @@ const PackagesGrid = () => {
                     <div className="mb-3">
                       <div className="d-flex justify-content-between">
                         <label className="form-label">
-                          Plan Currency<span className="text-danger"> *</span>
+                          Price Type<span className="text-danger"> *</span>
                         </label>
                         <span className="text-primary">
                           <i className="fa-solid fa-circle-exclamation me-2" />

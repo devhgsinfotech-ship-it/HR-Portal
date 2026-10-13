@@ -1,5 +1,6 @@
 // backend/src/utils/seedDefaultPlans.js
 const prisma = require('../config/prisma');
+const { getUsdToInrRate, convertInrToUsd } = require('./currencyRate');
 
 const ALL_MODULES = [
   'Employees', 'Invoices', 'Reports', 'Contacts',
@@ -24,6 +25,8 @@ const DEFAULT_PLANS = [
     description: 'Perfect for small Indian businesses and startups starting out with core HRMS.',
     priceMonthly: 1999.00,
     priceYearly: 19990.00,
+    basePriceMonthly: 1999.00,
+    basePriceYearly: 19990.00,
     maxEmployees: 10,
     maxStorageGb: 5.0,
     features: createFeatureMap(['Employees', 'Attendance', 'Reports']),
@@ -37,6 +40,8 @@ const DEFAULT_PLANS = [
     description: 'Ideal for growing Indian companies needing automated payroll, projects, and asset tracking.',
     priceMonthly: 4999.00,
     priceYearly: 49990.00,
+    basePriceMonthly: 4999.00,
+    basePriceYearly: 49990.00,
     maxEmployees: 50,
     maxStorageGb: 25.0,
     features: createFeatureMap(['Employees', 'Attendance', 'Reports', 'Payroll', 'Projects', 'Assets', 'Tickets', 'Invoices', 'Clients']),
@@ -50,6 +55,8 @@ const DEFAULT_PLANS = [
     description: 'Full-featured enterprise suite for large Indian enterprises with unlimited employees and SLA support.',
     priceMonthly: 12999.00,
     priceYearly: 129990.00,
+    basePriceMonthly: 12999.00,
+    basePriceYearly: 129990.00,
     maxEmployees: 99999,
     maxStorageGb: 100.0,
     features: createFeatureMap(ALL_MODULES),
@@ -62,20 +69,46 @@ const DEFAULT_PLANS = [
 async function seedDefaultPlans() {
   try {
     console.log('[SEED] Seeding SaaS Subscription Plans...');
+    const sysSetting = await prisma.systemSetting.findFirst();
+    const activeCurrency = (sysSetting?.currency || 'INR').toUpperCase();
+    const isUSD = activeCurrency === 'USD';
+
+    let usdRate = 84.0;
+    if (isUSD) {
+      usdRate = await getUsdToInrRate();
+    }
+
     for (const planData of DEFAULT_PLANS) {
+      const currentMonthly = isUSD ? convertInrToUsd(planData.basePriceMonthly, usdRate) : planData.basePriceMonthly;
+      const currentYearly = isUSD ? convertInrToUsd(planData.basePriceYearly, usdRate) : planData.basePriceYearly;
+      const currentCurrency = isUSD ? 'USD' : 'INR';
+      const currentSymbol = isUSD ? '$' : '₹';
+
       await prisma.subscriptionPlan.upsert({
         where: { code: planData.code },
         update: {
           name: planData.name,
           description: planData.description,
-          priceMonthly: planData.priceMonthly,
-          priceYearly: planData.priceYearly,
+          priceMonthly: currentMonthly,
+          priceYearly: currentYearly,
+          basePriceMonthly: planData.basePriceMonthly,
+          basePriceYearly: planData.basePriceYearly,
+          currency: currentCurrency,
+          currencySymbol: currentSymbol,
           maxEmployees: planData.maxEmployees,
           maxStorageGb: planData.maxStorageGb,
           features: planData.features,
           isActive: planData.isActive
         },
-        create: planData
+        create: {
+          ...planData,
+          priceMonthly: currentMonthly,
+          priceYearly: currentYearly,
+          basePriceMonthly: planData.basePriceMonthly,
+          basePriceYearly: planData.basePriceYearly,
+          currency: currentCurrency,
+          currencySymbol: currentSymbol
+        }
       });
     }
     console.log('[SEED] SaaS Subscription Plans seeded successfully.');
@@ -114,4 +147,3 @@ async function seedDefaultPlans() {
 }
 
 module.exports = { seedDefaultPlans, DEFAULT_PLANS, ALL_MODULES, createFeatureMap };
-

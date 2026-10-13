@@ -6,6 +6,11 @@ const prisma = require('../config/prisma');
  */
 const logTime = async (req, res) => {
   try {
+    const role = req.user.role;
+    if (role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN') {
+      return res.status(400).json({ message: 'Timesheet logging is not applicable for Administrator accounts.' });
+    }
+
     const companyId = req.user.companyId;
     const { projectId, taskId, logDate, hoursSpent, billableHours, description } = req.body;
 
@@ -44,7 +49,12 @@ const getTimeLogs = async (req, res) => {
     const companyId = req.user.companyId;
     const { projectId, employeeId, startDate, endDate, approvalStatus } = req.query;
 
-    const where = { companyId };
+    const where = { 
+      companyId,
+      employee: {
+        user: { role: { notIn: ['SUPER_ADMIN', 'COMPANY_ADMIN'] } }
+      }
+    };
     if (projectId) where.projectId = Number(projectId);
     if (approvalStatus) where.approvalStatus = approvalStatus;
 

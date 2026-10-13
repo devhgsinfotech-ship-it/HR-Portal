@@ -91,6 +91,7 @@ const ProjectDetails = () => {
   const projectId = searchParams.get("id");
 
   const currentUser = useAppSelector((state) => state.auth.user);
+  const currencySymbol = currentUser?.currencySymbol || (currentUser?.currency === 'USD' ? '$' : '₹');
   
   const canReadFinance = currentUser?.role === 'SUPER_ADMIN' || 
                         currentUser?.role === 'HR' || 
@@ -380,7 +381,7 @@ const ProjectDetails = () => {
   
   // Format budget
   const formattedBudget = canReadFinance && project.budget !== null
-    ? `₹ ${project.budget.toLocaleString()}`
+    ? `${currencySymbol} ${project.budget.toLocaleString()}`
     : "Confidential";
 
   return (

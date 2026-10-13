@@ -12,6 +12,7 @@ interface CurrencyItem {
     code: string;
     symbol: string;
     symbolPosition: string;
+    exchangeRate?: number;
     isDefault: boolean;
     status: string;
 }
@@ -296,16 +297,9 @@ const Currencies: React.FC = () => {
                                         </div>
                                         <div className="col-md-6 col-sm-8">
                                             <div className="d-flex justify-content-sm-end align-items-center flex-wrap row-gap-2 gap-2">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-primary"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#add_new_currency"
-                                                    aria-label="Add Currency"
-                                                >
-                                                    <i className="ti ti-circle-plus me-2" aria-hidden="true" />
-                                                    Add Currency
-                                                </button>
+                                                <span className="badge bg-primary-transparent text-primary py-2 px-3 fs-13">
+                                                    <i className="ti ti-arrows-exchange me-1" /> Multi-Currency Active (INR ₹ &amp; USD $)
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -327,7 +321,7 @@ const Currencies: React.FC = () => {
                                                                 <th>Currency Name</th>
                                                                 <th>Symbol</th>
                                                                 <th>Code</th>
-                                                                <th>Position</th>
+                                                                <th>Exchange Rate</th>
                                                                 <th>Status</th>
                                                                 <th>Default</th>
                                                                 <th className="text-end">Action</th>
@@ -349,7 +343,15 @@ const Currencies: React.FC = () => {
                                                                     <td>
                                                                         <strong>{c.code}</strong>
                                                                     </td>
-                                                                    <td>{c.symbolPosition || "Front"}</td>
+                                                                    <td>
+                                                                        {c.code === 'INR' ? (
+                                                                            <span className="text-muted fs-12">1.0 (Base Price)</span>
+                                                                        ) : (
+                                                                            <span className="badge bg-light text-dark fs-12">
+                                                                                1 USD = {c.exchangeRate ? c.exchangeRate.toFixed(2) : '84.00'} INR (Live API)
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
                                                                     <td>
                                                                         <span
                                                                             className={`badge badge-${

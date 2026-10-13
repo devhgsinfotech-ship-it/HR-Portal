@@ -3,6 +3,7 @@
 // Copyright (c) 2025 HGS Infotech Private Limited. All rights reserved.
 
 import { useState, useEffect, useCallback } from "react";
+import { useSelector } from "react-redux";
 import apiClient from "../../../core/utils/apiClient";
 import { all_routes } from "../../../router/all_routes";
 import { Link } from "react-router-dom";
@@ -67,12 +68,16 @@ const STEPS = [
 ];
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const fmt = (n: number | string) =>
-  "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const PayrollProcess = () => {
+  const user = useSelector((state: any) => state.auth?.user);
+  const currencySymbol = user?.currencySymbol || (user?.currency === "USD" ? "$" : "₹");
+  const isUSD = (user?.currency || "").toUpperCase() === "USD";
+  const fmt = (n: number | string) =>
+    currencySymbol + Number(n).toLocaleString(isUSD ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -504,11 +509,11 @@ const PayrollProcess = () => {
                             <input type="number" min={0} step={0.5} className="form-control form-control-sm" value={overrideLop} onChange={e => setOverrideLop(e.target.value)} />
                           </div>
                           <div className="col-6">
-                            <label className="form-label small fw-semibold">Bonus Override (₹)</label>
+                            <label className="form-label small fw-semibold">Bonus Override ({currencySymbol})</label>
                             <input type="number" min={0} className="form-control form-control-sm" value={overrideBonus} onChange={e => setOverrideBonus(e.target.value)} placeholder="Leave blank to keep" />
                           </div>
                           <div className="col-6">
-                            <label className="form-label small fw-semibold">Other Deductions (₹)</label>
+                            <label className="form-label small fw-semibold">Other Deductions ({currencySymbol})</label>
                             <input type="number" min={0} className="form-control form-control-sm" value={overrideOther} onChange={e => setOverrideOther(e.target.value)} placeholder="Leave blank to keep" />
                           </div>
                           <div className="col-12">

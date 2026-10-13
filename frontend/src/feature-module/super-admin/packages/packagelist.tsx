@@ -21,15 +21,8 @@ interface PackageListItem {
 }
 
 const CURRENCY_OPTIONS = [
-  { code: 'INR', symbol: '₹', label: 'INR (₹) - Indian Rupee' },
-  { code: 'USD', symbol: '$', label: 'USD ($) - US Dollar' },
-  { code: 'EUR', symbol: '€', label: 'EUR (€) - Euro' },
-  { code: 'GBP', symbol: '£', label: 'GBP (£) - British Pound' },
-  { code: 'AED', symbol: 'د.إ', label: 'AED (د.إ) - UAE Dirham' },
-  { code: 'CAD', symbol: 'CA$', label: 'CAD (CA$) - Canadian Dollar' },
-  { code: 'AUD', symbol: 'AU$', label: 'AUD (AU$) - Australian Dollar' },
-  { code: 'SGD', symbol: 'S$', label: 'SGD (S$) - Singapore Dollar' },
-  { code: 'SAR', symbol: '﷼', label: 'SAR (﷼) - Saudi Riyal' }
+  { code: 'INR', symbol: '₹', label: 'INR (₹) - Indian Rupee (Default)' },
+  { code: 'USD', symbol: '$', label: 'USD ($) - US Dollar (Converted)' }
 ];
 
 const Packages = () => {
@@ -343,8 +336,8 @@ const Packages = () => {
     { value: "Yearly", label: "Yearly" },
   ];
   const currency = [
-    { value: "USD", label: "USD" },
-    { value: "Euro", label: "Euro" },
+    { value: "INR", label: "INR (₹)" },
+    { value: "USD", label: "USD ($)" },
   ];
   const planPosition = [
     { value: "1", label: "1" },
@@ -716,13 +709,46 @@ const Packages = () => {
                     </div>
                   </div>
 
+                  {/* Currency Selection Pills */}
+                  <div className="col-12 mb-3">
+                    <label className="form-label fw-semibold">Plan Currency<span className="text-danger"> *</span></label>
+                    <div className="row g-2">
+                      <div className="col-6">
+                        <div
+                          className={`p-2 border rounded text-center cursor-pointer transition-all ${
+                            newPlan.currency === 'INR'
+                              ? 'border-primary bg-primary-transparent text-primary fw-bold shadow-xs'
+                              : 'bg-light text-dark'
+                          }`}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setNewPlan({ ...newPlan, currency: 'INR', currencySymbol: '₹' })}
+                        >
+                          <span className="fs-14">₹ INR - Indian Rupee</span>
+                        </div>
+                      </div>
+                      <div className="col-6">
+                        <div
+                          className={`p-2 border rounded text-center cursor-pointer transition-all ${
+                            newPlan.currency === 'USD'
+                              ? 'border-primary bg-primary-transparent text-primary fw-bold shadow-xs'
+                              : 'bg-light text-dark'
+                          }`}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setNewPlan({ ...newPlan, currency: 'USD', currencySymbol: '$' })}
+                        >
+                          <span className="fs-14">$ USD - US Dollar</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Monthly Price ({newPlan.currencySymbol || '₹'} {newPlan.currency})<span className="text-danger"> *</span>
+                      <label className="form-label fw-semibold">
+                        Monthly Price ({newPlan.currencySymbol || '₹'})<span className="text-danger"> *</span>
                       </label>
                       <div className="input-group">
-                        <span className="input-group-text">{newPlan.currencySymbol || '₹'}</span>
+                        <span className="input-group-text fw-bold">{newPlan.currencySymbol || '₹'}</span>
                         <input
                           type="number"
                           className="form-control"
@@ -736,11 +762,11 @@ const Packages = () => {
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Yearly Price ({newPlan.currencySymbol || '₹'} {newPlan.currency})<span className="text-danger"> *</span>
+                      <label className="form-label fw-semibold">
+                        Yearly Price ({newPlan.currencySymbol || '₹'})<span className="text-danger"> *</span>
                       </label>
                       <div className="input-group">
-                        <span className="input-group-text">{newPlan.currencySymbol || '₹'}</span>
+                        <span className="input-group-text fw-bold">{newPlan.currencySymbol || '₹'}</span>
                         <input
                           type="number"
                           className="form-control"
@@ -755,92 +781,33 @@ const Packages = () => {
 
                   <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Max Employees</label>
+                      <label className="form-label fw-semibold">Max Employees<span className="text-danger"> *</span></label>
                       <input
                         type="number"
                         className="form-control"
                         placeholder="25"
                         value={newPlan.maxEmployees}
                         onChange={(e) => setNewPlan({ ...newPlan, maxEmployees: Number(e.target.value) })}
+                        required
                       />
                     </div>
                   </div>
                   <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Max Storage (GB)</label>
+                      <label className="form-label fw-semibold">Max Storage (GB)<span className="text-danger"> *</span></label>
                       <input
                         type="number"
                         className="form-control"
                         placeholder="10"
                         value={newPlan.maxStorageGb}
                         onChange={(e) => setNewPlan({ ...newPlan, maxStorageGb: Number(e.target.value) })}
+                        required
                       />
                     </div>
                   </div>
                   <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Currency<span className="text-danger"> *</span></label>
-                      <select
-                        className="form-select"
-                        value={newPlan.currency}
-                        onChange={(e) => {
-                          const cur = e.target.value;
-                          const found = CURRENCY_OPTIONS.find(c => c.code === cur);
-                          setNewPlan({
-                            ...newPlan,
-                            currency: cur,
-                            currencySymbol: found ? found.symbol : '₹'
-                          });
-                        }}
-                      >
-                        {CURRENCY_OPTIONS.map(c => (
-                          <option key={c.code} value={c.code}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <label className="form-label">Country</label>
-                      <select
-                        className="form-select"
-                        value={newPlan.country}
-                        onChange={(e) => setNewPlan({ ...newPlan, country: e.target.value })}
-                      >
-                        <option value="India">India 🇮🇳</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <label className="form-label">State / Region</label>
-                      <select
-                        className="form-select"
-                        value={newPlan.state}
-                        onChange={(e) => setNewPlan({ ...newPlan, state: e.target.value })}
-                      >
-                        <option value="All India">All India</option>
-                        <option value="Maharashtra">Maharashtra</option>
-                        <option value="Delhi">Delhi</option>
-                        <option value="Karnataka">Karnataka</option>
-                        <option value="Haryana">Haryana</option>
-                        <option value="Tamil Nadu">Tamil Nadu</option>
-                        <option value="Telangana">Telangana</option>
-                        <option value="Gujarat">Gujarat</option>
-                        <option value="Uttar Pradesh">Uttar Pradesh</option>
-                        <option value="West Bengal">West Bengal</option>
-                        <option value="Punjab">Punjab</option>
-                        <option value="Kerala">Kerala</option>
-                        <option value="Rajasthan">Rajasthan</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="mb-3">
-                      <label className="form-label">Status<span className="text-danger"> *</span></label>
+                      <label className="form-label fw-semibold">Status<span className="text-danger"> *</span></label>
                       <select
                         className="form-select"
                         value={newPlan.isActive ? 'Active' : 'Inactive'}
@@ -980,13 +947,46 @@ const Packages = () => {
                     </div>
                   </div>
 
+                  {/* Currency Selection Pills */}
+                  <div className="col-12 mb-3">
+                    <label className="form-label fw-semibold">Plan Currency<span className="text-danger"> *</span></label>
+                    <div className="row g-2">
+                      <div className="col-6">
+                        <div
+                          className={`p-2 border rounded text-center cursor-pointer transition-all ${
+                            (editingPlan.currency || 'INR') === 'INR'
+                              ? 'border-primary bg-primary-transparent text-primary fw-bold shadow-xs'
+                              : 'bg-light text-dark'
+                          }`}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setEditingPlan({ ...editingPlan, currency: 'INR', currencySymbol: '₹' })}
+                        >
+                          <span className="fs-14">₹ INR - Indian Rupee</span>
+                        </div>
+                      </div>
+                      <div className="col-6">
+                        <div
+                          className={`p-2 border rounded text-center cursor-pointer transition-all ${
+                            editingPlan.currency === 'USD'
+                              ? 'border-primary bg-primary-transparent text-primary fw-bold shadow-xs'
+                              : 'bg-light text-dark'
+                          }`}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setEditingPlan({ ...editingPlan, currency: 'USD', currencySymbol: '$' })}
+                        >
+                          <span className="fs-14">$ USD - US Dollar</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Monthly Price ({editingPlan.currencySymbol || '₹'} {editingPlan.currency})<span className="text-danger"> *</span>
+                      <label className="form-label fw-semibold">
+                        Monthly Price ({editingPlan.currencySymbol || '₹'})<span className="text-danger"> *</span>
                       </label>
                       <div className="input-group">
-                        <span className="input-group-text">{editingPlan.currencySymbol || '₹'}</span>
+                        <span className="input-group-text fw-bold">{editingPlan.currencySymbol || '₹'}</span>
                         <input
                           type="number"
                           className="form-control"
@@ -999,11 +999,11 @@ const Packages = () => {
                   </div>
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label">
-                        Yearly Price ({editingPlan.currencySymbol || '₹'} {editingPlan.currency})<span className="text-danger"> *</span>
+                      <label className="form-label fw-semibold">
+                        Yearly Price ({editingPlan.currencySymbol || '₹'})<span className="text-danger"> *</span>
                       </label>
                       <div className="input-group">
-                        <span className="input-group-text">{editingPlan.currencySymbol || '₹'}</span>
+                        <span className="input-group-text fw-bold">{editingPlan.currencySymbol || '₹'}</span>
                         <input
                           type="number"
                           className="form-control"
@@ -1015,55 +1015,33 @@ const Packages = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-3">
+                  <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Max Employees</label>
+                      <label className="form-label fw-semibold">Max Employees<span className="text-danger"> *</span></label>
                       <input
                         type="number"
                         className="form-control"
                         value={editingPlan.maxEmployees}
                         onChange={(e) => setEditingPlan({ ...editingPlan, maxEmployees: Number(e.target.value) })}
+                        required
                       />
                     </div>
                   </div>
-                  <div className="col-md-3">
+                  <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Max Storage (GB)</label>
+                      <label className="form-label fw-semibold">Max Storage (GB)<span className="text-danger"> *</span></label>
                       <input
                         type="number"
                         className="form-control"
                         value={editingPlan.maxStorageGb}
                         onChange={(e) => setEditingPlan({ ...editingPlan, maxStorageGb: Number(e.target.value) })}
+                        required
                       />
                     </div>
                   </div>
-                  <div className="col-md-3">
+                  <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Currency<span className="text-danger"> *</span></label>
-                      <select
-                        className="form-select"
-                        value={editingPlan.currency || 'INR'}
-                        onChange={(e) => {
-                          const cur = e.target.value;
-                          const found = CURRENCY_OPTIONS.find(c => c.code === cur);
-                          setEditingPlan({
-                            ...editingPlan,
-                            currency: cur,
-                            currencySymbol: found ? found.symbol : '₹'
-                          });
-                        }}
-                      >
-                        {CURRENCY_OPTIONS.map(c => (
-                          <option key={c.code} value={c.code}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="col-md-3">
-                    <div className="mb-3">
-                      <label className="form-label">Status<span className="text-danger"> *</span></label>
+                      <label className="form-label fw-semibold">Status<span className="text-danger"> *</span></label>
                       <select
                         className="form-select"
                         value={editingPlan.isActive ? 'Active' : 'Inactive'}

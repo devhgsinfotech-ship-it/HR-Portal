@@ -57,6 +57,8 @@ interface ProjectItem {
 
 const ProjectGrid = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
+  const currencySymbol = currentUser?.currencySymbol || (currentUser?.currency === 'USD' ? '$' : '₹');
+  const currencyCode = currentUser?.currency || 'INR';
 
   // Scopes & Permission check
   const canReadFinance = currentUser?.role === 'SUPER_ADMIN' ||
@@ -609,7 +611,7 @@ const ProjectGrid = () => {
                           {canReadFinance && proj.budget !== null && (
                             <div className="d-flex justify-content-between mt-1 pt-1 border-top">
                               <span className="text-muted fw-semibold">Budget:</span>
-                              <span className="fw-bold text-success">₹ {proj.budget.toLocaleString()}</span>
+                              <span className="fw-bold text-success">{currencySymbol} {proj.budget.toLocaleString()}</span>
                             </div>
                           )}
                         </div>
@@ -750,7 +752,7 @@ const ProjectGrid = () => {
                     </div>
                     {canReadFinance && (
                       <div className="col-md-6 mb-3">
-                        <label className="form-label fs-13">Project Value / Budget (₹ INR)</label>
+                        <label className="form-label fs-13">Project Value / Budget ({currencySymbol} {currencyCode})</label>
                         <input
                           type="number"
                           className="form-control"
@@ -1048,7 +1050,7 @@ const ProjectGrid = () => {
                     </div>
                     {canReadFinance && (
                       <div className="col-md-6 mb-3">
-                        <label className="form-label fs-13">Project Value / Budget (₹ INR)</label>
+                        <label className="form-label fs-13">Project Value / Budget ({currencySymbol} {currencyCode})</label>
                         <input
                           type="number"
                           className="form-control"

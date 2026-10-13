@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
 import ImageWithBasePath from '../../../core/common/imageWithBasePath'
 import { all_routes } from '../../../router/all_routes'
@@ -7,6 +8,7 @@ import apiClient from '../../../core/utils/apiClient'
 import { LoadingSpinner } from '../../../core/common/LoadingSpinner'
 
 const PaySlip = () => {
+    const user = useSelector((state: any) => state.auth?.user);
     const [employeeData, setEmployeeData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -35,6 +37,7 @@ const PaySlip = () => {
     const salaryStructure = employeeData?.salaryStructure || {};
     const company = employeeData?.user?.company || {};
     const designation = employeeData?.designation?.name || 'Employee';
+    const currSym = user?.currencySymbol || company?.settings?.currencySymbol || (user?.currency === "USD" ? "$" : "₹");
 
     return (
         <>
@@ -177,7 +180,7 @@ const PaySlip = () => {
                                                         <div className="list-group-item">
                                                             <div className="d-flex align-items-center justify-content-between">
                                                                 <p className="mb-0">Basic Salary</p>
-                                                                <h6 className="fw-medium">₹{salaryStructure.basic?.toLocaleString() || 0}</h6>
+                                                                <h6 className="fw-medium">{currSym}{salaryStructure.basic?.toLocaleString() || 0}</h6>
                                                             </div>
                                                         </div>
                                                         <div className="list-group-item">
@@ -185,31 +188,31 @@ const PaySlip = () => {
                                                                 <p className="mb-0">
                                                                     House Rent Allowance (H.R.A.)
                                                                 </p>
-                                                                <h6 className="fw-medium">₹{salaryStructure.hra?.toLocaleString() || 0}</h6>
+                                                                <h6 className="fw-medium">{currSym}{salaryStructure.hra?.toLocaleString() || 0}</h6>
                                                             </div>
                                                         </div>
                                                         <div className="list-group-item">
                                                             <div className="d-flex align-items-center justify-content-between">
                                                                 <p className="mb-0">Conveyance</p>
-                                                                <h6 className="fw-medium">₹{salaryStructure.conveyance?.toLocaleString() || 0}</h6>
+                                                                <h6 className="fw-medium">{currSym}{salaryStructure.conveyance?.toLocaleString() || 0}</h6>
                                                             </div>
                                                         </div>
                                                         <div className="list-group-item">
                                                             <div className="d-flex align-items-center justify-content-between">
                                                                 <p className="mb-0">Medical Allowance</p>
-                                                                <h6 className="fw-medium">₹{salaryStructure.medicalAllowance?.toLocaleString() || 0}</h6>
+                                                                <h6 className="fw-medium">{currSym}{salaryStructure.medicalAllowance?.toLocaleString() || 0}</h6>
                                                             </div>
                                                         </div>
                                                         <div className="list-group-item">
                                                             <div className="d-flex align-items-center justify-content-between">
                                                                 <p className="mb-0">Special Allowance</p>
-                                                                <h6 className="fw-medium">₹{salaryStructure.specialAllowance?.toLocaleString() || 0}</h6>
+                                                                <h6 className="fw-medium">{currSym}{salaryStructure.specialAllowance?.toLocaleString() || 0}</h6>
                                                             </div>
                                                         </div>
                                                         <div className="list-group-item">
                                                             <div className="d-flex align-items-center justify-content-between">
                                                                 <p className="mb-0 fw-bold">Total Earnings</p>
-                                                                <h6 className="fw-bold">₹{salaryStructure.grossSalary?.toLocaleString() || 0}</h6>
+                                                                <h6 className="fw-bold">{currSym}{salaryStructure.grossSalary?.toLocaleString() || 0}</h6>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -222,19 +225,19 @@ const PaySlip = () => {
                                                         <div className="list-group-item">
                                                             <div className="d-flex align-items-center justify-content-between">
                                                                 <p className="mb-0">Provident Fund (PF)</p>
-                                                                <h6 className="fw-medium">₹{salaryStructure.pfDeduction?.toLocaleString() || 0}</h6>
+                                                                <h6 className="fw-medium">{currSym}{salaryStructure.pfDeduction?.toLocaleString() || 0}</h6>
                                                             </div>
                                                         </div>
                                                         <div className="list-group-item">
                                                             <div className="d-flex align-items-center justify-content-between">
                                                                 <p className="mb-0">Professional Tax</p>
-                                                                <h6 className="fw-medium">₹{salaryStructure.professionalTax?.toLocaleString() || 0}</h6>
+                                                                <h6 className="fw-medium">{currSym}{salaryStructure.professionalTax?.toLocaleString() || 0}</h6>
                                                             </div>
                                                         </div>
                                                         <div className="list-group-item">
                                                             <div className="d-flex align-items-center justify-content-between">
                                                                 <p className="mb-0">Other Deductions</p>
-                                                                <h6 className="fw-medium">₹{salaryStructure.otherDeductions?.toLocaleString() || 0}</h6>
+                                                                <h6 className="fw-medium">{currSym}{salaryStructure.otherDeductions?.toLocaleString() || 0}</h6>
                                                             </div>
                                                         </div>
                                                         <div className="list-group-item border-0">
@@ -248,7 +251,7 @@ const PaySlip = () => {
                                                             <div className="d-flex align-items-center justify-content-between">
                                                                 <p className="mb-0 fw-bold">Total Deductions</p>
                                                                 <h6 className="fw-bold">
-                                                                    ₹{(Number(salaryStructure.pfDeduction || 0) + Number(salaryStructure.professionalTax || 0) + Number(salaryStructure.otherDeductions || 0)).toLocaleString()}
+                                                                    {currSym}{(Number(salaryStructure.pfDeduction || 0) + Number(salaryStructure.professionalTax || 0) + Number(salaryStructure.otherDeductions || 0)).toLocaleString()}
                                                                 </h6>
                                                             </div>
                                                         </div>
@@ -259,7 +262,7 @@ const PaySlip = () => {
                                                 <h5 className="text-dark">
                                                     Net Salary :{" "}
                                                     <span className="text-success fw-bold">
-                                                        ₹{salaryStructure.netSalary?.toLocaleString() || 0}
+                                                        {currSym}{salaryStructure.netSalary?.toLocaleString() || 0}
                                                     </span>
                                                 </h5>
                                             </div>

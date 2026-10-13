@@ -121,7 +121,13 @@ const Membershipplan = () => {
                   <div className="p-3 bg-white rounded-3 border d-inline-block text-center shadow-sm">
                     <span className="text-muted fs-12">Price</span>
                     <h2 className="text-primary fw-bold mb-0">
-                      {(companySub.plan?.currencySymbol || '₹')}{(companySub.billingCycle === 'YEARLY' ? companySub.plan?.priceYearly : companySub.plan?.priceMonthly)?.toLocaleString()}
+                      {(companySub.plan?.currencySymbol || '₹')}{(() => {
+                        const activePrice = companySub.billingCycle === 'YEARLY' ? companySub.plan?.priceYearly : companySub.plan?.priceMonthly;
+                        const isUsdSub = (companySub.plan?.currency || '').toUpperCase() === 'USD';
+                        return isUsdSub
+                          ? Number(activePrice || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                          : Math.round(Number(activePrice || 0)).toLocaleString('en-IN');
+                      })()}
                       <span className="fs-13 text-muted fw-normal">/{companySub.billingCycle === 'YEARLY' ? 'year' : 'month'}</span>
                     </h2>
                   </div>
@@ -182,7 +188,12 @@ const Membershipplan = () => {
 
                       <div className="bg-light p-3 rounded-3 text-center mb-3">
                         <h2 className="text-dark fw-bold mb-0">
-                          {(p.currencySymbol || '₹')}{price?.toLocaleString()}
+                          {(p.currencySymbol || '₹')}{(() => {
+                            const isUsdPlan = (p.currency || '').toUpperCase() === 'USD';
+                            return isUsdPlan
+                              ? Number(price || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                              : Math.round(Number(price || 0)).toLocaleString('en-IN');
+                          })()}
                           <span className="text-muted fs-13 fw-normal">/{isYearly ? 'yr' : 'mo'}</span>
                         </h2>
                         <span className="fs-12 text-muted">Up to {p.maxEmployees} Employees • {p.maxStorageGb} GB Storage</span>

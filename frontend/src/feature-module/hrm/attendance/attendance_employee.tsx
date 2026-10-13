@@ -511,9 +511,85 @@ const AttendanceEmployee = () => {
   const data: AttendanceEmployeeData[] = filteredData;
   const columns = [
     {
-      title: "Date",
+      title: "Date & Day",
       dataIndex: "Date",
-      sorter: (a: AttendanceEmployeeData, b: AttendanceEmployeeData) => a.Date.length - b.Date.length,
+      render: (_text: string, record: any) => {
+        const rawDateVal = record.rawDate || record.Date;
+        if (!rawDateVal) return <span className="text-muted">N/A</span>;
+        const d = new Date(rawDateVal);
+        if (isNaN(d.getTime())) return <span className="text-muted">N/A</span>;
+
+        const now = new Date();
+        const isToday =
+          d.getDate() === now.getDate() &&
+          d.getMonth() === now.getMonth() &&
+          d.getFullYear() === now.getFullYear();
+
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        const isYesterday =
+          d.getDate() === yesterday.getDate() &&
+          d.getMonth() === yesterday.getMonth() &&
+          d.getFullYear() === yesterday.getFullYear();
+
+        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+
+        const dayNum = String(d.getDate()).padStart(2, '0');
+        const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
+        const yearNum = d.getFullYear();
+        const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' });
+        const fullDateStr = `${dayNum} ${monthShort} ${yearNum}`;
+
+        return (
+          <div className="d-flex align-items-center">
+            {/* Attractive Mini Calendar Block */}
+            <div
+              className="d-flex flex-column align-items-center justify-content-center rounded-2 me-2 border text-center flex-shrink-0 shadow-xs"
+              style={{
+                width: '44px',
+                height: '44px',
+                background: isToday ? '#ecfdf5' : isWeekend ? '#f8fafc' : '#ffffff',
+                borderColor: isToday ? '#10b981' : isWeekend ? '#cbd5e1' : '#e2e8f0',
+                lineHeight: 1
+              }}
+              title={`${dayOfWeek}, ${fullDateStr}`}
+            >
+              <span
+                className={`text-uppercase fw-bold ${isToday ? 'text-success' : isWeekend ? 'text-secondary' : 'text-muted'}`}
+                style={{ fontSize: '9px', letterSpacing: '0.5px' }}
+              >
+                {monthShort}
+              </span>
+              <span
+                className={`fw-bold fs-15 mt-1 ${isToday ? 'text-success' : isWeekend ? 'text-secondary' : 'text-dark'}`}
+              >
+                {dayNum}
+              </span>
+            </div>
+            <div>
+              <div className="d-flex align-items-center gap-1">
+                <span className="fw-semibold text-dark fs-13 mb-0">{dayOfWeek}</span>
+                {isToday && (
+                  <span className="badge bg-success-transparent text-success border border-success-subtle fs-10 px-1.5 py-0.5 rounded-pill">
+                    Today
+                  </span>
+                )}
+                {isYesterday && (
+                  <span className="badge bg-primary-transparent text-primary border border-primary-subtle fs-10 px-1.5 py-0.5 rounded-pill">
+                    Yesterday
+                  </span>
+                )}
+              </div>
+              <span className="fs-12 text-muted d-block mt-0.5">
+                <i className="ti ti-calendar me-1 fs-11 text-secondary" />
+                {fullDateStr}
+              </span>
+            </div>
+          </div>
+        );
+      },
+      sorter: (a: any, b: any) =>
+        new Date(a.rawDate || a.Date || 0).getTime() - new Date(b.rawDate || b.Date || 0).getTime(),
     },
     {
       title: "Check In",

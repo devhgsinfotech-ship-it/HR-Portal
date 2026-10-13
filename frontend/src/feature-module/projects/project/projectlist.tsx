@@ -52,6 +52,8 @@ interface ProjectItem {
 
 const ProjectList = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
+  const currencySymbol = currentUser?.currencySymbol || (currentUser?.currency === 'USD' ? '$' : '₹');
+  const currencyCode = currentUser?.currency || 'INR';
 
   // Scopes & Permission check
   const canReadFinance = currentUser?.role === 'SUPER_ADMIN' ||
@@ -775,7 +777,7 @@ const ProjectList = () => {
                     </div>
                     {canReadFinance && (
                       <div className="col-md-6 mb-3">
-                        <label className="form-label fs-13">Project Value / Budget (₹ INR)</label>
+                        <label className="form-label fs-13">Project Value / Budget ({currencySymbol} {currencyCode})</label>
                         <input
                           type="number"
                           className="form-control"
@@ -1073,7 +1075,7 @@ const ProjectList = () => {
                     </div>
                     {canReadFinance && (
                       <div className="col-md-6 mb-3">
-                        <label className="form-label fs-13">Project Value / Budget (₹ INR)</label>
+                        <label className="form-label fs-13">Project Value / Budget ({currencySymbol} {currencyCode})</label>
                         <input
                           type="number"
                           className="form-control"

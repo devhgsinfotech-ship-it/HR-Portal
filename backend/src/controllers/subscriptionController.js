@@ -2,6 +2,7 @@
 const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const { sendDomainApprovedEmail } = require('../utils/emailService');
+const { getUsdToInrRate, convertUsdToInr, convertInrToUsd } = require('../utils/currencyRate');
 
 // Helper to resolve features map seamlessly
 function resolveFeatures(planFeatures, customFeatures) {
@@ -31,12 +32,7 @@ function resolveFeatures(planFeatures, customFeatures) {
 
 const CURRENCY_SYMBOLS = {
   INR: '₹',
-  USD: '$',
-  EUR: '€',
-  GBP: '£',
-  AED: 'د.إ',
-  CAD: 'CA$',
-  AUD: 'AU$'
+  USD: '$'
 };
 
 function resolveCurrencySymbol(currency, symbol) {
@@ -57,6 +53,35 @@ async function getPlans(req, res) {
     const sysCurrency = sysSetting?.currency || 'INR';
     const sysSymbol = sysSetting?.currencySymbol || '₹';
 
+    let targetCurrency = sysCurrency;
+    let targetSymbol = sysSymbol;
+
+    const queryCurr = req.query?.currency ? req.query.currency.toUpperCase() : null;
+
+    if (queryCurr === 'USD' || queryCurr === 'INR') {
+      targetCurrency = queryCurr;
+      targetSymbol = queryCurr === 'USD' ? '$' : '₹';
+    } else if (req.user?.role !== 'SUPER_ADMIN') {
+      let companyId = req.user?.companyId;
+      if (!companyId && req.user?.id) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: req.user.id },
+          select: { companyId: true }
+        });
+        companyId = dbUser?.companyId;
+      }
+      if (companyId) {
+        const compSetting = await prisma.companySetting.findUnique({ where: { companyId } });
+        if (compSetting?.currency) {
+          targetCurrency = compSetting.currency.toUpperCase();
+          targetSymbol = compSetting.currencySymbol || (targetCurrency === 'USD' ? '$' : '₹');
+        }
+      }
+    }
+
+    const rate = await getUsdToInrRate();
+    const isUSD = targetCurrency === 'USD';
+
     const plans = await prisma.subscriptionPlan.findMany({
       include: {
         _count: {
@@ -67,23 +92,34 @@ async function getPlans(req, res) {
     });
 
     // Format response with subscriber count & currency info
-    const formatted = plans.map(p => ({
-      id: p.id,
-      name: p.name,
-      code: p.code,
-      description: p.description,
-      priceMonthly: p.priceMonthly,
-      priceYearly: p.priceYearly,
-      currency: p.currency || sysCurrency,
-      currencySymbol: p.currencySymbol || sysSymbol,
-      maxEmployees: p.maxEmployees,
-      maxStorageGb: p.maxStorageGb,
-      features: resolveFeatures(p.features),
-      isActive: p.isActive,
-      totalSubscribers: p._count.subscriptions,
-      createdAt: p.createdAt,
-      updatedAt: p.updatedAt
-    }));
+    const formatted = plans.map(p => {
+      const baseM = p.basePriceMonthly != null ? p.basePriceMonthly : p.priceMonthly;
+      const baseY = p.basePriceYearly != null ? p.basePriceYearly : p.priceYearly;
+
+      const calcMonthly = isUSD ? convertInrToUsd(baseM, rate) : baseM;
+      const calcYearly = isUSD ? convertInrToUsd(baseY, rate) : baseY;
+
+      return {
+        id: p.id,
+        name: p.name,
+        code: p.code,
+        description: p.description,
+        priceMonthly: calcMonthly,
+        priceYearly: calcYearly,
+        currency: targetCurrency,
+        currencySymbol: targetSymbol,
+        basePriceMonthly: baseM,
+        basePriceYearly: baseY,
+        exchangeRate: rate,
+        maxEmployees: p.maxEmployees,
+        maxStorageGb: p.maxStorageGb,
+        features: resolveFeatures(p.features),
+        isActive: p.isActive,
+        totalSubscribers: p._count.subscriptions,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt
+      };
+    });
 
     res.json(formatted);
   } catch (error) {
@@ -116,6 +152,14 @@ async function createPlan(req, res) {
     const chosenCurrency = (currency || 'INR').toUpperCase();
     const chosenSymbol = resolveCurrencySymbol(chosenCurrency, currencySymbol);
 
+    let basePriceMonthly = parseFloat(priceMonthly);
+    let basePriceYearly = parseFloat(priceYearly);
+    if (chosenCurrency === 'USD') {
+      const rate = await getUsdToInrRate();
+      basePriceMonthly = convertUsdToInr(basePriceMonthly, rate);
+      basePriceYearly = convertUsdToInr(basePriceYearly, rate);
+    }
+
     const plan = await prisma.subscriptionPlan.create({
       data: {
         name,
@@ -123,6 +167,8 @@ async function createPlan(req, res) {
         description: description || '',
         priceMonthly: parseFloat(priceMonthly),
         priceYearly: parseFloat(priceYearly),
+        basePriceMonthly,
+        basePriceYearly,
         currency: chosenCurrency,
         currencySymbol: chosenSymbol,
         maxEmployees: maxEmployees ? parseInt(maxEmployees, 10) : 10,
@@ -145,16 +191,33 @@ async function updatePlan(req, res) {
     const planId = parseInt(id, 10);
     if (isNaN(planId)) return res.status(400).json({ message: 'Invalid plan ID' });
 
+    const currentPlan = await prisma.subscriptionPlan.findUnique({ where: { id: planId } });
+    if (!currentPlan) return res.status(404).json({ message: 'Plan not found' });
+
     const { name, description, priceMonthly, priceYearly, maxEmployees, maxStorageGb, features, isActive, currency, currencySymbol } = req.body;
 
     const dataToUpdate = {};
     if (name !== undefined) dataToUpdate.name = name;
     if (description !== undefined) dataToUpdate.description = description;
-    if (priceMonthly !== undefined) dataToUpdate.priceMonthly = parseFloat(priceMonthly);
-    if (priceYearly !== undefined) dataToUpdate.priceYearly = parseFloat(priceYearly);
+
+    const targetCurrency = currency !== undefined ? currency.toUpperCase() : currentPlan.currency;
+
+    if (priceMonthly !== undefined) {
+      dataToUpdate.priceMonthly = parseFloat(priceMonthly);
+      dataToUpdate.basePriceMonthly = (targetCurrency === 'USD')
+        ? convertUsdToInr(dataToUpdate.priceMonthly, await getUsdToInrRate())
+        : dataToUpdate.priceMonthly;
+    }
+    if (priceYearly !== undefined) {
+      dataToUpdate.priceYearly = parseFloat(priceYearly);
+      dataToUpdate.basePriceYearly = (targetCurrency === 'USD')
+        ? convertUsdToInr(dataToUpdate.priceYearly, await getUsdToInrRate())
+        : dataToUpdate.priceYearly;
+    }
+
     if (currency !== undefined) {
-      dataToUpdate.currency = currency.toUpperCase();
-      dataToUpdate.currencySymbol = resolveCurrencySymbol(dataToUpdate.currency, currencySymbol);
+      dataToUpdate.currency = targetCurrency;
+      dataToUpdate.currencySymbol = resolveCurrencySymbol(targetCurrency, currencySymbol);
     } else if (currencySymbol !== undefined) {
       dataToUpdate.currencySymbol = currencySymbol;
     }
@@ -587,6 +650,21 @@ async function getCompanySubscription(req, res) {
     const sysCurrency = sysSetting?.currency || 'INR';
     const sysSymbol = sysSetting?.currencySymbol || '₹';
 
+    let compSetting = null;
+    if (companyId) {
+      compSetting = await prisma.companySetting.findUnique({ where: { companyId } });
+    }
+    const targetCurrency = compSetting?.currency || sysCurrency;
+    const targetSymbol = compSetting?.currencySymbol || (targetCurrency === 'USD' ? '$' : '₹');
+    const isUSD = targetCurrency === 'USD';
+    const rate = await getUsdToInrRate();
+
+    const baseM = sub.plan.basePriceMonthly != null ? sub.plan.basePriceMonthly : sub.plan.priceMonthly;
+    const baseY = sub.plan.basePriceYearly != null ? sub.plan.basePriceYearly : sub.plan.priceYearly;
+
+    const displayMonthly = isUSD ? convertInrToUsd(baseM, rate) : baseM;
+    const displayYearly = isUSD ? convertInrToUsd(baseY, rate) : baseY;
+
     res.json({
       subscriptionId: sub.id,
       companyId: sub.companyId,
@@ -596,10 +674,13 @@ async function getCompanySubscription(req, res) {
         name: sub.plan.name,
         code: sub.plan.code,
         description: sub.plan.description,
-        priceMonthly: sub.plan.priceMonthly,
-        priceYearly: sub.plan.priceYearly,
-        currency: sub.plan.currency || sysCurrency,
-        currencySymbol: sub.plan.currencySymbol || sysSymbol,
+        priceMonthly: displayMonthly,
+        priceYearly: displayYearly,
+        currency: targetCurrency,
+        currencySymbol: targetSymbol,
+        basePriceMonthly: baseM,
+        basePriceYearly: baseY,
+        exchangeRate: rate,
         maxEmployees: sub.plan.maxEmployees,
         maxStorageGb: sub.plan.maxStorageGb,
         features: resolveFeatures(sub.plan.features, sub.customFeatures)
@@ -735,7 +816,17 @@ async function changeCompanyPlan(req, res) {
     }
 
     const cycle = billingCycle === 'YEARLY' ? 'YEARLY' : 'MONTHLY';
-    const amount = cycle === 'YEARLY' ? targetPlan.priceYearly : targetPlan.priceMonthly;
+    const compSetting = await prisma.companySetting.findUnique({ where: { companyId } });
+    const compCurrency = compSetting?.currency || 'INR';
+    const isUSD = compCurrency === 'USD';
+    const rate = await getUsdToInrRate();
+
+    const baseAmount = cycle === 'YEARLY'
+      ? (targetPlan.basePriceYearly != null ? targetPlan.basePriceYearly : targetPlan.priceYearly)
+      : (targetPlan.basePriceMonthly != null ? targetPlan.basePriceMonthly : targetPlan.priceMonthly);
+
+    const invoiceAmount = isUSD ? convertInrToUsd(baseAmount, rate) : baseAmount;
+    const invoiceCurrency = isUSD ? 'USD' : 'INR';
 
     let sub = await prisma.subscription.findUnique({ where: { companyId } });
 
@@ -779,8 +870,8 @@ async function changeCompanyPlan(req, res) {
         companyId,
         subscriptionId: sub.id,
         invoiceNumber,
-        amount,
-        currency: targetPlan.currency || 'INR',
+        amount: invoiceAmount,
+        currency: invoiceCurrency,
         status: 'PAID',
         dueDate: now,
         paidAt: now,

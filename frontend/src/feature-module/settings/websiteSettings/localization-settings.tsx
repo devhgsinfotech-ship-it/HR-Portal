@@ -5,9 +5,15 @@ import { all_routes } from "../../../router/all_routes";
 import CommonSelect from "../../../core/common/commonSelect";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
 import apiClient from "../../../core/utils/apiClient";
+import { useSelector, useDispatch } from "react-redux";
+import { updateUser } from "../../../core/data/redux/authSlice";
 
 const Localizationsettings = () => {
   const routes = all_routes;
+  const dispatch = useDispatch();
+  const user = useSelector((state: any) => state.auth?.user);
+  const isSuperAdmin = (user?.role || "").toUpperCase() === "SUPER_ADMIN";
+
   const [selectedCurrency, setSelectedCurrency] = useState<string>("INR");
   const [saving, setSaving] = useState<boolean>(false);
   const [alert, setAlert] = useState<{ type: "success" | "danger"; message: string } | null>(null);
@@ -15,25 +21,43 @@ const Localizationsettings = () => {
   useEffect(() => {
     const fetchCurr = async () => {
       try {
-        const res = await apiClient.get("/system-settings");
-        if (res.data?.success && res.data.settings?.currency) {
-          setSelectedCurrency(res.data.settings.currency);
+        if (isSuperAdmin) {
+          const res = await apiClient.get("/system-settings");
+          if (res.data?.success && res.data.settings?.currency) {
+            setSelectedCurrency(res.data.settings.currency);
+          }
+        } else {
+          const res = await apiClient.get("/auth/company-settings");
+          if (res.data?.success && res.data.company) {
+            const curr = res.data.company.currency || res.data.company.settings?.currency || "INR";
+            setSelectedCurrency(curr);
+          }
         }
       } catch (e) {
-        console.error("Failed to load system settings in localization:", e);
+        console.error("Failed to load settings in localization:", e);
       }
     };
     fetchCurr();
-  }, []);
+  }, [isSuperAdmin]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setSaving(true);
       setAlert(null);
-      const res = await apiClient.post("/system-settings/set-default-currency", { code: selectedCurrency });
-      if (res.data?.success) {
-        setAlert({ type: "success", message: `System currency updated to ${selectedCurrency} successfully!` });
+      if (isSuperAdmin) {
+        const res = await apiClient.post("/system-settings/set-default-currency", { code: selectedCurrency });
+        if (res.data?.success) {
+          setAlert({ type: "success", message: `System currency updated to ${selectedCurrency} successfully!` });
+        }
+      } else {
+        const res = await apiClient.put("/auth/company-settings", { currency: selectedCurrency });
+        if (res.data?.success) {
+          const sym = selectedCurrency === "USD" ? "$" : "₹";
+          dispatch(updateUser({ currency: selectedCurrency, currencySymbol: sym }));
+          window.dispatchEvent(new CustomEvent('companyCurrencyUpdated', { detail: { currency: selectedCurrency, currencySymbol: sym } }));
+          setAlert({ type: "success", message: `Company operating currency updated to ${selectedCurrency} (${sym}) successfully!` });
+        }
       }
     } catch (err: any) {
       setAlert({ type: "danger", message: err.response?.data?.message || "Failed to update currency." });
@@ -70,18 +94,12 @@ const Localizationsettings = () => {
     { value: "March", label: "March" },
   ];
   const currencyOptions = [
-    { value: "INR", label: "INR (Indian Rupee)" },
-    { value: "USD", label: "USD (US Dollar)" },
-    { value: "EUR", label: "EUR (Euro)" },
-    { value: "GBP", label: "GBP (British Pound)" },
-    { value: "AED", label: "AED (UAE Dirham)" },
+    { value: "INR", label: "INR (Indian Rupee - ₹)" },
+    { value: "USD", label: "USD (US Dollar - $)" },
   ];
   const symbols = [
     { value: "₹", label: "₹ (INR)" },
     { value: "$", label: "$ (USD)" },
-    { value: "€", label: "€ (EUR)" },
-    { value: "£", label: "£ (GBP)" },
-    { value: "د.إ", label: "د.إ (AED)" },
   ];
   const symbolsandvalue = [
     { value: "$100", label: "$100" },
