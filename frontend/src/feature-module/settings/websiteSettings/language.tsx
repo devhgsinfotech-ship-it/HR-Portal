@@ -48,7 +48,7 @@ const Language = () => {
                 </Link>
               </li>
               <li className="nav-item">
-                <Link className="nav-link active" to={routes.businessSettings}>
+                <Link className="nav-link active" to={routes.companySettings}>
                   <i className="ti ti-world-cog me-2" />
                   Website Settings
                 </Link>
@@ -87,7 +87,7 @@ const Language = () => {
                         to={routes.businessSettings}
                         className="d-inline-flex align-items-center rounded  py-2 px-3"
                       >
-                        Business Settings
+                        Company Settings
                       </Link>
                       <Link
                         to={routes.seoSettings}

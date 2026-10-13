@@ -527,36 +527,46 @@ async function getHrDashboardSummary(req, res) {
         // ── 8. Recruitment & Benefits/Payroll stats (Dynamic from SQL DB) ────────
         let recruitmentStats = { applicants: 0, hired: 0, avgTimeDays: 0, interviewPositions: 0 };
         try {
-            const pendingOnboarding = await prisma.employee.count({
+            // Active applicants currently in recruitment pipeline
+            const activeApplicants = await prisma.applicant.count({
                 where: {
-                    user: { companyId },
-                    onboardingStatus: { in: ['INVITED', 'PROFILE_SUBMITTED', 'DOCS_SUBMITTED', 'HR_REVIEW', 'CORRECTION_REQUESTED'] }
+                    companyId,
+                    stage: { in: ['APPLIED', 'SHORTLISTED', 'INTERVIEW', 'OFFER'] }
                 }
             });
-            const completedOnboarding = await prisma.employee.findMany({
+
+            // Hired applicants in recruitment
+            const hiredCandidates = await prisma.applicant.findMany({
                 where: {
-                    user: { companyId },
-                    onboardingStatus: 'COMPLETED'
+                    companyId,
+                    stage: 'HIRED'
                 },
-                select: { createdAt: true, updatedAt: true }
+                select: { appliedAt: true, updatedAt: true }
             });
-            const activeDesignations = await prisma.designation.count({ where: { companyId } });
+
+            // Open job postings in recruitment
+            const openJobPostings = await prisma.jobPosting.count({
+                where: {
+                    companyId,
+                    status: 'OPEN'
+                }
+            });
 
             let avgTimeDays = 0;
-            if (completedOnboarding.length > 0) {
-                const totalDays = completedOnboarding.reduce((sum, emp) => {
-                    const created = new Date(emp.createdAt).getTime();
-                    const updated = new Date(emp.updatedAt).getTime();
-                    return sum + Math.max(1, Math.round((updated - created) / (1000 * 60 * 60 * 24)));
+            if (hiredCandidates.length > 0) {
+                const totalDays = hiredCandidates.reduce((sum, cand) => {
+                    const applied = new Date(cand.appliedAt).getTime();
+                    const hired = new Date(cand.updatedAt).getTime();
+                    return sum + Math.max(1, Math.round((hired - applied) / (1000 * 60 * 60 * 24)));
                 }, 0);
-                avgTimeDays = Math.round(totalDays / completedOnboarding.length);
+                avgTimeDays = Math.round(totalDays / hiredCandidates.length);
             }
 
             recruitmentStats = {
-                applicants: pendingOnboarding,
-                hired: completedOnboarding.length,
+                applicants: activeApplicants,
+                hired: hiredCandidates.length,
                 avgTimeDays: avgTimeDays,
-                interviewPositions: activeDesignations
+                interviewPositions: openJobPostings
             };
         } catch (rErr) {
             console.error('Error fetching recruitment stats:', rErr);

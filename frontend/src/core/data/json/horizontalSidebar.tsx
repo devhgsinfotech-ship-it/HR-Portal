@@ -1021,11 +1021,6 @@ export const HorizontalSidebarData = [
                 base: 'company-settings',
               },
               {
-                menuValue: 'Business Settings',
-                route: routes.businessSettings,
-                base: 'bussiness-settings',
-              },
-              {
                 menuValue: 'SEO Settings',
                 route: routes.seoSettings,
                 base: 'seo-settings',

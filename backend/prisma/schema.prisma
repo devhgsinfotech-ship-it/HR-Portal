@@ -63,6 +63,8 @@ model SubscriptionPlan {
   maxEmployees  Int            @default(10)
   maxStorageGb  Float          @default(5)
   features      Json?
+  currency      String         @default("INR")
+  currencySymbol String        @default("₹")
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -1302,4 +1304,30 @@ enum ReferralStatus {
   REVIEWED
   HIRED
   REJECTED
+}
+
+model SystemSetting {
+  id             Int      @id @default(autoincrement())
+  systemName     String   @default("HR Portal")
+  logoUrl        String?
+  currency       String   @default("INR")
+  currencySymbol String   @default("₹")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model Currency {
+  id             Int      @id @default(autoincrement())
+  name           String
+  code           String   @unique
+  symbol         String
+  symbolPosition String   @default("Front")
+  isDefault      Boolean  @default(false)
+  status         String   @default("Active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("currencies")
 }

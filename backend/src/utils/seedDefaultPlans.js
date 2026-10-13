@@ -27,6 +27,8 @@ const DEFAULT_PLANS = [
     maxEmployees: 10,
     maxStorageGb: 5.0,
     features: createFeatureMap(['Employees', 'Attendance', 'Reports']),
+    currency: 'INR',
+    currencySymbol: '₹',
     isActive: true
   },
   {
@@ -38,6 +40,8 @@ const DEFAULT_PLANS = [
     maxEmployees: 50,
     maxStorageGb: 25.0,
     features: createFeatureMap(['Employees', 'Attendance', 'Reports', 'Payroll', 'Projects', 'Assets', 'Tickets', 'Invoices', 'Clients']),
+    currency: 'INR',
+    currencySymbol: '₹',
     isActive: true
   },
   {
@@ -49,6 +53,8 @@ const DEFAULT_PLANS = [
     maxEmployees: 99999,
     maxStorageGb: 100.0,
     features: createFeatureMap(ALL_MODULES),
+    currency: 'INR',
+    currencySymbol: '₹',
     isActive: true
   }
 ];

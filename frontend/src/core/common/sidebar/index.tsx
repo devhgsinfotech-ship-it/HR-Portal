@@ -190,7 +190,7 @@ const filterMenu = (items: SidebarMenuItem[] | undefined, role: Role): SidebarMe
       return false;
     }
 
-    // Explicitly hide "User Management" parent menu for SUPER_ADMIN
+    // Explicitly hide "User Management" for SUPER_ADMIN
     if (normalizedRole === "SUPER_ADMIN") {
       const labelLower = (item.label || "").toLowerCase();
       const baseLower = (item.base || "").toLowerCase();
@@ -399,8 +399,10 @@ const Sidebar = React.memo(() => {
       }
     };
     window.addEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
+    window.addEventListener("systemLogoUpdated", handleLogoUpdate as EventListener);
     return () => {
       window.removeEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
+      window.removeEventListener("systemLogoUpdated", handleLogoUpdate as EventListener);
     };
   }, []);
 

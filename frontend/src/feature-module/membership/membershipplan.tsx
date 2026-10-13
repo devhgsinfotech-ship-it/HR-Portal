@@ -121,7 +121,7 @@ const Membershipplan = () => {
                   <div className="p-3 bg-white rounded-3 border d-inline-block text-center shadow-sm">
                     <span className="text-muted fs-12">Price</span>
                     <h2 className="text-primary fw-bold mb-0">
-                      ₹{(companySub.billingCycle === 'YEARLY' ? companySub.plan?.priceYearly : companySub.plan?.priceMonthly)?.toLocaleString('en-IN')}
+                      {(companySub.plan?.currencySymbol || '₹')}{(companySub.billingCycle === 'YEARLY' ? companySub.plan?.priceYearly : companySub.plan?.priceMonthly)?.toLocaleString()}
                       <span className="fs-13 text-muted fw-normal">/{companySub.billingCycle === 'YEARLY' ? 'year' : 'month'}</span>
                     </h2>
                   </div>
@@ -182,7 +182,7 @@ const Membershipplan = () => {
 
                       <div className="bg-light p-3 rounded-3 text-center mb-3">
                         <h2 className="text-dark fw-bold mb-0">
-                          ₹{price?.toLocaleString('en-IN')}
+                          {(p.currencySymbol || '₹')}{price?.toLocaleString()}
                           <span className="text-muted fs-13 fw-normal">/{isYearly ? 'yr' : 'mo'}</span>
                         </h2>
                         <span className="fs-12 text-muted">Up to {p.maxEmployees} Employees • {p.maxStorageGb} GB Storage</span>

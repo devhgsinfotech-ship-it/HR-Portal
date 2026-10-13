@@ -20,6 +20,18 @@ interface PackageListItem {
   maxEmployees: number;
 }
 
+const CURRENCY_OPTIONS = [
+  { code: 'INR', symbol: '₹', label: 'INR (₹) - Indian Rupee' },
+  { code: 'USD', symbol: '$', label: 'USD ($) - US Dollar' },
+  { code: 'EUR', symbol: '€', label: 'EUR (€) - Euro' },
+  { code: 'GBP', symbol: '£', label: 'GBP (£) - British Pound' },
+  { code: 'AED', symbol: 'د.إ', label: 'AED (د.إ) - UAE Dirham' },
+  { code: 'CAD', symbol: 'CA$', label: 'CAD (CA$) - Canadian Dollar' },
+  { code: 'AUD', symbol: 'AU$', label: 'AUD (AU$) - Australian Dollar' },
+  { code: 'SGD', symbol: 'S$', label: 'SGD (S$) - Singapore Dollar' },
+  { code: 'SAR', symbol: '﷼', label: 'SAR (﷼) - Saudi Riyal' }
+];
+
 const Packages = () => {
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -35,7 +47,8 @@ const Packages = () => {
     features: ['Employees', 'Invoices', 'Reports', 'Attendance', 'Payroll'],
     country: 'India',
     state: 'All India',
-    currency: 'INR (₹)',
+    currency: 'INR',
+    currencySymbol: '₹',
     isActive: true
   });
 
@@ -46,6 +59,8 @@ const Packages = () => {
     description: '',
     priceMonthly: 0,
     priceYearly: 0,
+    currency: 'INR',
+    currencySymbol: '₹',
     maxEmployees: 10,
     maxStorageGb: 5,
     features: [],
@@ -95,6 +110,8 @@ const Packages = () => {
       description: plan.description || '',
       priceMonthly: plan.priceMonthly || 0,
       priceYearly: plan.priceYearly || 0,
+      currency: plan.currency || 'INR',
+      currencySymbol: plan.currencySymbol || '₹',
       maxEmployees: plan.maxEmployees || 10,
       maxStorageGb: plan.maxStorageGb || 5,
       features: enabledFeats,
@@ -162,6 +179,8 @@ const Packages = () => {
         description: newPlan.description,
         priceMonthly: Number(newPlan.priceMonthly),
         priceYearly: Number(newPlan.priceYearly),
+        currency: newPlan.currency || 'INR',
+        currencySymbol: newPlan.currencySymbol || '₹',
         maxEmployees: Number(newPlan.maxEmployees),
         maxStorageGb: Number(newPlan.maxStorageGb),
         features: featMap,
@@ -185,7 +204,8 @@ const Packages = () => {
         features: ['Employees', 'Invoices', 'Reports', 'Attendance', 'Payroll'],
         country: 'India',
         state: 'All India',
-        currency: 'INR (₹)',
+        currency: 'INR',
+        currencySymbol: '₹',
         isActive: true
       });
       setCustomFeature('');
@@ -211,6 +231,8 @@ const Packages = () => {
         description: editingPlan.description,
         priceMonthly: Number(editingPlan.priceMonthly),
         priceYearly: Number(editingPlan.priceYearly),
+        currency: editingPlan.currency || 'INR',
+        currencySymbol: editingPlan.currencySymbol || '₹',
         maxEmployees: Number(editingPlan.maxEmployees),
         maxStorageGb: Number(editingPlan.maxStorageGb),
         features: featMap,
@@ -227,17 +249,20 @@ const Packages = () => {
     }
   };
 
-  const tableData: PackageListItem[] = plans.map(p => ({
-    id: p.id,
-    Plan_Name: p.name,
-    Plan_Type: 'Monthly / Yearly',
-    Total_Subscribers: p.totalSubscribers || 0,
-    Price: `₹${p.priceMonthly.toLocaleString('en-IN')}/mo (₹${p.priceYearly.toLocaleString('en-IN')}/yr)`,
-    Created_Date: p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'N/A',
-    Status: p.isActive ? 'Active' : 'Inactive',
-    code: p.code,
-    maxEmployees: p.maxEmployees
-  }));
+  const tableData: PackageListItem[] = plans.map(p => {
+    const sym = p.currencySymbol || '₹';
+    return {
+      id: p.id,
+      Plan_Name: p.name,
+      Plan_Type: 'Monthly / Yearly',
+      Total_Subscribers: p.totalSubscribers || 0,
+      Price: `${sym}${p.priceMonthly.toLocaleString()}/mo (${sym}${p.priceYearly.toLocaleString()}/yr)`,
+      Created_Date: p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'N/A',
+      Status: p.isActive ? 'Active' : 'Inactive',
+      code: p.code,
+      maxEmployees: p.maxEmployees
+    };
+  });
 
   const totalPlansCount = plans.length;
   const activePlansCount = plans.filter(p => p.isActive).length;
@@ -694,10 +719,10 @@ const Packages = () => {
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label">
-                        Monthly Price (₹ INR)<span className="text-danger"> *</span>
+                        Monthly Price ({newPlan.currencySymbol || '₹'} {newPlan.currency})<span className="text-danger"> *</span>
                       </label>
                       <div className="input-group">
-                        <span className="input-group-text">₹</span>
+                        <span className="input-group-text">{newPlan.currencySymbol || '₹'}</span>
                         <input
                           type="number"
                           className="form-control"
@@ -712,10 +737,10 @@ const Packages = () => {
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label">
-                        Yearly Price (₹ INR)<span className="text-danger"> *</span>
+                        Yearly Price ({newPlan.currencySymbol || '₹'} {newPlan.currency})<span className="text-danger"> *</span>
                       </label>
                       <div className="input-group">
-                        <span className="input-group-text">₹</span>
+                        <span className="input-group-text">{newPlan.currencySymbol || '₹'}</span>
                         <input
                           type="number"
                           className="form-control"
@@ -754,13 +779,25 @@ const Packages = () => {
                   </div>
                   <div className="col-md-4">
                     <div className="mb-3">
-                      <label className="form-label">Currency</label>
+                      <label className="form-label">Currency<span className="text-danger"> *</span></label>
                       <select
                         className="form-select"
                         value={newPlan.currency}
-                        onChange={(e) => setNewPlan({ ...newPlan, currency: e.target.value })}
+                        onChange={(e) => {
+                          const cur = e.target.value;
+                          const found = CURRENCY_OPTIONS.find(c => c.code === cur);
+                          setNewPlan({
+                            ...newPlan,
+                            currency: cur,
+                            currencySymbol: found ? found.symbol : '₹'
+                          });
+                        }}
                       >
-                        <option value="INR (₹)">INR (₹) - Indian Rupee</option>
+                        {CURRENCY_OPTIONS.map(c => (
+                          <option key={c.code} value={c.code}>
+                            {c.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -946,10 +983,10 @@ const Packages = () => {
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label">
-                        Monthly Price (₹ INR)<span className="text-danger"> *</span>
+                        Monthly Price ({editingPlan.currencySymbol || '₹'} {editingPlan.currency})<span className="text-danger"> *</span>
                       </label>
                       <div className="input-group">
-                        <span className="input-group-text">₹</span>
+                        <span className="input-group-text">{editingPlan.currencySymbol || '₹'}</span>
                         <input
                           type="number"
                           className="form-control"
@@ -963,10 +1000,10 @@ const Packages = () => {
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label">
-                        Yearly Price (₹ INR)<span className="text-danger"> *</span>
+                        Yearly Price ({editingPlan.currencySymbol || '₹'} {editingPlan.currency})<span className="text-danger"> *</span>
                       </label>
                       <div className="input-group">
-                        <span className="input-group-text">₹</span>
+                        <span className="input-group-text">{editingPlan.currencySymbol || '₹'}</span>
                         <input
                           type="number"
                           className="form-control"
@@ -978,7 +1015,7 @@ const Packages = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-4">
+                  <div className="col-md-3">
                     <div className="mb-3">
                       <label className="form-label">Max Employees</label>
                       <input
@@ -989,7 +1026,7 @@ const Packages = () => {
                       />
                     </div>
                   </div>
-                  <div className="col-md-4">
+                  <div className="col-md-3">
                     <div className="mb-3">
                       <label className="form-label">Max Storage (GB)</label>
                       <input
@@ -1000,7 +1037,31 @@ const Packages = () => {
                       />
                     </div>
                   </div>
-                  <div className="col-md-4">
+                  <div className="col-md-3">
+                    <div className="mb-3">
+                      <label className="form-label">Currency<span className="text-danger"> *</span></label>
+                      <select
+                        className="form-select"
+                        value={editingPlan.currency || 'INR'}
+                        onChange={(e) => {
+                          const cur = e.target.value;
+                          const found = CURRENCY_OPTIONS.find(c => c.code === cur);
+                          setEditingPlan({
+                            ...editingPlan,
+                            currency: cur,
+                            currencySymbol: found ? found.symbol : '₹'
+                          });
+                        }}
+                      >
+                        {CURRENCY_OPTIONS.map(c => (
+                          <option key={c.code} value={c.code}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
                     <div className="mb-3">
                       <label className="form-label">Status<span className="text-danger"> *</span></label>
                       <select

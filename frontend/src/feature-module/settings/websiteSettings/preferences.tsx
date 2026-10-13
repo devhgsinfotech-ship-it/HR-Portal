@@ -78,10 +78,10 @@ const Preference = () => {
                   <div className="card-body">
                     <div className="d-flex flex-column list-group settings-list">
                       <Link
-                        to={routes.businessSettings}
+                        to={routes.companySettings}
                         className="d-inline-flex align-items-center rounded py-2 px-3"
                       >
-                        Business Settings
+                        Company Settings
                       </Link>
                       <Link
                         to={routes.seoSettings}

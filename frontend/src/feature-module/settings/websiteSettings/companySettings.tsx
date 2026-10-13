@@ -4,7 +4,7 @@ import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { all_routes } from "../../../router/all_routes";
 import { OverlayTrigger, Tooltip } from "react-bootstrap";
 import apiClient from "../../../core/utils/apiClient";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { updateUser } from "../../../core/data/redux/authSlice";
 import type { AppDispatch } from "../../../core/data/redux/store";
 
@@ -29,6 +29,8 @@ const getFeatureList = (features: any): string[] => {
 const CompanySettings = () => {
   const routes = all_routes;
   const dispatch = useDispatch<AppDispatch>();
+  const user = useSelector((state: any) => state.auth?.user);
+  const isSuperAdmin = (user?.role || "").toUpperCase() === "SUPER_ADMIN";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'danger'; text: string } | null>(null);
@@ -63,6 +65,10 @@ const CompanySettings = () => {
   };
 
   useEffect(() => {
+    if (isSuperAdmin) {
+      setLoading(false);
+      return;
+    }
     const fetchCompanySettings = async () => {
       try {
         setLoading(true);
@@ -172,6 +178,55 @@ const CompanySettings = () => {
     }
   };
 
+  if (isSuperAdmin) {
+    return (
+      <div className="page-wrapper">
+        <div className="content">
+          <div className="d-md-flex d-block align-items-center justify-content-between page-breadcrumb mb-4">
+            <div className="my-auto mb-2">
+              <h2 className="mb-1 text-dark fw-bold">Company Settings</h2>
+              <nav>
+                <ol className="breadcrumb mb-0">
+                  <li className="breadcrumb-item">
+                    <Link to={routes.superAdminDashboard}>
+                      <i className="ti ti-smart-home" /> Dashboard
+                    </Link>
+                  </li>
+                  <li className="breadcrumb-item">Settings</li>
+                  <li className="breadcrumb-item active" aria-current="page">
+                    Company Settings
+                  </li>
+                </ol>
+              </nav>
+            </div>
+          </div>
+
+          <div className="card shadow-sm border p-4 text-center">
+            <div
+              className="avatar avatar-xxl bg-primary-transparent text-primary mx-auto mb-3 d-flex align-items-center justify-content-center rounded-circle"
+              style={{ width: "70px", height: "70px" }}
+            >
+              <i className="ti ti-building fs-36" />
+            </div>
+            <h4 className="fw-bold mb-2">Multi-Tenant Company Configuration</h4>
+            <p className="text-muted mx-auto mb-4" style={{ maxWidth: "600px" }}>
+              Each registered company admin configures their own logo, profile, and website settings from their own company dashboard.
+              As Super Admin, you configure the platform-wide header logo and system currency from Super Admin Settings.
+            </p>
+            <div className="d-flex justify-content-center gap-2 flex-wrap">
+              <Link to={routes.superAdminSettings} className="btn btn-primary">
+                <i className="ti ti-settings me-1" /> Open Super Admin Platform Settings
+              </Link>
+              <Link to={routes.superAdminCompanies} className="btn btn-outline-secondary">
+                <i className="ti ti-building-community me-1" /> View Registered Companies
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="page-wrapper">
@@ -208,6 +263,46 @@ const CompanySettings = () => {
             </div>
           </div>
 
+          {/* Top Settings Nav Tabs */}
+          <ul className="nav nav-tabs nav-tabs-solid bg-transparent border-bottom mb-3 mt-3">
+            <li className="nav-item">
+              <Link className="nav-link" to={routes.profilesettings}>
+                <i className="ti ti-settings me-2" />
+                General Settings
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link className="nav-link active" to={routes.companySettings}>
+                <i className="ti ti-world-cog me-2" />
+                Website Settings
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link className="nav-link" to={routes.salarySettings}>
+                <i className="ti ti-device-ipad-horizontal-cog me-2" />
+                App Settings
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link className="nav-link" to={routes.emailSettings}>
+                <i className="ti ti-server-cog me-2" />
+                System Settings
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link className="nav-link" to={routes.paymentGateways}>
+                <i className="ti ti-settings-dollar me-2" />
+                Financial Settings
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link className="nav-link" to={routes.customCss}>
+                <i className="ti ti-settings-2 me-2" />
+                Other Settings
+              </Link>
+            </li>
+          </ul>
+
           {message && (
             <div className={`alert alert-${message.type} alert-dismissible fade show mt-3 mb-3`} role="alert">
               {message.text}
@@ -224,12 +319,16 @@ const CompanySettings = () => {
           ) : (
             <div className="row">
               <div className="col-xxl-2 col-xl-3">
-                <div className="pt-3 d-flex flex-column list-group mb-4">
+                <div className="pt-3 d-flex flex-column list-group mb-4 settings-list">
                   <Link
                     to={routes.companySettings}
                     className="d-block rounded p-2 active"
                   >
+                    <i className="ti ti-arrow-badge-right me-2" />
                     Company Settings
+                  </Link>
+                  <Link to={routes.seoSettings} className="d-block rounded p-2">
+                    SEO Settings
                   </Link>
                   <Link to={routes.localizationSettings} className="d-block rounded p-2">
                     Localization
@@ -240,14 +339,17 @@ const CompanySettings = () => {
                   <Link to={routes.preference} className="d-block rounded p-2">
                     Preferences
                   </Link>
-                  <Link
-                    to={routes.socialAuthentication}
-                    className="d-block rounded p-2"
-                  >
-                    Social Authentication
+                  <Link to={routes.appearance} className="d-block rounded p-2">
+                    Appearance
                   </Link>
                   <Link to={routes.language} className="d-block rounded p-2">
                     Language
+                  </Link>
+                  <Link to={routes.authenticationSettings} className="d-block rounded p-2">
+                    Authentication Settings
+                  </Link>
+                  <Link to={routes.aiSettings} className="d-block rounded p-2">
+                    AI Settings
                   </Link>
                 </div>
               </div>
@@ -425,7 +527,7 @@ const CompanySettings = () => {
                             <div className="card-body">
                               <div className="d-flex align-items-center justify-content-between mb-2">
                                 <span className="fw-bold text-dark fs-16">{subscriptionData.plan?.name}</span>
-                                <span className="text-primary fw-medium">${subscriptionData.plan?.priceMonthly}/mo</span>
+                                <span className="text-primary fw-medium">{subscriptionData.plan?.currencySymbol || '₹'}{subscriptionData.plan?.priceMonthly}/mo</span>
                               </div>
                               <p className="fs-12 text-muted mb-3">{subscriptionData.plan?.description}</p>
                               

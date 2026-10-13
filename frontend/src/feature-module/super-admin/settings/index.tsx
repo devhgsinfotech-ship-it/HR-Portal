@@ -1,0 +1,568 @@
+import React, { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
+import { all_routes } from "../../../router/all_routes";
+import apiClient from "../../../core/utils/apiClient";
+import { useAppDispatch, useAppSelector } from "../../../core/data/redux/store";
+import { updateUser } from "../../../core/data/redux/authSlice";
+
+const POPULAR_CURRENCIES = [
+  { code: "INR", symbol: "₹", name: "Indian Rupee" },
+  { code: "USD", symbol: "$", name: "US Dollar" },
+  { code: "EUR", symbol: "€", name: "Euro" },
+  { code: "GBP", symbol: "£", name: "British Pound" },
+  { code: "AED", symbol: "د.إ", name: "UAE Dirham" },
+  { code: "CAD", symbol: "$", name: "Canadian Dollar" },
+  { code: "AUD", symbol: "$", name: "Australian Dollar" },
+];
+
+const SuperAdminSettings: React.FC = () => {
+  const routes = all_routes;
+  const dispatch = useAppDispatch();
+  const { user } = useAppSelector((state) => state.auth);
+
+  const [loading, setLoading] = useState<boolean>(true);
+  const [savingLogo, setSavingLogo] = useState<boolean>(false);
+  const [savingCurrency, setSavingCurrency] = useState<boolean>(false);
+  const [savingGeneral, setSavingGeneral] = useState<boolean>(false);
+  const [alert, setAlert] = useState<{ type: "success" | "danger"; message: string } | null>(null);
+
+  // Form State
+  const [systemName, setSystemName] = useState<string>("HR Portal");
+  const [currentLogoUrl, setCurrentLogoUrl] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  const [currency, setCurrency] = useState<string>("INR");
+  const [currencySymbol, setCurrencySymbol] = useState<string>("₹");
+  const [allCurrencies, setAllCurrencies] = useState<any[]>([]);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const getFullLogoUrl = (url: string | null | undefined) => {
+    if (!url) return null;
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) {
+      return url;
+    }
+    const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+    const clean = url.startsWith("/") ? url : `/${url}`;
+    return `${base}${clean}`;
+  };
+
+  const fetchSettings = async () => {
+    try {
+      setLoading(true);
+      const [settingsRes, currRes] = await Promise.all([
+        apiClient.get("/system-settings").catch(() => null),
+        apiClient.get("/system-settings/currencies").catch(() => null),
+      ]);
+
+      if (settingsRes?.data?.success && settingsRes.data.settings) {
+        const s = settingsRes.data.settings;
+        setSystemName(s.systemName || "HR Portal");
+        setCurrentLogoUrl(s.logoUrl || null);
+        setLogoPreview(s.logoUrl ? getFullLogoUrl(s.logoUrl) : null);
+        if (s.currency) setCurrency(s.currency);
+        if (s.currencySymbol) setCurrencySymbol(s.currencySymbol);
+      }
+
+      if (currRes?.data?.success && Array.isArray(currRes.data.currencies)) {
+        setAllCurrencies(currRes.data.currencies);
+        const def = currRes.data.currencies.find((c: any) => c.isDefault);
+        if (def) {
+          setCurrency(def.code);
+          setCurrencySymbol(def.symbol);
+        }
+      }
+    } catch (err: any) {
+      console.error("Failed to load system settings:", err);
+      setAlert({ type: "danger", message: "Failed to load system settings from server." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setLogoFile(file);
+      setLogoPreview(URL.createObjectURL(file));
+      setAlert(null);
+    }
+  };
+
+  const handleSaveLogo = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!logoFile && !currentLogoUrl) {
+      setAlert({ type: "danger", message: "Please select an image file to upload." });
+      return;
+    }
+
+    try {
+      setSavingLogo(true);
+      setAlert(null);
+      const formData = new FormData();
+      if (logoFile) {
+        formData.append("logo", logoFile);
+      }
+
+      const res = await apiClient.put("/system-settings", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (res.data?.success) {
+        const newLogo = res.data.settings?.logoUrl;
+        setCurrentLogoUrl(newLogo);
+        setLogoFile(null);
+        if (newLogo) {
+          setLogoPreview(getFullLogoUrl(newLogo));
+          dispatch(updateUser({ companyLogoUrl: newLogo }));
+          window.dispatchEvent(new CustomEvent("companyLogoUpdated", { detail: newLogo }));
+          window.dispatchEvent(new CustomEvent("systemLogoUpdated", { detail: newLogo }));
+        }
+        setAlert({
+          type: "success",
+          message: "Super Admin header logo updated successfully! Header and sidebar updated.",
+        });
+      }
+    } catch (err: any) {
+      console.error("Failed to save logo:", err);
+      setAlert({
+        type: "danger",
+        message: err.response?.data?.message || "Failed to update Super Admin logo.",
+      });
+    } finally {
+      setSavingLogo(false);
+    }
+  };
+
+  const handleSaveCurrency = async (selectedCode?: string, selectedSymbol?: string) => {
+    const targetCode = (selectedCode || currency).toUpperCase();
+    const targetSymbol = selectedSymbol || currencySymbol;
+
+    try {
+      setSavingCurrency(true);
+      setAlert(null);
+
+      const res = await apiClient.post("/system-settings/set-default-currency", {
+        code: targetCode,
+      });
+
+      if (res.data?.success) {
+        setCurrency(targetCode);
+        setCurrencySymbol(res.data.currency?.symbol || targetSymbol);
+        setAlert({
+          type: "success",
+          message: `Default currency changed to ${targetCode} (${res.data.currency?.symbol || targetSymbol}) successfully!`,
+        });
+        fetchSettings();
+      }
+    } catch (err: any) {
+      console.error("Failed to update currency:", err);
+      setAlert({
+        type: "danger",
+        message: err.response?.data?.message || "Failed to update system currency.",
+      });
+    } finally {
+      setSavingCurrency(false);
+    }
+  };
+
+  const handleSaveGeneral = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSavingGeneral(true);
+      setAlert(null);
+
+      const res = await apiClient.put("/system-settings", {
+        systemName,
+        currency,
+        currencySymbol,
+      });
+
+      if (res.data?.success) {
+        setAlert({
+          type: "success",
+          message: "Platform settings saved successfully!",
+        });
+      }
+    } catch (err: any) {
+      console.error("Failed to save platform settings:", err);
+      setAlert({
+        type: "danger",
+        message: err.response?.data?.message || "Failed to save settings.",
+      });
+    } finally {
+      setSavingGeneral(false);
+    }
+  };
+
+  return (
+    <div className="page-wrapper">
+      <div className="content">
+        {/* Breadcrumb Header */}
+        <div className="d-md-flex d-block align-items-center justify-content-between page-breadcrumb mb-4">
+          <div className="my-auto mb-2">
+            <h2 className="mb-1 text-dark fw-bold">Super Admin Platform Settings</h2>
+            <nav>
+              <ol className="breadcrumb mb-0">
+                <li className="breadcrumb-item">
+                  <Link to={routes.superAdminDashboard}>
+                    <i className="ti ti-smart-home" /> Dashboard
+                  </Link>
+                </li>
+                <li className="breadcrumb-item">Super Admin</li>
+                <li className="breadcrumb-item active" aria-current="page">
+                  Platform Settings
+                </li>
+              </ol>
+            </nav>
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <Link to={routes.currencies} className="btn btn-outline-primary btn-sm">
+              <i className="ti ti-currency-dollar me-1" /> Manage Currencies Table
+            </Link>
+          </div>
+        </div>
+
+        {/* Tenant Isolation Banner */}
+        <div className="alert alert-info d-flex align-items-center mb-4" role="alert">
+          <i className="ti ti-info-circle fs-20 me-2" />
+          <div>
+            <strong>Multi-Tenant Isolation:</strong> These settings configure the <strong>Super Admin &amp; Platform</strong> branding (header logo, system currency). Individual companies manage their own logos and company settings independently in their company admin portals.
+          </div>
+        </div>
+
+        {/* Status Alerts */}
+        {alert && (
+          <div
+            className={`alert alert-${alert.type} alert-dismissible fade show d-flex align-items-center`}
+            role="alert"
+          >
+            <i
+              className={`ti ${
+                alert.type === "success" ? "ti-circle-check" : "ti-alert-triangle"
+              } fs-18 me-2`}
+            />
+            <div className="flex-grow-1">{alert.message}</div>
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setAlert(null)}
+              aria-label="Close"
+            />
+          </div>
+        )}
+
+        {loading ? (
+          <div className="card">
+            <div className="card-body text-center py-5">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading settings...</span>
+              </div>
+              <p className="text-muted mt-2 mb-0">Loading Super Admin settings...</p>
+            </div>
+          </div>
+        ) : (
+          <div className="row">
+            {/* Super Admin Header Logo Card */}
+            <div className="col-lg-6 mb-4">
+              <div className="card h-100 shadow-sm border">
+                <div className="card-header bg-white border-bottom py-3">
+                  <div className="d-flex align-items-center justify-content-between">
+                    <div>
+                      <h5 className="card-title mb-1 fw-bold">Super Admin Header &amp; Sidebar Logo</h5>
+                      <p className="card-subtitle text-muted fs-12 mb-0">
+                        Upload the logo displayed in the top header and sidebar for Super Admin.
+                      </p>
+                    </div>
+                    <span className="badge bg-primary-transparent text-primary">Header Branding</span>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="mb-4">
+                    <label className="form-label fw-semibold mb-2">Live Logo Preview</label>
+                    <div className="d-flex align-items-center gap-3 p-3 bg-light rounded border">
+                      <div
+                        className="d-flex align-items-center justify-content-center bg-white rounded border p-2 shadow-xs"
+                        style={{ minWidth: "160px", minHeight: "60px" }}
+                      >
+                        {logoPreview ? (
+                          <img
+                            src={logoPreview}
+                            alt="Super Admin Logo"
+                            style={{ maxHeight: "40px", maxWidth: "150px", objectFit: "contain" }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "/assets/img/hgs-logo-HR.webp";
+                            }}
+                          />
+                        ) : (
+                          <img
+                            src="/assets/img/hgs-logo-HR.webp"
+                            alt="Default Logo"
+                            style={{ maxHeight: "40px", maxWidth: "150px", objectFit: "contain" }}
+                          />
+                        )}
+                      </div>
+                      <div className="flex-grow-1">
+                        <div className="fw-semibold text-dark fs-13">
+                          {logoFile ? logoFile.name : currentLogoUrl ? "Custom System Logo Active" : "Default System Logo"}
+                        </div>
+                        <div className="text-muted fs-12">
+                          PNG, WEBP, SVG, or JPG (Recommended: 140px × 40px)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="form-label fw-semibold mb-2">Select Logo Image</label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="form-control"
+                      accept="image/png, image/jpeg, image/webp, image/svg+xml"
+                      onChange={handleLogoFileChange}
+                    />
+                    <small className="text-muted d-block mt-1">
+                      Uploading replaces the logo in the top navbar and sidebar instantly.
+                    </small>
+                  </div>
+
+                  <div className="d-flex align-items-center gap-2 pt-2">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => handleSaveLogo()}
+                      disabled={savingLogo || !logoFile}
+                    >
+                      {savingLogo ? (
+                        <>
+                          <span
+                            className="spinner-border spinner-border-sm me-2"
+                            role="status"
+                            aria-hidden="true"
+                          />
+                          Saving Logo...
+                        </>
+                      ) : (
+                        <>
+                          <i className="ti ti-upload me-1" /> Upload &amp; Update Header Logo
+                        </>
+                      )}
+                    </button>
+                    {logoFile && (
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => {
+                          setLogoFile(null);
+                          setLogoPreview(currentLogoUrl ? getFullLogoUrl(currentLogoUrl) : null);
+                          if (fileInputRef.current) fileInputRef.current.value = "";
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Currency Settings Card */}
+            <div className="col-lg-6 mb-4">
+              <div className="card h-100 shadow-sm border">
+                <div className="card-header bg-white border-bottom py-3">
+                  <div className="d-flex align-items-center justify-content-between">
+                    <div>
+                      <h5 className="card-title mb-1 fw-bold">Platform Currency Settings</h5>
+                      <p className="card-subtitle text-muted fs-12 mb-0">
+                        Configure the default billing &amp; display currency for packages and membership plans.
+                      </p>
+                    </div>
+                    <span className="badge bg-success-transparent text-success">
+                      Active: {currencySymbol} {currency}
+                    </span>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="mb-4">
+                    <label className="form-label fw-semibold mb-2">Current Active Currency</label>
+                    <div className="p-3 bg-light rounded border d-flex align-items-center justify-content-between">
+                      <div className="d-flex align-items-center gap-3">
+                        <div
+                          className="avatar avatar-md rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fs-18 fw-bold"
+                          style={{ width: "42px", height: "42px" }}
+                        >
+                          {currencySymbol}
+                        </div>
+                        <div>
+                          <h6 className="mb-0 fw-bold text-dark">{currency}</h6>
+                          <span className="text-muted fs-12">
+                            Symbol: <strong>{currencySymbol}</strong> • System Default
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-end">
+                        <span className="badge bg-success">Active Default</span>
+                        <div className="text-muted fs-11 mt-1">Applied across SaaS packages</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold mb-2">Change Currency Quickly</label>
+                    <div className="row g-2 mb-3">
+                      {POPULAR_CURRENCIES.map((c) => {
+                        const isSelected = currency === c.code;
+                        return (
+                          <div className="col-6 col-sm-4" key={c.code}>
+                            <button
+                              type="button"
+                              className={`btn w-100 text-start p-2 border rounded ${
+                                isSelected
+                                  ? "btn-primary shadow-xs"
+                                  : "btn-outline-light text-dark bg-white"
+                              }`}
+                              onClick={() => {
+                                setCurrency(c.code);
+                                setCurrencySymbol(c.symbol);
+                                handleSaveCurrency(c.code, c.symbol);
+                              }}
+                              disabled={savingCurrency}
+                            >
+                              <div className="d-flex align-items-center justify-content-between">
+                                <span className="fw-bold">{c.code}</span>
+                                <span className="badge bg-light text-dark">{c.symbol}</span>
+                              </div>
+                              <div className="fs-11 text-truncate" style={{ opacity: 0.85 }}>
+                                {c.name}
+                              </div>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Custom Currency Selection</label>
+                    <div className="input-group">
+                      <select
+                        className="form-select"
+                        value={currency}
+                        onChange={(e) => {
+                          const code = e.target.value;
+                          const found =
+                            allCurrencies.find((c: any) => c.code === code) ||
+                            POPULAR_CURRENCIES.find((c) => c.code === code);
+                          setCurrency(code);
+                          if (found) setCurrencySymbol(found.symbol);
+                        }}
+                      >
+                        {allCurrencies.length > 0
+                          ? allCurrencies.map((c: any) => (
+                              <option key={c.id || c.code} value={c.code}>
+                                {c.name} ({c.symbol} {c.code})
+                              </option>
+                            ))
+                          : POPULAR_CURRENCIES.map((c) => (
+                              <option key={c.code} value={c.code}>
+                                {c.name} ({c.symbol} {c.code})
+                              </option>
+                            ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => handleSaveCurrency()}
+                        disabled={savingCurrency}
+                      >
+                        {savingCurrency ? (
+                          <span className="spinner-border spinner-border-sm" role="status" />
+                        ) : (
+                          "Set Active Currency"
+                        )}
+                      </button>
+                    </div>
+                    <small className="text-muted d-block mt-1">
+                      Membership plans and SaaS invoices will calculate in this currency.
+                    </small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* General Platform Info Card */}
+            <div className="col-12">
+              <div className="card shadow-sm border">
+                <div className="card-header bg-white border-bottom py-3">
+                  <h5 className="card-title mb-0 fw-bold">Platform Information</h5>
+                </div>
+                <div className="card-body">
+                  <form onSubmit={handleSaveGeneral}>
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Platform Name</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={systemName}
+                          onChange={(e) => setSystemName(e.target.value)}
+                          placeholder="e.g. HR Portal / SaaS HRMS"
+                        />
+                      </div>
+                      <div className="col-md-3">
+                        <label className="form-label fw-semibold">System Currency Code</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={currency}
+                          onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+                          placeholder="INR, USD, etc."
+                        />
+                      </div>
+                      <div className="col-md-3">
+                        <label className="form-label fw-semibold">System Currency Symbol</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={currencySymbol}
+                          onChange={(e) => setCurrencySymbol(e.target.value)}
+                          placeholder="₹, $, €, etc."
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-4 text-end">
+                      <button
+                        type="submit"
+                        className="btn btn-primary"
+                        disabled={savingGeneral}
+                      >
+                        {savingGeneral ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <i className="ti ti-device-floppy me-1" /> Save Platform Details
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default SuperAdminSettings;

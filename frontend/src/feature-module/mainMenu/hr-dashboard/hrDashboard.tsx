@@ -703,7 +703,7 @@ const HrDashboard = () => {
                   <div className="col-4">
                     <span className="fs-11 text-muted d-block mb-1">Avg Time</span>
                     <h4 className="fw-bold text-dark m-0">{dashData.recruitmentStats?.avgTimeDays || 0} days</h4>
-                    <span className="fs-10 text-muted">Onboarding</span>
+                    <span className="fs-10 text-muted">To Hire</span>
                   </div>
                 </div>
 
@@ -711,10 +711,10 @@ const HrDashboard = () => {
                   <div className="d-flex align-items-center gap-2">
                     <i className="ti ti-briefcase text-primary fs-18" />
                     <span className="fs-12 text-dark font-medium">
-                      {dashData.recruitmentStats?.interviewPositions || 0} active designation{(dashData.recruitmentStats?.interviewPositions || 0) === 1 ? '' : 's'}
+                      {dashData.recruitmentStats?.interviewPositions || 0} open job position{(dashData.recruitmentStats?.interviewPositions || 0) === 1 ? '' : 's'}
                     </span>
                   </div>
-                  <Link to={all_routes.candidatesGrid} className="fs-12 fw-semibold text-primary text-decoration-none">
+                  <Link to={all_routes.joblist} className="fs-12 fw-semibold text-primary text-decoration-none">
                     View Details →
                   </Link>
                 </div>

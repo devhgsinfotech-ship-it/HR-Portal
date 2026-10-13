@@ -535,6 +535,9 @@ export const SuperAdminChunk = {
   PurchaseTransaction: lazy(
     () => import("../feature-module/super-admin/purchase-transaction")
   ),
+  SuperAdminSettings: lazy(
+    () => import("../feature-module/super-admin/settings")
+  ),
 };
 
 // Tickets Module Chunk

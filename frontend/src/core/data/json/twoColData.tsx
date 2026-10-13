@@ -1031,9 +1031,9 @@ export const TowColData = [
             base: 'website-settings',
             subMenusTwo: [
               {
-                menuValue: 'Business Settings',
-                route: routes.businessSettings,
-                base: 'bussiness-settings',
+                menuValue: 'Company Settings',
+                route: routes.companySettings,
+                base: 'company-settings',
               },
               {
                 menuValue: 'SEO Settings',

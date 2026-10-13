@@ -150,6 +150,11 @@ app.use('/subscriptions', subscriptionRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 
+// System Settings & Currencies
+const systemSettingsRoutes = require('./src/routes/systemSettingsRoutes');
+app.use('/system-settings', systemSettingsRoutes);
+app.use('/api/system-settings', systemSettingsRoutes);
+
 // Phase 4 APIs
 app.use('/assets', assetRoutes);
 app.use('/api/assets', assetRoutes);

@@ -765,6 +765,9 @@ export const Domain = createLazyComponent(
 export const PurchaseTransaction = createLazyComponent(
   () => import("../feature-module/super-admin/purchase-transaction")
 );
+export const SuperAdminSettings = createLazyComponent(
+  () => import("../feature-module/super-admin/settings")
+);
 
 // Tickets Components - Lazy Loaded
 export const Tickets = createLazyComponent(

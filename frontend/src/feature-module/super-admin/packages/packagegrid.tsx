@@ -362,7 +362,7 @@ const PackagesGrid = () => {
                                 </div>
                                 <div className="card bg-light p-3 mb-3 border-0">
                                   <h2 className="text-primary mb-1">
-                                    ₹{Number(price).toLocaleString('en-IN')}
+                                    {p.currencySymbol || '₹'}{Number(price).toLocaleString()}
                                     <span className="fs-14 fw-normal text-muted ms-1">
                                       {period}
                                     </span>
