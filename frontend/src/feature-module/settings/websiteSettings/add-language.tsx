@@ -98,31 +98,6 @@ const Addlanguage = () => {
                                                 Localization
                                             </Link>
                                             <Link
-                                                to={routes.prefixes}
-                                                className="d-inline-flex align-items-center rounded py-2 px-3"
-                                            >
-                                                Prefixes
-                                            </Link>
-                                            <Link
-                                                to={routes.preference}
-                                                className="d-inline-flex align-items-center rounded py-2 px-3"
-                                            >
-                                                Preferences
-                                            </Link>
-                                            <Link
-                                                to={routes.appearance}
-                                                className="d-inline-flex align-items-center rounded py-2 px-3"
-                                            >
-                                                Appearance
-                                            </Link>
-                                            <Link
-                                                to={routes.language}
-                                                className="d-inline-flex align-items-center rounded active py-2 px-3"
-                                            >
-                                                <i className="ti ti-arrow-badge-right me-2" />
-                                                Language
-                                            </Link>
-                                            <Link
                                                 to={routes.authenticationSettings}
                                                 className="d-inline-flex align-items-center rounded py-2 px-3"
                                             >
@@ -153,13 +128,6 @@ const Addlanguage = () => {
                                                     </div>
                                                     <div className="col-sm-7">
                                                         <div className="d-flex align-items-center justify-content-sm-end flex-wrap row-gap-2">
-                                                            <Link
-                                                                to={routes.language}
-                                                                className="btn btn-sm btn-primary d-inline-flex align-items-center me-3"
-                                                            >
-                                                                <i className="ti ti-arrow-left me-2" />
-                                                                Back to Translations
-                                                            </Link>
                                                             <Link
                                                                 to="#"
                                                                 className="btn btn-sm btn-outline-dark d-inline-flex align-items-center me-3"

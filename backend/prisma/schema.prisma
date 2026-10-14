@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
+  binaryTargets = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -49,6 +49,7 @@ model Company {
   tasks            Task[]
   timeLogs         TimeLog[]
   users            User[]
+  seoSetting       SeoSetting?
 
   @@map("companies")
 }
@@ -567,6 +568,16 @@ model CompanySetting {
   currency             String  @default("INR")
   currencySymbol       String  @default("₹")
   payrollCycleStartDay Int     @default(1)
+  language             String  @default("English")
+  languageSwitcher     Boolean @default(false)
+  dateFormat           String  @default("DD/MM/YYYY")
+  timeFormat           String  @default("12 Hours")
+  financialYear        String  @default("2026-2027")
+  startingMonth        String  @default("April")
+  currencyPosition     String  @default("Front")
+  decimalSeparator     String  @default(".")
+  thousandSeparator    String  @default(",")
+  countriesRestriction String  @default("Allow All Countries")
   company              Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@map("company_settings")
@@ -1310,13 +1321,24 @@ enum ReferralStatus {
 }
 
 model SystemSetting {
-  id             Int      @id @default(autoincrement())
-  systemName     String   @default("HR Portal")
-  logoUrl        String?
-  currency       String   @default("INR")
-  currencySymbol String   @default("₹")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                   Int      @id @default(autoincrement())
+  systemName           String   @default("HR Portal")
+  logoUrl              String?
+  currency             String   @default("INR")
+  currencySymbol       String   @default("₹")
+  timezone             String   @default("Asia/Kolkata")
+  language             String   @default("English")
+  languageSwitcher     Boolean  @default(false)
+  dateFormat           String   @default("DD/MM/YYYY")
+  timeFormat           String   @default("12 Hours")
+  financialYear        String   @default("2026-2027")
+  startingMonth        String   @default("April")
+  currencyPosition     String   @default("Front")
+  decimalSeparator     String   @default(".")
+  thousandSeparator    String   @default(",")
+  countriesRestriction String   @default("Allow All Countries")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@map("system_settings")
 }
@@ -1335,3 +1357,21 @@ model Currency {
 
   @@map("currencies")
 }
+
+model SeoSetting {
+  id              Int       @id @default(autoincrement())
+  companyId       Int?      @unique
+  metaTitle       String?   @db.Text
+  metaKeywords    String?   @db.Text
+  metaDescription String?   @db.Text
+  canonicalUrl    String?   @db.Text
+  ogTitle         String?   @db.Text
+  ogDescription   String?   @db.Text
+  ogImage         String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  company         Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("seo_settings")
+}
+

@@ -120,8 +120,14 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     return ["COMPANY_ADMIN", "HR", "MANAGER"];
   }
 
+  // Dedicated rule: My Attendance (Self-service attendance tracking for Employees, HR & Managers)
+  // Hidden from and disallowed for Company Admin & Super Admin (Owners/Admins are not tracked)
+  if (p === "/attendance-employee" || p.startsWith("/attendance-employee")) {
+    return ["HR", "MANAGER", "EMPLOYEE"];
+  }
+
   const employeeAllowedPrefixes = [
-    "/employee-dashboard", "/attendance-employee", "/leaves-employee",
+    "/employee-dashboard", "/leaves-employee",
     "/pages/profile", "/hrm/holidays", "/application",
     "/projects", "/tasks", "/task-board", "/clients",
     "/org", "/org-directory"
@@ -259,6 +265,22 @@ const filterMenu = (items: SidebarMenuItem[] | undefined, role: Role): SidebarMe
         linkLower.includes("ai-center") ||
         baseLower.startsWith("/ai-") ||
         linkLower.startsWith("/ai-")
+      ) {
+        return false;
+      }
+    }
+
+    // Explicitly hide "My Attendance" for COMPANY_ADMIN and SUPER_ADMIN
+    if (normalizedRole === "COMPANY_ADMIN" || normalizedRole === "SUPER_ADMIN") {
+      const labelLower = (item.label || "").trim().toLowerCase();
+      const linkLower = (item.link || "").trim().toLowerCase();
+      const baseLower = (item.base || "").trim().toLowerCase();
+
+      if (
+        labelLower === "my attendance" ||
+        baseLower === "attendance-employee" ||
+        linkLower.includes("attendance-employee") ||
+        baseLower.includes("attendance-employee")
       ) {
         return false;
       }

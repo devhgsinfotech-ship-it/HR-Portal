@@ -89,13 +89,7 @@ const CustomFields = () => {
                       Salary Settings
                     </Link>
                     <Link
-                      to={routes.approvalSettings}
-                      className="d-inline-flex align-items-center rounded py-2 px-3"
-                    >
-                      Approval Settings
-                    </Link>
-                    <Link
-                      to={routes.approvalSettings}
+                      to={routes.invoiceSettings}
                       className="d-inline-flex align-items-center rounded py-2 px-3"
                     >
                       Invoice Settings

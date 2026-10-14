@@ -55,22 +55,13 @@ const Socialauthentication = () => {
                 <Link to={routes.localization} className="d-block rounded p-2">
                   Localization
                 </Link>
-                <Link to={routes.prefixes} className="d-block rounded p-2">
-                  Prefixes
-                </Link>
-                <Link to={routes.preference} className="d-block rounded p-2">
-                  Preferences
-                </Link>
                 <Link
                   to={routes.socialAuthentication}
                   className="d-block rounded p-2 active"
                 >
                   Social Authentication
                 </Link>
-                <Link to={routes.language} className="d-block rounded p-2">
-                  Language
-                </Link>
-              </div>
+                </div>
             </div>
             <div className="col-xxl-10 col-xl-9">
               <div className="border-start ps-3">

@@ -97,30 +97,6 @@ const Aisettings = () => {
                                                 Localization
                                             </Link>
                                             <Link
-                                                to={routes.prefixes}
-                                                className="d-inline-flex align-items-center rounded py-2 px-3"
-                                            >
-                                                Prefixes
-                                            </Link>
-                                            <Link
-                                                to={routes.preference}
-                                                className="d-inline-flex align-items-center rounded py-2 px-3"
-                                            >
-                                                Preferences
-                                            </Link>
-                                            <Link
-                                                to={routes.appearance}
-                                                className="d-inline-flex align-items-center rounded py-2 px-3"
-                                            >
-                                                Appearance
-                                            </Link>
-                                            <Link
-                                                to={routes.language}
-                                                className="d-inline-flex align-items-center rounded py-2 px-3"
-                                            >
-                                                Language
-                                            </Link>
-                                            <Link
                                                 to={routes.authenticationSettings}
                                                 className="d-inline-flex align-items-center rounded py-2 px-3"
                                             >

@@ -1118,27 +1118,6 @@ export const SidebarDataTest = [
                 base: 'localization-settings',
               },
               {
-                label: 'Prefixes',
-                link: routes.prefixes,
-                base: 'prefixes',
-              },
-              {
-                label: 'Preferences',
-                link: routes.preference,
-                base: 'preferences',
-              },
-              {
-                label: 'Appearance',
-                link: routes.appearance,
-                base: 'appearance',
-              },
-              {
-                label: 'Language',
-                link: routes.language,
-                base: 'language',
-                base2: 'add-language',
-              },
-              {
                 label: 'Authentication',
                 link: routes.authenticationSettings,
                 base: 'authentication-settings',
@@ -1160,11 +1139,6 @@ export const SidebarDataTest = [
                 label: 'Salary Settings',
                 link: routes.salarySettings,
                 base: 'salary-settings',
-              },
-              {
-                label: 'Approval Settings',
-                link: routes.approvalSettings,
-                base: 'approval-settings',
               },
               {
                 label: 'Invoice Settings',

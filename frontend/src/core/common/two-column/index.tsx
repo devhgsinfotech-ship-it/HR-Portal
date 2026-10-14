@@ -514,10 +514,6 @@ const TwoColumnSidebar = () => {
                                             <li><Link to={all_routes.businessSettings}>Business Settings</Link></li>
                                             <li><Link to={all_routes.seoSettings}>SEO Settings</Link></li>
                                             <li><Link to={all_routes.localizationSettings}>Localization</Link></li>
-                                            <li><Link to={all_routes.prefixes}>Prefixes</Link></li>
-                                            <li><Link to={all_routes.preference}>Preferences</Link></li>
-                                            <li><Link to={all_routes.performanceAppraisal}>Appearance</Link></li>
-                                            <li><Link to={all_routes.language}>Language</Link></li>
                                             <li><Link to={all_routes.authenticationSettings}>Authentication</Link></li>
                                             <li><Link to={all_routes.aiSettings}>AI Settings</Link></li>
                                         </ul>
@@ -526,7 +522,6 @@ const TwoColumnSidebar = () => {
                                         <Link to="#">App Settings<span className="menu-arrow"></span></Link>
                                         <ul>
                                             <li><Link to={all_routes.salarySettings}>Salary Settings</Link></li>
-                                            <li><Link to={all_routes.approvalSettings}>Approval Settings</Link></li>
                                             <li><Link to={all_routes.invoiceSettings}>Invoice Settings</Link></li>
                                             <li><Link to={all_routes.leaveType}>Leave Type</Link></li>
                                             <li><Link to={all_routes.customFields}>Custom Fields</Link></li>

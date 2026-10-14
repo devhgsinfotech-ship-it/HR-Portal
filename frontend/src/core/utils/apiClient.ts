@@ -50,10 +50,21 @@ apiClient.interceptors.response.use(
         if (isUnauth) {
             const requestUrl = error.config?.url || '';
 
-            // Skip redirect for auth endpoints — let the component handle those errors
+            // NEVER redirect if user is already on the login or register page (prevents infinite reload loops)
+            const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+            if (
+                currentPath.includes('/login') ||
+                currentPath.includes('/register') ||
+                currentPath.includes('/forgot-password')
+            ) {
+                return Promise.reject(error);
+            }
+
+            // Skip redirect for auth and public endpoints — let the caller handle those errors
             const isAuthEndpoint = requestUrl.includes('/auth/login') ||
                 requestUrl.includes('/auth/register') ||
-                requestUrl.includes('/auth/verify-email');
+                requestUrl.includes('/auth/verify-email') ||
+                requestUrl.includes('/seo-settings');
 
             if (!isAuthEndpoint) {
                 // Token expired for a protected route — clear and redirect

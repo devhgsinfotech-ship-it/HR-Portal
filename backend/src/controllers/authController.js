@@ -913,7 +913,12 @@ async function updateCompanySettings(req, res) {
             return res.status(403).json({ message: 'Unauthorized: Only Company Admins can modify their company settings' });
         }
 
-        const { name, phone, email, address, industry, companySize, logoUrl, currency } = req.body;
+        const {
+            name, phone, email, address, industry, companySize, logoUrl,
+            currency, currencySymbol, timezone, language, languageSwitcher,
+            dateFormat, timeFormat, financialYear, startingMonth,
+            currencyPosition, decimalSeparator, thousandSeparator, countriesRestriction
+        } = req.body;
         
         let newLogoUrl = logoUrl;
         if (req.file) {
@@ -929,25 +934,45 @@ async function updateCompanySettings(req, res) {
         if (companySize !== undefined) updateData.companySize = companySize;
         if (newLogoUrl !== undefined) updateData.logoUrl = newLogoUrl;
 
-        const updatedCompany = await prisma.company.update({
-            where: { id: companyId },
-            data: updateData,
-        });
+        let updatedCompany = null;
+        if (Object.keys(updateData).length > 0) {
+            updatedCompany = await prisma.company.update({
+                where: { id: companyId },
+                data: updateData,
+            });
+        } else {
+            updatedCompany = await prisma.company.findUnique({ where: { id: companyId } });
+        }
 
-        let updatedSettings = null;
+        const settingUpdateData = {};
         if (currency !== undefined) {
             const cleanCurr = currency.toUpperCase() === 'USD' ? 'USD' : 'INR';
-            const cleanSym = cleanCurr === 'USD' ? '$' : '₹';
+            settingUpdateData.currency = cleanCurr;
+            settingUpdateData.currencySymbol = currencySymbol || (cleanCurr === 'USD' ? '$' : '₹');
+        } else if (currencySymbol !== undefined) {
+            settingUpdateData.currencySymbol = currencySymbol;
+        }
+
+        if (timezone !== undefined) settingUpdateData.timezone = timezone;
+        if (language !== undefined) settingUpdateData.language = language;
+        if (languageSwitcher !== undefined) settingUpdateData.languageSwitcher = Boolean(languageSwitcher);
+        if (dateFormat !== undefined) settingUpdateData.dateFormat = dateFormat;
+        if (timeFormat !== undefined) settingUpdateData.timeFormat = timeFormat;
+        if (financialYear !== undefined) settingUpdateData.financialYear = financialYear;
+        if (startingMonth !== undefined) settingUpdateData.startingMonth = startingMonth;
+        if (currencyPosition !== undefined) settingUpdateData.currencyPosition = currencyPosition;
+        if (decimalSeparator !== undefined) settingUpdateData.decimalSeparator = decimalSeparator;
+        if (thousandSeparator !== undefined) settingUpdateData.thousandSeparator = thousandSeparator;
+        if (countriesRestriction !== undefined) settingUpdateData.countriesRestriction = countriesRestriction;
+
+        let updatedSettings = null;
+        if (Object.keys(settingUpdateData).length > 0) {
             updatedSettings = await prisma.companySetting.upsert({
                 where: { companyId },
-                update: {
-                    currency: cleanCurr,
-                    currencySymbol: cleanSym
-                },
+                update: settingUpdateData,
                 create: {
                     companyId,
-                    currency: cleanCurr,
-                    currencySymbol: cleanSym
+                    ...settingUpdateData
                 }
             });
         } else {

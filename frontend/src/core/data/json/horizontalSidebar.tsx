@@ -1031,27 +1031,6 @@ export const HorizontalSidebarData = [
                 base: 'localization-settings',
               },
               {
-                menuValue: 'Prefixes',
-                route: routes.prefixes,
-                base: 'prefixes',
-              },
-              {
-                menuValue: 'Preferences',
-                route: routes.preference,
-                base: 'preferences',
-              },
-              {
-                menuValue: 'Appearance',
-                route: routes.appearance,
-                base: 'appearance',
-              },
-              {
-                menuValue: 'Language',
-                route: routes.language,
-                base: 'language',
-                base2: 'add-language',
-              },
-              {
                 menuValue: 'Authentication',
                 route: routes.authenticationSettings,
                 base: 'authentication-settings',
@@ -1072,11 +1051,6 @@ export const HorizontalSidebarData = [
                 menuValue: 'Salary Settings',
                 route: routes.salarySettings,
                 base: 'salary-settings',
-              },
-              {
-                menuValue: 'Approval Settings',
-                route: routes.approvalSettings,
-                base: 'approval-settings',
               },
               {
                 menuValue: 'Invoice Settings',

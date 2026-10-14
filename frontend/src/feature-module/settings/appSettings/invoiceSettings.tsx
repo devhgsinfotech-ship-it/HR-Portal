@@ -88,15 +88,9 @@ const InvoiceSettings = () => {
                     <div className="d-flex flex-column list-group settings-list">
                       <Link
                         to={routes.salarySettings}
-                        className="d-inline-flex align-items-center rounded  py-2 px-3"
-                      >
-                        Profile Settings
-                      </Link>
-                      <Link
-                        to={routes.approvalSettings}
                         className="d-inline-flex align-items-center rounded py-2 px-3"
                       >
-                        Approval Settings
+                        Salary Settings
                       </Link>
                       <Link
                         to={routes.invoiceSettings}

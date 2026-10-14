@@ -545,6 +545,36 @@ async function sendHRManagerOnboardingEmail({ toEmail, hrName, companyName, veri
     }
 }
 
+/**
+ * Sends a test email to verify SMTP configuration
+ * @param {string} toEmail 
+ */
+async function sendTestEmail(toEmail) {
+    const transporter = await getTransporter();
+    const mailOptions = {
+        from: `"SmartHR System Test" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
+        to: toEmail,
+        subject: '✅ SmartHR Email Service Test Verification',
+        html: `
+            <div style="font-family: Arial, sans-serif; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; max-width: 550px; margin: 0 auto;">
+                <h2 style="color: #28a745; margin-top: 0;">✅ Email Service is Working!</h2>
+                <p>Hello,</p>
+                <p>This is a test email sent from your <strong>SmartHR HRMS Portal</strong> to verify that your email configuration is properly sending messages.</p>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; font-size: 13px; margin: 20px 0; border-left: 4px solid #28a745;">
+                    <p style="margin: 4px 0;"><strong>Delivered At:</strong> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)</p>
+                    <p style="margin: 4px 0;"><strong>SMTP Host:</strong> ${process.env.SMTP_HOST || 'smtp.ethereal.email (Sandbox)'}</p>
+                    <p style="margin: 4px 0;"><strong>Delivery Status:</strong> Verified</p>
+                </div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 0;">SmartHR Automated Email Verification Service</p>
+            </div>
+        `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    const testUrl = nodemailer.getTestMessageUrl(info);
+    return { info, testUrl };
+}
+
 module.exports = {
     sendVerificationEmail,
     sendEmployeeInviteEmail,
@@ -554,5 +584,6 @@ module.exports = {
     sendOfferLetterEmail,
     sendCorrectionRequestEmail,
     sendDomainApprovedEmail,
-    sendHRManagerOnboardingEmail
+    sendHRManagerOnboardingEmail,
+    sendTestEmail
 };

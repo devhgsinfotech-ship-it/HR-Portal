@@ -398,18 +398,6 @@ const CompanySettings = () => {
                   <Link to={routes.localizationSettings} className="d-block rounded p-2">
                     Localization
                   </Link>
-                  <Link to={routes.prefixes} className="d-block rounded p-2">
-                    Prefixes
-                  </Link>
-                  <Link to={routes.preference} className="d-block rounded p-2">
-                    Preferences
-                  </Link>
-                  <Link to={routes.appearance} className="d-block rounded p-2">
-                    Appearance
-                  </Link>
-                  <Link to={routes.language} className="d-block rounded p-2">
-                    Language
-                  </Link>
                   <Link to={routes.authenticationSettings} className="d-block rounded p-2">
                     Authentication Settings
                   </Link>

@@ -12,8 +12,10 @@ const {
     updateCurrency,
     deleteCurrency,
     setDefaultCurrency,
+    getEmailStatus,
+    sendTestEmailHandler,
 } = require('../controllers/systemSettingsController');
-const { verifyToken } = require('../middleware/authMiddleware');
+const { verifyToken, requireRole } = require('../middleware/authMiddleware');
 
 const UPLOAD_BASE = process.env.UPLOAD_PATH
     ? path.resolve(process.env.UPLOAD_PATH)
@@ -37,6 +39,10 @@ const upload = multer({ storage });
 // System Settings endpoints
 router.get('/', getSystemSettings);
 router.put('/', verifyToken, upload.single('logo'), updateSystemSettings);
+
+// Email Server Status & Testing endpoints
+router.get('/email-status', verifyToken, getEmailStatus);
+router.post('/send-test-email', verifyToken, sendTestEmailHandler);
 
 // Currency Management endpoints
 router.get('/currencies', getCurrencies);

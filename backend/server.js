@@ -155,6 +155,11 @@ const systemSettingsRoutes = require('./src/routes/systemSettingsRoutes');
 app.use('/system-settings', systemSettingsRoutes);
 app.use('/api/system-settings', systemSettingsRoutes);
 
+// SEO Settings
+const seoSettingsRoutes = require('./src/routes/seoSettingsRoutes');
+app.use('/seo-settings', seoSettingsRoutes);
+app.use('/api/seo-settings', seoSettingsRoutes);
+
 // Phase 4 APIs
 app.use('/assets', assetRoutes);
 app.use('/api/assets', assetRoutes);

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import type { AppRootState as RootState } from '../../../core/data/redux/store';
@@ -48,6 +48,13 @@ const AttendanceEmployee = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const user = useSelector((state: RootState) => state.auth.user);
+  const userRole = (user?.role || '').toUpperCase();
+
+  // Company Admin and Super Admin do not punch in or have personal attendance tracked.
+  // Redirect them to Team Attendance instead.
+  if (userRole === 'COMPANY_ADMIN' || userRole === 'SUPER_ADMIN') {
+    return <Navigate to={all_routes.attendanceadmin || '/attendance-admin'} replace />;
+  }
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000); // update every minute
