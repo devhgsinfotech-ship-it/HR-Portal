@@ -1,5 +1,7 @@
 // backend/src/utils/emailService.js
 const nodemailer = require('nodemailer');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 /**
  * Creates and returns a Nodemailer transporter.
@@ -46,6 +48,37 @@ async function getTransporter() {
 }
 
 /**
+ * Resolves dynamic email content from the database.
+ * Replaces {{tag}} placeholders with runtime parameters.
+ * Falls back to default subject & HTML if template is not found or DB error occurs.
+ */
+async function resolveEmailTemplate(slug, data = {}, fallbackSubject, fallbackHtml) {
+    try {
+        const template = await prisma.emailTemplate.findUnique({ where: { slug } });
+        if (template && template.status === 'Active') {
+            const render = (str) => {
+                if (!str) return '';
+                return str.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, key) => {
+                    return data[key] !== undefined && data[key] !== null ? String(data[key]) : match;
+                });
+            };
+            return {
+                subject: render(template.subject),
+                html: render(template.body),
+                isCustomized: template.isCustomized,
+            };
+        }
+    } catch (e) {
+        console.warn(`[emailService] Dynamic template error for "${slug}", using fallback:`, e.message);
+    }
+    return {
+        subject: fallbackSubject,
+        html: fallbackHtml,
+        isCustomized: false,
+    };
+}
+
+/**
  * Sends a verification email containing a link with the provided token.
  * 
  * @param {string} toEmail - The recipient's email address
@@ -61,32 +94,41 @@ async function sendVerificationEmail(toEmail, token, companyName, workspaceUrl) 
         // Note: For local dev with subdomains, we link to the specific workspace verification page
         const verificationLink = `${workspaceUrl}/email-verification?token=${token}`;
 
+        const fallbackSubject = `Verify your ${companyName || 'SmartHR'} Workspace`;
+        const fallbackHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                <h2 style="color: #333;">Welcome to SmartHR, ${companyName}!</h2>
+                <p style="color: #555; font-size: 16px;">
+                    Thank you for registering. Your workspace has been created successfully.
+                    Please click the button below to verify your email address and activate your account.
+                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${verificationLink}" style="background-color: #ff5722; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+                        Verify Email Address
+                    </a>
+                </div>
+                <p style="color: #555; font-size: 14px;">
+                    Or copy and paste this link into your browser:<br/>
+                    <a href="${verificationLink}" style="color: #ff5722; word-break: break-all;">${verificationLink}</a>
+                </p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="color: #999; font-size: 12px; text-align: center;">
+                    If you did not request this, please ignore this email.
+                </p>
+            </div>
+        `;
+
+        const resolved = await resolveEmailTemplate('email-verification', {
+            companyName: companyName || 'SmartHR',
+            actionUrl: verificationLink,
+            verifyUrl: verificationLink,
+        }, fallbackSubject, fallbackHtml);
+
         const mailOptions = {
             from: `"SmartHR Support" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
             to: toEmail,
-            subject: 'Verify your SmartHR Workspace',
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                    <h2 style="color: #333;">Welcome to SmartHR, ${companyName}!</h2>
-                    <p style="color: #555; font-size: 16px;">
-                        Thank you for registering. Your workspace has been created successfully.
-                        Please click the button below to verify your email address and activate your account.
-                    </p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="${verificationLink}" style="background-color: #ff5722; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
-                            Verify Email Address
-                        </a>
-                    </div>
-                    <p style="color: #555; font-size: 14px;">
-                        Or copy and paste this link into your browser:<br/>
-                        <a href="${verificationLink}" style="color: #ff5722; word-break: break-all;">${verificationLink}</a>
-                    </p>
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                    <p style="color: #999; font-size: 12px; text-align: center;">
-                        If you did not request this, please ignore this email.
-                    </p>
-                </div>
-            `
+            subject: resolved.subject,
+            html: resolved.html
         };
 
         const info = await transporter.sendMail(mailOptions);
@@ -113,39 +155,49 @@ async function sendEmployeeInviteEmail(toEmail, token, companyName, employeeName
 
         const inviteLink = `${workspaceUrl}/invite/${token}`;
 
-        const mailOptions = {
-            from: `"HGS HR Support" <${process.env.SMTP_USER || 'noreply@aaups.com'}>`,
-            to: toEmail,
-            subject: `You have been invited to join ${companyName} on HGS-HRMS`,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                    ${logoUrl ? `
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <img src="${logoUrl}" alt="${companyName}" style="max-height: 60px; object-fit: contain;" />
-                    </div>
-                    ` : `
-                    <h2 style="color: #ff5722; text-align: center; margin-bottom: 20px;">${companyName}</h2>
-                    `}
-                    <h3 style="color: #333;">Welcome, ${employeeName}!</h3>
-                    <p style="color: #555; font-size: 16px;">
-                        You have been invited to join <strong>${companyName}</strong>'s HR portal.
-                        Please click the button below to set up your account password and complete your onboarding profile.
-                    </p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="${inviteLink}" style="background-color: #ff5722; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
-                            Accept Invitation
-                        </a>
-                    </div>
-                    <p style="color: #555; font-size: 14px;">
-                        Or copy and paste this link into your browser:<br/>
-                        <a href="${inviteLink}" style="color: #ff5722; word-break: break-all;">${inviteLink}</a>
-                    </p>
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                    <p style="color: #999; font-size: 12px; text-align: center;">
-                        This link will expire in 48 hours.
-                    </p>
+        const fallbackSubject = `You have been invited to join ${companyName} on HGS-HRMS`;
+        const fallbackHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                ${logoUrl ? `
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="${logoUrl}" alt="${companyName}" style="max-height: 60px; object-fit: contain;" />
                 </div>
-            `
+                ` : `
+                <h2 style="color: #ff5722; text-align: center; margin-bottom: 20px;">${companyName}</h2>
+                `}
+                <h3 style="color: #333;">Welcome, ${employeeName}!</h3>
+                <p style="color: #555; font-size: 16px;">
+                    You have been invited to join <strong>${companyName}</strong>'s HR portal.
+                    Please click the button below to set up your account password and complete your onboarding profile.
+                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${inviteLink}" style="background-color: #ff5722; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+                        Accept Invitation
+                    </a>
+                </div>
+                <p style="color: #555; font-size: 14px;">
+                    Or copy and paste this link into your browser:<br/>
+                    <a href="${inviteLink}" style="color: #ff5722; word-break: break-all;">${inviteLink}</a>
+                </p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="color: #999; font-size: 12px; text-align: center;">
+                    This link will expire in 48 hours.
+                </p>
+            </div>
+        `;
+
+        const resolved = await resolveEmailTemplate('employee-invite', {
+            employeeName,
+            companyName,
+            actionUrl: inviteLink,
+            logoUrl: logoUrl || ''
+        }, fallbackSubject, fallbackHtml);
+
+        const mailOptions = {
+            from: `"${companyName || 'HGS'} HR Support" <${process.env.SMTP_USER || 'noreply@aaups.com'}>`,
+            to: toEmail,
+            subject: resolved.subject,
+            html: resolved.html
         };
 
         const info = await transporter.sendMail(mailOptions);
@@ -168,39 +220,50 @@ async function sendPasswordResetEmail(toEmail, token, workspaceUrl, userName, co
 
         const resetLink = `${workspaceUrl}/reset-password?token=${token}`;
 
+        const fallbackSubject = `Reset your ${companyName || 'HGS-HRMS'} Password`;
+        const fallbackHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                ${logoUrl ? `
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="${logoUrl}" alt="${companyName || 'HGS-HRMS'}" style="max-height: 60px; object-fit: contain;" />
+                </div>
+                ` : `
+                <h2 style="color: #ff5722; text-align: center; margin-bottom: 20px;">${companyName || 'SmartHR'}</h2>
+                `}
+                <h3 style="color: #333;">Hello, ${userName || 'User'}!</h3>
+                <p style="color: #555; font-size: 16px;">
+                    We received a request to reset your password for your <strong>${companyName || 'SmartHR'}</strong> account. If you didn't make this request, you can safely ignore this email.
+                    Otherwise, click the button below to choose a new password.
+                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${resetLink}" style="background-color: #ff5722; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+                        Reset Password
+                    </a>
+                </div>
+                <p style="color: #555; font-size: 14px;">
+                    Or copy and paste this link into your browser:<br/>
+                    <a href="${resetLink}" style="color: #ff5722; word-break: break-all;">${resetLink}</a>
+                </p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="color: #999; font-size: 12px; text-align: center;">
+                    This link will expire in 1 hour.
+                </p>
+            </div>
+        `;
+
+        const resolved = await resolveEmailTemplate('password-reset', {
+            userName: userName || 'User',
+            companyName: companyName || 'SmartHR',
+            actionUrl: resetLink,
+            resetUrl: resetLink,
+            logoUrl: logoUrl || ''
+        }, fallbackSubject, fallbackHtml);
+
         const mailOptions = {
             from: `"${companyName || 'HGS-HRMS'} Support" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
             to: toEmail,
-            subject: `Reset your ${companyName || 'HGS-HRMS'} Password`,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                    ${logoUrl ? `
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <img src="${logoUrl}" alt="${companyName || 'HGS-HRMS'}" style="max-height: 60px; object-fit: contain;" />
-                    </div>
-                    ` : `
-                    <h2 style="color: #ff5722; text-align: center; margin-bottom: 20px;">${companyName || 'SmartHR'}</h2>
-                    `}
-                    <h3 style="color: #333;">Hello, ${userName || 'User'}!</h3>
-                    <p style="color: #555; font-size: 16px;">
-                        We received a request to reset your password for your <strong>${companyName || 'SmartHR'}</strong> account. If you didn't make this request, you can safely ignore this email.
-                        Otherwise, click the button below to choose a new password.
-                    </p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="${resetLink}" style="background-color: #ff5722; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
-                            Reset Password
-                        </a>
-                    </div>
-                    <p style="color: #555; font-size: 14px;">
-                        Or copy and paste this link into your browser:<br/>
-                        <a href="${resetLink}" style="color: #ff5722; word-break: break-all;">${resetLink}</a>
-                    </p>
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                    <p style="color: #999; font-size: 12px; text-align: center;">
-                        This link will expire in 1 hour.
-                    </p>
-                </div>
-            `
+            subject: resolved.subject,
+            html: resolved.html
         };
 
         const info = await transporter.sendMail(mailOptions);
@@ -225,36 +288,49 @@ async function sendJobApplicationNotificationEmail(recipients, applicant, jobPos
         if (!recipients || recipients.length === 0) return;
         const transporter = await getTransporter();
 
+        const candidateFullName = `${applicant.firstName} ${applicant.lastName}`;
+        const fallbackSubject = `New Job Application Received: ${candidateFullName} - ${jobPosting.title}`;
+        const fallbackHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                <h2 style="color: #ff5722; margin-bottom: 10px;">New Job Application Received</h2>
+                <p style="color: #333; font-size: 16px;">
+                    A candidate has submitted an application for <strong>${jobPosting.title}</strong> (${jobPosting.jobCode || 'N/A'}).
+                </p>
+                <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #444;">Candidate Details:</h4>
+                    <ul style="color: #555; line-height: 1.6; padding-left: 20px;">
+                        <li><strong>Full Name:</strong> ${candidateFullName}</li>
+                        <li><strong>Email:</strong> ${applicant.email}</li>
+                        <li><strong>Phone:</strong> ${applicant.phone || 'N/A'}</li>
+                        <li><strong>Applied Date:</strong> ${new Date().toLocaleDateString('en-IN')}</li>
+                        ${applicant.resumeUrl ? `<li><strong>Resume Attached:</strong> Yes (${applicant.resumeUrl})</li>` : ''}
+                    </ul>
+                    ${applicant.notes ? `<p style="color: #555; margin-top: 10px;"><strong>Cover Letter / Notes:</strong><br/>${applicant.notes}</p>` : ''}
+                </div>
+                <p style="color: #555; font-size: 14px;">
+                    Please log in to your HR Portal under Recruitment > Candidates to review the application and candidate profile.
+                </p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="color: #999; font-size: 12px; text-align: center;">
+                    This is an automated notification from ${companyName} HRMS Recruitment System.
+                </p>
+            </div>
+        `;
+
+        const resolved = await resolveEmailTemplate('job-application-alert', {
+            candidateName: candidateFullName,
+            candidateEmail: applicant.email,
+            candidatePhone: applicant.phone || 'N/A',
+            jobTitle: jobPosting.title,
+            companyName,
+            notes: applicant.notes || 'None',
+        }, fallbackSubject, fallbackHtml);
+
         const mailOptions = {
             from: `"${companyName} Recruitment" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
             to: Array.isArray(recipients) ? recipients.join(', ') : recipients,
-            subject: `New Job Application Received: ${applicant.firstName} ${applicant.lastName} - ${jobPosting.title}`,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                    <h2 style="color: #ff5722; margin-bottom: 10px;">New Job Application Received</h2>
-                    <p style="color: #333; font-size: 16px;">
-                        A candidate has submitted an application for <strong>${jobPosting.title}</strong> (${jobPosting.jobCode || 'N/A'}).
-                    </p>
-                    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                        <h4 style="margin-top: 0; color: #444;">Candidate Details:</h4>
-                        <ul style="color: #555; line-height: 1.6; padding-left: 20px;">
-                            <li><strong>Full Name:</strong> ${applicant.firstName} ${applicant.lastName}</li>
-                            <li><strong>Email:</strong> ${applicant.email}</li>
-                            <li><strong>Phone:</strong> ${applicant.phone || 'N/A'}</li>
-                            <li><strong>Applied Date:</strong> ${new Date().toLocaleDateString('en-IN')}</li>
-                            ${applicant.resumeUrl ? `<li><strong>Resume Attached:</strong> Yes (${applicant.resumeUrl})</li>` : ''}
-                        </ul>
-                        ${applicant.notes ? `<p style="color: #555; margin-top: 10px;"><strong>Cover Letter / Notes:</strong><br/>${applicant.notes}</p>` : ''}
-                    </div>
-                    <p style="color: #555; font-size: 14px;">
-                        Please log in to your HR Portal under Recruitment > Candidates to review the application and candidate profile.
-                    </p>
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                    <p style="color: #999; font-size: 12px; text-align: center;">
-                        This is an automated notification from ${companyName} HRMS Recruitment System.
-                    </p>
-                </div>
-            `
+            subject: resolved.subject,
+            html: resolved.html
         };
 
         const info = await transporter.sendMail(mailOptions);
@@ -281,57 +357,68 @@ async function sendInterviewScheduleEmail({ toEmail, candidateName, jobTitle, ro
             timeStyle: 'short'
         });
 
-        const subject = isResendOrUpdate
+        const fallbackSubject = isResendOrUpdate
             ? `[Updated] Interview Schedule: ${roundTitle || 'Interview Round'} - ${jobTitle || 'Position'} | ${companyName}`
             : `Interview Scheduled: ${roundTitle || 'Interview Round'} - ${jobTitle || 'Position'} | ${companyName}`;
+
+        const fallbackHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                <div style="text-align: center; padding-bottom: 15px; border-bottom: 2px solid #ff5722;">
+                    <h2 style="color: #ff5722; margin: 0;">${companyName}</h2>
+                    <span style="color: #777; font-size: 13px;">Recruitment & Applicant Tracking System</span>
+                </div>
+                <h3 style="color: #333; margin-top: 20px;">
+                    ${isResendOrUpdate ? 'Interview Details Updated' : 'Interview Invitation'}
+                </h3>
+                <p style="color: #444; font-size: 15px;">
+                    Dear <strong>${candidateName}</strong>,
+                </p>
+                <p style="color: #555; font-size: 15px; line-height: 1.5;">
+                    ${isResendOrUpdate 
+                        ? `Your interview details for the <strong>${jobTitle || 'Applied Position'}</strong> role have been updated. Please review your schedule details below:`
+                        : `We are pleased to invite you for an interview for the <strong>${jobTitle || 'Applied Position'}</strong> role. Here are your schedule details:`
+                    }
+                </p>
+                <div style="background-color: #f8f9fa; padding: 18px; border-left: 4px solid #ff5722; border-radius: 6px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #222;">Schedule Details:</h4>
+                    <ul style="color: #444; line-height: 1.8; padding-left: 20px; font-size: 14px; margin-bottom: 0;">
+                        <li><strong>Interview Round:</strong> ${roundTitle || 'Technical Interview'}</li>
+                        <li><strong>Date & Time:</strong> ${formattedDate}</li>
+                        <li><strong>Meeting Link / Location:</strong> <a href="${locationOrLink}" target="_blank" style="color: #ff5722; font-weight: bold; word-break: break-all;">${locationOrLink}</a></li>
+                    </ul>
+                </div>
+                ${locationOrLink && locationOrLink.startsWith('http') ? `
+                <div style="text-align: center; margin: 25px 0;">
+                    <a href="${locationOrLink}" target="_blank" style="background-color: #ff5722; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 15px; display: inline-block;">
+                        Join Video Meeting
+                    </a>
+                </div>
+                ` : ''}
+                <p style="color: #555; font-size: 14px;">
+                    Please ensure you join on time. If you need to reschedule or have any queries, please reply directly to this email.
+                </p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="color: #999; font-size: 12px; text-align: center;">
+                    Best regards,<br/>
+                    <strong>${companyName} Recruitment Team</strong>
+                </p>
+            </div>
+        `;
+
+        const resolved = await resolveEmailTemplate('interview-schedule', {
+            candidateName,
+            jobTitle: jobTitle || 'Position',
+            roundTitle: roundTitle || 'Technical Interview',
+            interviewDate: formattedDate,
+            locationOrLink: locationOrLink || '',
+            companyName
+        }, fallbackSubject, fallbackHtml);
 
         const mailOptions = {
             from: `"${companyName} Recruitment" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
             to: toEmail,
-            subject,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                    <div style="text-align: center; padding-bottom: 15px; border-bottom: 2px solid #ff5722;">
-                        <h2 style="color: #ff5722; margin: 0;">${companyName}</h2>
-                        <span style="color: #777; font-size: 13px;">Recruitment & Applicant Tracking System</span>
-                    </div>
-                    <h3 style="color: #333; margin-top: 20px;">
-                        ${isResendOrUpdate ? 'Interview Details Updated' : 'Interview Invitation'}
-                    </h3>
-                    <p style="color: #444; font-size: 15px;">
-                        Dear <strong>${candidateName}</strong>,
-                    </p>
-                    <p style="color: #555; font-size: 15px; line-height: 1.5;">
-                        ${isResendOrUpdate 
-                            ? `Your interview details for the <strong>${jobTitle || 'Applied Position'}</strong> role have been updated. Please review your schedule details below:`
-                            : `We are pleased to invite you for an interview for the <strong>${jobTitle || 'Applied Position'}</strong> role. Here are your schedule details:`
-                        }
-                    </p>
-                    <div style="background-color: #f8f9fa; padding: 18px; border-left: 4px solid #ff5722; border-radius: 6px; margin: 20px 0;">
-                        <h4 style="margin-top: 0; color: #222;">Schedule Details:</h4>
-                        <ul style="color: #444; line-height: 1.8; padding-left: 20px; font-size: 14px; margin-bottom: 0;">
-                            <li><strong>Interview Round:</strong> ${roundTitle || 'Technical Interview'}</li>
-                            <li><strong>Date & Time:</strong> ${formattedDate}</li>
-                            <li><strong>Meeting Link / Location:</strong> <a href="${locationOrLink}" target="_blank" style="color: #ff5722; font-weight: bold; word-break: break-all;">${locationOrLink}</a></li>
-                        </ul>
-                    </div>
-                    ${locationOrLink && locationOrLink.startsWith('http') ? `
-                    <div style="text-align: center; margin: 25px 0;">
-                        <a href="${locationOrLink}" target="_blank" style="background-color: #ff5722; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 15px; display: inline-block;">
-                            Join Video Meeting
-                        </a>
-                    </div>
-                    ` : ''}
-                    <p style="color: #555; font-size: 14px;">
-                        Please ensure you join on time. If you need to reschedule or have any queries, please reply directly to this email.
-                    </p>
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                    <p style="color: #999; font-size: 12px; text-align: center;">
-                        Best regards,<br/>
-                        <strong>${companyName} Recruitment Team</strong>
-                    </p>
-                </div>
-            `
+            subject: resolved.subject,
+            html: resolved.html
         };
 
         const info = await transporter.sendMail(mailOptions);
@@ -361,38 +448,49 @@ async function sendOfferLetterEmail({ toEmail, candidateName, jobTitle, annualCt
             dateStyle: 'full'
         });
 
+        const fallbackSubject = `Job Offer Letter: ${jobTitle} | ${companyName}`;
+        const fallbackHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                <div style="text-align: center; padding-bottom: 15px; border-bottom: 2px solid #28a745;">
+                    <h2 style="color: #28a745; margin: 0;">${companyName}</h2>
+                    <span style="color: #777; font-size: 13px;">Official Employment Offer</span>
+                </div>
+                <h3 style="color: #333; margin-top: 20px;">Congratulations, ${candidateName}!</h3>
+                <p style="color: #555; font-size: 15px; line-height: 1.6;">
+                    We are thrilled to offer you the position of <strong>${jobTitle}</strong> at <strong>${companyName}</strong>! Following your interviews, we were thoroughly impressed with your background and achievements.
+                </p>
+                <div style="background-color: #f4fdf7; padding: 18px; border-left: 4px solid #28a745; border-radius: 6px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #222;">Offer Highlights:</h4>
+                    <ul style="color: #444; line-height: 1.8; padding-left: 20px; font-size: 14px; margin-bottom: 0;">
+                        <li><strong>Designation / Position:</strong> ${jobTitle}</li>
+                        <li><strong>Annual CTC:</strong> ${formattedCtc} per annum</li>
+                        <li><strong>Expected Date of Joining:</strong> ${formattedDate}</li>
+                    </ul>
+                </div>
+                <p style="color: #555; font-size: 14px;">
+                    Please review the attached formal Offer Letter document for full details regarding your compensation package, benefits, and joining procedure.
+                </p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="color: #999; font-size: 12px; text-align: center;">
+                    Best regards,<br/>
+                    <strong>${companyName} Talent Acquisition Team</strong>
+                </p>
+            </div>
+        `;
+
+        const resolved = await resolveEmailTemplate('offer-letter', {
+            candidateName,
+            jobTitle,
+            companyName,
+            annualCtc: formattedCtc,
+            joiningDate: formattedDate,
+        }, fallbackSubject, fallbackHtml);
+
         const mailOptions = {
             from: `"${companyName} HR Team" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
             to: toEmail,
-            subject: `Job Offer Letter: ${jobTitle} | ${companyName}`,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                    <div style="text-align: center; padding-bottom: 15px; border-bottom: 2px solid #28a745;">
-                        <h2 style="color: #28a745; margin: 0;">${companyName}</h2>
-                        <span style="color: #777; font-size: 13px;">Official Employment Offer</span>
-                    </div>
-                    <h3 style="color: #333; margin-top: 20px;">Congratulations, ${candidateName}!</h3>
-                    <p style="color: #555; font-size: 15px; line-height: 1.6;">
-                        We are thrilled to offer you the position of <strong>${jobTitle}</strong> at <strong>${companyName}</strong>! Following your interviews, we were thoroughly impressed with your background and achievements.
-                    </p>
-                    <div style="background-color: #f4fdf7; padding: 18px; border-left: 4px solid #28a745; border-radius: 6px; margin: 20px 0;">
-                        <h4 style="margin-top: 0; color: #222;">Offer Highlights:</h4>
-                        <ul style="color: #444; line-height: 1.8; padding-left: 20px; font-size: 14px; margin-bottom: 0;">
-                            <li><strong>Designation / Position:</strong> ${jobTitle}</li>
-                            <li><strong>Annual CTC:</strong> ${formattedCtc} per annum</li>
-                            <li><strong>Expected Date of Joining:</strong> ${formattedDate}</li>
-                        </ul>
-                    </div>
-                    <p style="color: #555; font-size: 14px;">
-                        Please review the attached formal Offer Letter document for full details regarding your compensation package, benefits, and joining procedure.
-                    </p>
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                    <p style="color: #999; font-size: 12px; text-align: center;">
-                        Best regards,<br/>
-                        <strong>${companyName} Talent Acquisition Team</strong>
-                    </p>
-                </div>
-            `,
+            subject: resolved.subject,
+            html: resolved.html,
             attachments: pdfPath ? [{ filename: `Offer_Letter_${candidateName.replace(/\s+/g, '_')}.pdf`, path: pdfPath }] : []
         };
 
@@ -410,34 +508,46 @@ async function sendOfferLetterEmail({ toEmail, candidateName, jobTitle, annualCt
 async function sendCorrectionRequestEmail(toEmail, employeeName, companyName, workspaceUrl, reason) {
     try {
         const transporter = await getTransporter();
-        const mailOptions = {
-            from: `"HR Portal" <no-reply@hgs-hrms.local>`,
-            to: toEmail,
-            subject: 'Action Required: Update Your Profile / Documents',
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
-                    <h2 style="color: #ea580c; border-bottom: 2px solid #ea580c; padding-bottom: 10px;">Action Required</h2>
-                    <p style="color: #333; font-size: 16px;">Dear ${employeeName},</p>
-                    <p style="color: #555; font-size: 14px; line-height: 1.5;">
-                        During the review of your onboarding profile and documents for <strong>${companyName}</strong>, our HR team has requested some corrections.
-                    </p>
-                    <div style="background-color: #fff7ed; border-left: 4px solid #ea580c; padding: 15px; margin: 20px 0;">
-                        <h4 style="margin-top: 0; color: #9a3412;">Reason / Comments from HR:</h4>
-                        <p style="color: #444; font-size: 14px; margin-bottom: 0;">${reason}</p>
-                    </div>
-                    <p style="color: #555; font-size: 14px; line-height: 1.5;">
-                        Please log in to your employee portal and update your details or re-upload the requested documents as soon as possible to complete your onboarding process.
-                    </p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="${workspaceUrl}/login" style="background-color: #ea580c; color: white; text-decoration: none; padding: 12px 25px; border-radius: 5px; font-weight: bold; display: inline-block;">Login to Portal</a>
-                    </div>
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                    <p style="color: #999; font-size: 12px; text-align: center;">
-                        Best regards,<br/>
-                        <strong>${companyName} HR Team</strong>
-                    </p>
+
+        const fallbackSubject = `Action Required: Update Your Profile / Documents - ${companyName}`;
+        const fallbackHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+                <h2 style="color: #ea580c; border-bottom: 2px solid #ea580c; padding-bottom: 10px;">Action Required</h2>
+                <p style="color: #333; font-size: 16px;">Dear ${employeeName},</p>
+                <p style="color: #555; font-size: 14px; line-height: 1.5;">
+                    During the review of your onboarding profile and documents for <strong>${companyName}</strong>, our HR team has requested some corrections.
+                </p>
+                <div style="background-color: #fff7ed; border-left: 4px solid #ea580c; padding: 15px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #9a3412;">Reason / Comments from HR:</h4>
+                    <p style="color: #444; font-size: 14px; margin-bottom: 0;">${reason}</p>
                 </div>
-            `
+                <p style="color: #555; font-size: 14px; line-height: 1.5;">
+                    Please log in to your employee portal and update your details or re-upload the requested documents as soon as possible to complete your onboarding process.
+                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${workspaceUrl}/login" style="background-color: #ea580c; color: white; text-decoration: none; padding: 12px 25px; border-radius: 5px; font-weight: bold; display: inline-block;">Login to Portal</a>
+                </div>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="color: #999; font-size: 12px; text-align: center;">
+                    Best regards,<br/>
+                    <strong>${companyName} HR Team</strong>
+                </p>
+            </div>
+        `;
+
+        const resolved = await resolveEmailTemplate('correction-request', {
+            employeeName,
+            companyName,
+            actionUrl: `${workspaceUrl}/login`,
+            notes: reason,
+            reason
+        }, fallbackSubject, fallbackHtml);
+
+        const mailOptions = {
+            from: `"${companyName} HR Team" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
+            to: toEmail,
+            subject: resolved.subject,
+            html: resolved.html
         };
 
         const info = await transporter.sendMail(mailOptions);
@@ -499,39 +609,50 @@ async function sendDomainApprovedEmail(toEmail, companyName, subdomain, workspac
     }
 }
 
-async function sendHRManagerOnboardingEmail({ toEmail, hrName, companyName, verifyUrl }) {
+async function sendHRManagerOnboardingEmail({ toEmail, hrName, companyName, verifyUrl, tempPassword }) {
     try {
         const transporter = await getTransporter();
+
+        const fallbackSubject = `Welcome to ${companyName} - Verify Account & Create Password`;
+        const fallbackHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 25px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
+                <h2 style="color: #ff5722; text-align: center; margin-bottom: 20px;">${companyName}</h2>
+                <h3 style="color: #333;">Welcome, ${hrName}!</h3>
+                <p style="color: #555; font-size: 16px; line-height: 1.5;">
+                    You have been added as an <strong>HR Manager</strong> for <strong>${companyName}</strong>.
+                </p>
+                <p style="color: #555; font-size: 15px; line-height: 1.5;">
+                    To activate your account and log in, please verify your email address and set your password by clicking the button below:
+                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${verifyUrl}" style="background-color: #ff5722; color: #fff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                        Verify Account &amp; Create Password
+                    </a>
+                </div>
+                <p style="color: #555; font-size: 14px;">
+                    Direct link:<br/>
+                    <a href="${verifyUrl}" style="color: #ff5722; word-break: break-all;">${verifyUrl}</a>
+                </p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;" />
+                <p style="color: #777; font-size: 13px; text-align: center;">
+                    After creating your password, log in to complete your onboarding details (Phone, Date of Joining, Profile Photo, Bank &amp; Documents).
+                </p>
+            </div>
+        `;
+
+        const resolved = await resolveEmailTemplate('hr-onboarding', {
+            hrName,
+            companyName,
+            actionUrl: verifyUrl,
+            verifyUrl,
+            tempPassword: tempPassword || ''
+        }, fallbackSubject, fallbackHtml);
 
         const mailOptions = {
             from: `"${companyName} HR Portal" <${process.env.SMTP_USER || 'noreply@yourhrms.com'}>`,
             to: toEmail,
-            subject: `Welcome to ${companyName} - Verify Account & Create Password`,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 25px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
-                    <h2 style="color: #ff5722; text-align: center; margin-bottom: 20px;">${companyName}</h2>
-                    <h3 style="color: #333;">Welcome, ${hrName}!</h3>
-                    <p style="color: #555; font-size: 16px; line-height: 1.5;">
-                        You have been added as an <strong>HR Manager</strong> for <strong>${companyName}</strong>.
-                    </p>
-                    <p style="color: #555; font-size: 15px; line-height: 1.5;">
-                        To activate your account and log in, please verify your email address and set your password by clicking the button below:
-                    </p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="${verifyUrl}" style="background-color: #ff5722; color: #fff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-                            Verify Account &amp; Create Password
-                        </a>
-                    </div>
-                    <p style="color: #555; font-size: 14px;">
-                        Direct link:<br/>
-                        <a href="${verifyUrl}" style="color: #ff5722; word-break: break-all;">${verifyUrl}</a>
-                    </p>
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;" />
-                    <p style="color: #777; font-size: 13px; text-align: center;">
-                        After creating your password, log in to complete your onboarding details (Phone, Date of Joining, Profile Photo, Bank &amp; Documents).
-                    </p>
-                </div>
-            `
+            subject: resolved.subject,
+            html: resolved.html
         };
 
         const info = await transporter.sendMail(mailOptions);

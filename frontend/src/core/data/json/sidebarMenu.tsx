@@ -1230,16 +1230,6 @@ export const SidebarDataTest = [
             showSubRoute: false,
             submenuItems: [
               {
-                label: 'Custom CSS',
-                link: routes.customCss,
-                base: 'custom-css',
-              },
-              {
-                label: 'Custom JS',
-                link: routes.customJs,
-                base: 'custom-js',
-              },
-              {
                 label: 'Cronjob',
                 link: routes.cronjob,
                 base: 'cronjob',

@@ -1213,12 +1213,12 @@ export const publicRoutes = [
   },
   {
     path: routes.customCss,
-    element: <Customcss />,
+    element: <Navigate to={routes.cronjob} replace />,
     route: Route,
   },
   {
     path: routes.customJs,
-    element: <Customjs />,
+    element: <Navigate to={routes.cronjob} replace />,
     route: Route,
   },
   {

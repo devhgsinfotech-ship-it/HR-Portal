@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const emailService = require('../utils/emailService');
 const { seedDefaultCompanyRoles } = require('../utils/seedDefaultRoles');
 const { generateCompanyCode, autoAssignEmployeeDefaults } = require('../utils/codeGenerator');
+const { getDynamicFrontendUrl } = require('../utils/urlHelper');
 
 async function login(req, res) {
     try {
@@ -288,11 +289,8 @@ async function register(req, res) {
             return { company, user };
         });
 
-        // Dynamically generate base URL based on the environment
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
-        const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
-        const protocol = domain.includes('localhost') ? 'http' : 'https';
-        const baseUrl = `${protocol}://${domain}`;
+        // Dynamically resolve frontend URL based on request environment (localhost on dev, live URL on production)
+        const baseUrl = getDynamicFrontendUrl(req);
         const workspaceUrl = baseUrl;
 
         // Send real email instead of just logging token
@@ -638,10 +636,7 @@ async function resendVerification(req, res) {
             data: { userId: user.id, token: verifyToken, expiresAt: tokenExpiry }
         });
 
-        const isProduction = process.env.NODE_ENV === 'production';
-        const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
-        const protocol = domain.includes('localhost') ? 'http' : 'https';
-        const workspaceUrl = `${protocol}://${domain}`;
+        const workspaceUrl = getDynamicFrontendUrl(req);
 
         await emailService.sendVerificationEmail(email, verifyToken, user.company.name, workspaceUrl);
 
@@ -688,14 +683,10 @@ async function forgotPassword(req, res) {
             }
         });
 
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
-        const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
-        const protocol = domain.includes('localhost') ? 'http' : 'https';
-
-        const workspaceUrl = `${protocol}://${domain}`;
+        const workspaceUrl = getDynamicFrontendUrl(req);
         const companyName = user.company ? user.company.name : 'HGS-HRMS';
         const logoUrl = user.company?.logoUrl 
-            ? (user.company.logoUrl.startsWith('http') ? user.company.logoUrl : `${protocol}://api.${domain}${user.company.logoUrl}`) 
+            ? (user.company.logoUrl.startsWith('http') ? user.company.logoUrl : `${workspaceUrl}${user.company.logoUrl}`) 
             : null;
 
         await emailService.sendPasswordResetEmail(cleanEmail, resetToken, workspaceUrl, user.name, companyName, logoUrl);

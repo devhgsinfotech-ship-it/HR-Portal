@@ -66,7 +66,7 @@ const Preference = () => {
                 </Link>
               </li>
               <li className="nav-item">
-                <Link className="nav-link" to={routes.customCss}>
+                <Link className="nav-link" to={routes.cronjob}>
                   <i className="ti ti-settings-2 me-2" />
                   Other Settings
                 </Link>

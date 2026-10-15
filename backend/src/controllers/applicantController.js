@@ -5,6 +5,7 @@ const path = require('path');
 const prisma = require('../config/prisma');
 const { sendJobApplicationNotificationEmail, sendInterviewScheduleEmail, sendOfferLetterEmail, sendEmployeeInviteEmail } = require('../utils/emailService');
 const { extractSkillsFromText, extractExperienceYears, calculateSkillMatch } = require('../utils/aiSkillMatcher');
+const { getDynamicFrontendUrl } = require('../utils/urlHelper');
 
 // Helper to send email alerts and create in-app notifications for HR & Company Admin when an application is submitted
 async function sendApplicationNotificationToHR(job, applicant) {
@@ -626,16 +627,12 @@ async function convertToEmployee(req, res) {
     });
 
     // Send Onboarding Email to New Employee
-    const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
-    const baseDomain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
-    const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
-
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       select: { name: true, subdomain: true }
     });
 
-    const workspaceUrl = process.env.APP_URL || `${protocol}://${baseDomain}`;
+    const workspaceUrl = getDynamicFrontendUrl(req);
 
     await sendEmployeeInviteEmail(
       applicant.email,

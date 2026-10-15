@@ -68,7 +68,7 @@ const Cronjobschedule = () => {
                                 </Link>
                             </li>
                             <li className="nav-item">
-                                <Link className="nav-link active" to={routes.customCss}>
+                                <Link className="nav-link active" to={routes.cronjob}>
                                     <i className="ti ti-settings-2 me-2" />
                                     Other Settings
                                 </Link>
@@ -79,18 +79,6 @@ const Cronjobschedule = () => {
                                 <div className="card">
                                     <div className="card-body">
                                         <div className="d-flex flex-column list-group settings-list">
-                                            <Link
-                                                to={routes.customCss}
-                                                className="d-inline-flex align-items-center rounded py-2 px-3"
-                                            >
-                                                Custom CSS
-                                            </Link>
-                                            <Link
-                                                to={routes.customJs}
-                                                className="d-inline-flex align-items-center rounded py-2 px-3"
-                                            >
-                                                Custom JS
-                                            </Link>
                                             <Link
                                                 to={routes.cronjob}
                                                 className="d-inline-flex align-items-center rounded active py-2 px-3"

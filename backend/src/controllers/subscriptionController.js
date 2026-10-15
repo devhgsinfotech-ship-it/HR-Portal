@@ -3,6 +3,7 @@ const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const { sendDomainApprovedEmail } = require('../utils/emailService');
 const { getUsdToInrRate, convertUsdToInr, convertInrToUsd } = require('../utils/currencyRate');
+const { getDynamicFrontendUrl } = require('../utils/urlHelper');
 
 // Helper to resolve features map seamlessly
 function resolveFeatures(planFeatures, customFeatures) {
@@ -1310,10 +1311,7 @@ async function updateDomainStatus(req, res) {
     }
 
     if (isApproved && (company.domainStatus !== 'APPROVED' || company.emailDomain !== updatedCompany.emailDomain)) {
-      const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
-      const baseDomain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
-      const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
-      const workspaceUrl = `${protocol}://${baseDomain}`;
+      const workspaceUrl = getDynamicFrontendUrl(req);
 
       sendDomainApprovedEmail(updatedCompany.email, updatedCompany.name, updatedCompany.emailDomain || updatedCompany.name, workspaceUrl)
         .catch(err => console.warn('Domain approval email notice:', err.message));

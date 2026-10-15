@@ -1375,3 +1375,39 @@ model SeoSetting {
   @@map("seo_settings")
 }
 
+model EmailTemplate {
+  id             Int      @id @default(autoincrement())
+  slug           String   @unique
+  name           String
+  category       String   @default("General")
+  description    String?  @db.Text
+  subject        String
+  body           String   @db.Text
+  tags           String   @db.Text
+  defaultSubject String
+  defaultBody    String   @db.Text
+  isCustomized   Boolean  @default(false)
+  status         String   @default("Active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("email_templates")
+}
+
+model CronJob {
+  id            Int       @id @default(autoincrement())
+  key           String    @unique
+  name          String
+  description   String?   @db.Text
+  schedule      String
+  scheduleHuman String
+  status        String    @default("ACTIVE")
+  lastRun       DateTime?
+  nextRun       DateTime?
+  lastStatus    String?
+  lastMessage   String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("cron_jobs")
+}

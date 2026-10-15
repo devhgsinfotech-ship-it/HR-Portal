@@ -1154,16 +1154,6 @@ export const TowColData = [
             base: 'other-settings',
             subMenusTwo: [
               {
-                menuValue: 'Custom CSS',
-                route: routes.customCss,
-                base: 'custom-css',
-              },
-              {
-                menuValue: 'Custom JS',
-                route: routes.customJs,
-                base: 'custom-js',
-              },
-              {
                 menuValue: 'Cronjob',
                 route: routes.cronjob,
                 base: 'cronjob',
