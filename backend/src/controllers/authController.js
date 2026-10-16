@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const emailService = require('../utils/emailService');
 const { seedDefaultCompanyRoles } = require('../utils/seedDefaultRoles');
 const { generateCompanyCode, autoAssignEmployeeDefaults } = require('../utils/codeGenerator');
+const { getDynamicFrontendUrl } = require('../utils/urlHelper');
 
 async function login(req, res) {
     try {
@@ -43,6 +44,29 @@ async function login(req, res) {
         // 3. Check account status (Must be email verified)
         if (user.accountStatus !== 'ACTIVE') {
             return res.status(403).json({ message: 'Your account is pending verification. Please check your email to verify your account.' });
+        }
+
+        // 3.1 Check if user IP is banned (globally or for this company)
+        const rawClientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip || '')
+            .split(',')[0].trim().replace(/^::ffff:/, '');
+
+        if (rawClientIp && rawClientIp !== '127.0.0.1' && rawClientIp !== '::1') {
+            const isBanned = await prisma.bannedIp.findFirst({
+                where: {
+                    ipAddress: rawClientIp,
+                    status: 'Active',
+                    OR: [
+                        { companyId: null },
+                        ...(user.companyId ? [{ companyId: user.companyId }] : [])
+                    ]
+                }
+            });
+
+            if (isBanned) {
+                return res.status(403).json({
+                    message: `Access denied: Your IP (${rawClientIp}) has been banned. ${isBanned.reason ? `Reason: ${isBanned.reason}` : ''}`
+                });
+            }
         }
 
         // 4. Domain Approval Check (for non-Super Admin users)
@@ -288,11 +312,8 @@ async function register(req, res) {
             return { company, user };
         });
 
-        // Dynamically generate base URL based on the environment
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
-        const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
-        const protocol = domain.includes('localhost') ? 'http' : 'https';
-        const baseUrl = `${protocol}://${domain}`;
+        // Dynamically resolve frontend URL based on request environment (localhost on dev, live URL on production)
+        const baseUrl = getDynamicFrontendUrl(req);
         const workspaceUrl = baseUrl;
 
         // Send real email instead of just logging token
@@ -638,10 +659,7 @@ async function resendVerification(req, res) {
             data: { userId: user.id, token: verifyToken, expiresAt: tokenExpiry }
         });
 
-        const isProduction = process.env.NODE_ENV === 'production';
-        const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
-        const protocol = domain.includes('localhost') ? 'http' : 'https';
-        const workspaceUrl = `${protocol}://${domain}`;
+        const workspaceUrl = getDynamicFrontendUrl(req);
 
         await emailService.sendVerificationEmail(email, verifyToken, user.company.name, workspaceUrl);
 
@@ -688,14 +706,10 @@ async function forgotPassword(req, res) {
             }
         });
 
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
-        const domain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
-        const protocol = domain.includes('localhost') ? 'http' : 'https';
-
-        const workspaceUrl = `${protocol}://${domain}`;
+        const workspaceUrl = getDynamicFrontendUrl(req);
         const companyName = user.company ? user.company.name : 'HGS-HRMS';
         const logoUrl = user.company?.logoUrl 
-            ? (user.company.logoUrl.startsWith('http') ? user.company.logoUrl : `${protocol}://api.${domain}${user.company.logoUrl}`) 
+            ? (user.company.logoUrl.startsWith('http') ? user.company.logoUrl : `${workspaceUrl}${user.company.logoUrl}`) 
             : null;
 
         await emailService.sendPasswordResetEmail(cleanEmail, resetToken, workspaceUrl, user.name, companyName, logoUrl);
@@ -913,7 +927,12 @@ async function updateCompanySettings(req, res) {
             return res.status(403).json({ message: 'Unauthorized: Only Company Admins can modify their company settings' });
         }
 
-        const { name, phone, email, address, industry, companySize, logoUrl, currency } = req.body;
+        const {
+            name, phone, email, address, industry, companySize, logoUrl,
+            currency, currencySymbol, timezone, language, languageSwitcher,
+            dateFormat, timeFormat, financialYear, startingMonth,
+            currencyPosition, decimalSeparator, thousandSeparator, countriesRestriction
+        } = req.body;
         
         let newLogoUrl = logoUrl;
         if (req.file) {
@@ -929,25 +948,45 @@ async function updateCompanySettings(req, res) {
         if (companySize !== undefined) updateData.companySize = companySize;
         if (newLogoUrl !== undefined) updateData.logoUrl = newLogoUrl;
 
-        const updatedCompany = await prisma.company.update({
-            where: { id: companyId },
-            data: updateData,
-        });
+        let updatedCompany = null;
+        if (Object.keys(updateData).length > 0) {
+            updatedCompany = await prisma.company.update({
+                where: { id: companyId },
+                data: updateData,
+            });
+        } else {
+            updatedCompany = await prisma.company.findUnique({ where: { id: companyId } });
+        }
 
-        let updatedSettings = null;
+        const settingUpdateData = {};
         if (currency !== undefined) {
             const cleanCurr = currency.toUpperCase() === 'USD' ? 'USD' : 'INR';
-            const cleanSym = cleanCurr === 'USD' ? '$' : '₹';
+            settingUpdateData.currency = cleanCurr;
+            settingUpdateData.currencySymbol = currencySymbol || (cleanCurr === 'USD' ? '$' : '₹');
+        } else if (currencySymbol !== undefined) {
+            settingUpdateData.currencySymbol = currencySymbol;
+        }
+
+        if (timezone !== undefined) settingUpdateData.timezone = timezone;
+        if (language !== undefined) settingUpdateData.language = language;
+        if (languageSwitcher !== undefined) settingUpdateData.languageSwitcher = Boolean(languageSwitcher);
+        if (dateFormat !== undefined) settingUpdateData.dateFormat = dateFormat;
+        if (timeFormat !== undefined) settingUpdateData.timeFormat = timeFormat;
+        if (financialYear !== undefined) settingUpdateData.financialYear = financialYear;
+        if (startingMonth !== undefined) settingUpdateData.startingMonth = startingMonth;
+        if (currencyPosition !== undefined) settingUpdateData.currencyPosition = currencyPosition;
+        if (decimalSeparator !== undefined) settingUpdateData.decimalSeparator = decimalSeparator;
+        if (thousandSeparator !== undefined) settingUpdateData.thousandSeparator = thousandSeparator;
+        if (countriesRestriction !== undefined) settingUpdateData.countriesRestriction = countriesRestriction;
+
+        let updatedSettings = null;
+        if (Object.keys(settingUpdateData).length > 0) {
             updatedSettings = await prisma.companySetting.upsert({
                 where: { companyId },
-                update: {
-                    currency: cleanCurr,
-                    currencySymbol: cleanSym
-                },
+                update: settingUpdateData,
                 create: {
                     companyId,
-                    currency: cleanCurr,
-                    currencySymbol: cleanSym
+                    ...settingUpdateData
                 }
             });
         } else {

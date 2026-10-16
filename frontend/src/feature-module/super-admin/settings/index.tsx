@@ -511,6 +511,29 @@ const SuperAdminSettings: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Backup & Recovery Shortcut Card */}
+            <div className="col-12 mt-3">
+              <div className="card shadow-sm border bg-light-primary border-primary-subtle">
+                <div className="card-body p-3 d-flex align-items-center justify-content-between flex-wrap gap-3">
+                  <div className="d-flex align-items-center gap-3">
+                    <div className="avatar avatar-lg rounded bg-primary text-white d-flex align-items-center justify-content-center">
+                      <i className="ti ti-database fs-24" />
+                    </div>
+                    <div>
+                      <h5 className="mb-1 text-dark fw-bold">Multi-Company Master Backup &amp; Recovery</h5>
+                      <p className="text-muted fs-13 mb-0">
+                        Create full-platform database snapshots of all companies or isolated backups for specific tenants.
+                      </p>
+                    </div>
+                  </div>
+                  <Link to={routes.backup} className="btn btn-primary d-flex align-items-center px-3 py-2">
+                    <i className="ti ti-database-export me-2" />
+                    Open Backup Console
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

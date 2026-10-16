@@ -71,7 +71,7 @@ const CustomFields = () => {
               </Link>
             </li>
             <li className="nav-item">
-              <Link className="nav-link" to={routes.customCss}>
+              <Link className="nav-link" to={routes.cronjob}>
                 <i className="ti ti-settings-2 me-2" />
                 Other Settings
               </Link>
@@ -89,13 +89,7 @@ const CustomFields = () => {
                       Salary Settings
                     </Link>
                     <Link
-                      to={routes.approvalSettings}
-                      className="d-inline-flex align-items-center rounded py-2 px-3"
-                    >
-                      Approval Settings
-                    </Link>
-                    <Link
-                      to={routes.approvalSettings}
+                      to={routes.invoiceSettings}
                       className="d-inline-flex align-items-center rounded py-2 px-3"
                     >
                       Invoice Settings

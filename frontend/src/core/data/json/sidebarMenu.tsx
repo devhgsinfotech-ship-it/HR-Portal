@@ -207,6 +207,11 @@ export const SidebarDataTest = [
             base: routes.superAdminSettings,
           },
           {
+            label: 'Backup & Export',
+            link: routes.backup,
+            base: 'backup',
+          },
+          {
             label: 'Tenant Usage Metrics',
             link: routes.tenantUsageMetrics,
             base: routes.tenantUsageMetrics,
@@ -1118,27 +1123,6 @@ export const SidebarDataTest = [
                 base: 'localization-settings',
               },
               {
-                label: 'Prefixes',
-                link: routes.prefixes,
-                base: 'prefixes',
-              },
-              {
-                label: 'Preferences',
-                link: routes.preference,
-                base: 'preferences',
-              },
-              {
-                label: 'Appearance',
-                link: routes.appearance,
-                base: 'appearance',
-              },
-              {
-                label: 'Language',
-                link: routes.language,
-                base: 'language',
-                base2: 'add-language',
-              },
-              {
                 label: 'Authentication',
                 link: routes.authenticationSettings,
                 base: 'authentication-settings',
@@ -1160,11 +1144,6 @@ export const SidebarDataTest = [
                 label: 'Salary Settings',
                 link: routes.salarySettings,
                 base: 'salary-settings',
-              },
-              {
-                label: 'Approval Settings',
-                link: routes.approvalSettings,
-                base: 'approval-settings',
               },
               {
                 label: 'Invoice Settings',
@@ -1256,24 +1235,9 @@ export const SidebarDataTest = [
             showSubRoute: false,
             submenuItems: [
               {
-                label: 'Custom CSS',
-                link: routes.customCss,
-                base: 'custom-css',
-              },
-              {
-                label: 'Custom JS',
-                link: routes.customJs,
-                base: 'custom-js',
-              },
-              {
                 label: 'Cronjob',
                 link: routes.cronjob,
                 base: 'cronjob',
-              },
-              {
-                label: 'Storage',
-                link: routes.storage,
-                base: 'storage-settings',
               },
               {
                 label: 'Ban IP Address',

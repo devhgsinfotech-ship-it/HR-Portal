@@ -234,6 +234,15 @@ const HorizontalSidebar: React.FC = () => {
                           if (normRole === "COMPANY_ADMIN" && menuItem.menuValue === "Dashboard") {
                             return subItem.menuValue === "Admin Dashboard";
                           }
+                          if (normRole === "COMPANY_ADMIN" || normRole === "SUPER_ADMIN") {
+                            if (
+                              subValLower === "my attendance" ||
+                              subItem.base === "attendance-employee" ||
+                              (subItem.route && subItem.route.includes("attendance-employee"))
+                            ) {
+                              return false;
+                            }
+                          }
                           return true;
                         }).map((subItem, j) => {
                           const hasSubTwo =

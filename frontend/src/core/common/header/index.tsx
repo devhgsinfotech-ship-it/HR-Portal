@@ -275,33 +275,37 @@ const Header = React.memo(() => {
   }, []);
 
   // System Modules & Actions Index for Quick Jump
-  const systemModules = useMemo(() => [
-    { title: 'Org Directory', category: 'Pages & Actions', icon: 'building', route: all_routes.org || '/org', keywords: 'organization org employee directory team' },
-    { title: 'Employees List', category: 'Pages & Actions', icon: 'users', route: all_routes.employeeList || '/employees', keywords: 'employee staff workforce team list' },
-    { title: 'Employees Grid', category: 'Pages & Actions', icon: 'layout-grid', route: all_routes.employeeGrid || '/employees-grid', keywords: 'employee grid cards' },
-    { title: 'Departments', category: 'Departments', icon: 'building-community', route: all_routes.departments || '/departments', keywords: 'department team division dept' },
-    { title: 'Designations', category: 'Departments', icon: 'badge', route: all_routes.designations || '/designations', keywords: 'designation role position title' },
-    
-    { title: 'My Attendance', category: 'Attendance & Leaves', icon: 'clock-check', route: all_routes.attendanceemployee || '/attendance-employee', keywords: 'attendance punch checkin checkout time in out' },
-    { title: 'Attendance Management', category: 'Attendance & Leaves', icon: 'clock-cog', route: all_routes.attendanceadmin || '/attendance-admin', keywords: 'admin attendance regularization punches' },
-    { title: 'My Leaves', category: 'Attendance & Leaves', icon: 'calendar-off', route: all_routes.leaveemployee || '/leaves-employee', keywords: 'leave vacation timeoff apply leave balance' },
-    { title: 'Leave Approvals', category: 'Attendance & Leaves', icon: 'calendar-event', route: all_routes.leaveadmin || '/leaves', keywords: 'leave admin approve reject leave requests' },
-    { title: 'Holidays', category: 'Attendance & Leaves', icon: 'calendar-star', route: all_routes.holidays || '/hrm/holidays', keywords: 'holiday calendar festival office off' },
-    
-    { title: 'My Payslips & Salary', category: 'Payroll', icon: 'receipt-2', route: all_routes.payslip || '/payslip', keywords: 'payslip salary pay slip gross net salary structure tax' },
-    { title: 'Employee Salary List', category: 'Payroll', icon: 'cash', route: all_routes.employeesalary || '/payroll/employee-salary', keywords: 'employee salary payroll list' },
-    { title: 'Payroll Additions', category: 'Payroll', icon: 'currency-dollar', route: all_routes.payrollAddition || '/payroll/payroll-addition', keywords: 'payroll items deductions allowances basic hra' },
-    
-    { title: 'Goal Tracking', category: 'Performance', icon: 'target', route: all_routes.goalTracking || '/performance/goal-tracking', keywords: 'goals target okr kpi tracking' },
-    { title: 'Performance Review', category: 'Performance', icon: 'stars', route: all_routes.performanceReview || '/performance/performance-review', keywords: 'appraisal review rating evaluation' },
-    { title: 'Performance Indicators', category: 'Performance', icon: 'chart-bar', route: all_routes.performanceIndicator || '/performance/performance-indicator', keywords: 'kpi indicator metrics' },
-    
-    { title: 'Company Policies', category: 'Policies & Docs', icon: 'file-text', route: all_routes.policy || '/policy', keywords: 'policy document hr rules guidelines code of conduct' },
-    { title: 'My Profile & Documents', category: 'Policies & Docs', icon: 'user-circle', route: all_routes.profile || '/pages/profile', keywords: 'profile documents aadhaar pan resume personal info' },
-    
-    { title: 'Leave Settings', category: 'Settings', icon: 'adjustments', route: all_routes.leavesettings || '/leave-settings', keywords: 'leave settings policy types' },
-    { title: 'General Settings', category: 'Settings', icon: 'settings', route: all_routes.profilesettings || '/settings/general-settings', keywords: 'company settings logo system config' },
-  ], [routes]);
+  const systemModules = useMemo(() => {
+    const isCompanyOrSuperAdmin = userRole === 'COMPANY_ADMIN' || userRole === 'SUPER_ADMIN';
+    const list = [
+      { title: 'Org Directory', category: 'Pages & Actions', icon: 'building', route: all_routes.org || '/org', keywords: 'organization org employee directory team' },
+      { title: 'Employees List', category: 'Pages & Actions', icon: 'users', route: all_routes.employeeList || '/employees', keywords: 'employee staff workforce team list' },
+      { title: 'Employees Grid', category: 'Pages & Actions', icon: 'layout-grid', route: all_routes.employeeGrid || '/employees-grid', keywords: 'employee grid cards' },
+      { title: 'Departments', category: 'Departments', icon: 'building-community', route: all_routes.departments || '/departments', keywords: 'department team division dept' },
+      { title: 'Designations', category: 'Departments', icon: 'badge', route: all_routes.designations || '/designations', keywords: 'designation role position title' },
+      
+      { title: 'My Attendance', category: 'Attendance & Leaves', icon: 'clock-check', route: all_routes.attendanceemployee || '/attendance-employee', keywords: 'attendance punch checkin checkout time in out' },
+      { title: 'Attendance Management', category: 'Attendance & Leaves', icon: 'clock-cog', route: all_routes.attendanceadmin || '/attendance-admin', keywords: 'admin attendance regularization punches' },
+      { title: 'My Leaves', category: 'Attendance & Leaves', icon: 'calendar-off', route: all_routes.leaveemployee || '/leaves-employee', keywords: 'leave vacation timeoff apply leave balance' },
+      { title: 'Leave Approvals', category: 'Attendance & Leaves', icon: 'calendar-event', route: all_routes.leaveadmin || '/leaves', keywords: 'leave admin approve reject leave requests' },
+      { title: 'Holidays', category: 'Attendance & Leaves', icon: 'calendar-star', route: all_routes.holidays || '/hrm/holidays', keywords: 'holiday calendar festival office off' },
+      
+      { title: 'My Payslips & Salary', category: 'Payroll', icon: 'receipt-2', route: all_routes.payslip || '/payslip', keywords: 'payslip salary pay slip gross net salary structure tax' },
+      { title: 'Employee Salary List', category: 'Payroll', icon: 'cash', route: all_routes.employeesalary || '/payroll/employee-salary', keywords: 'employee salary payroll list' },
+      { title: 'Payroll Additions', category: 'Payroll', icon: 'currency-dollar', route: all_routes.payrollAddition || '/payroll/payroll-addition', keywords: 'payroll items deductions allowances basic hra' },
+      
+      { title: 'Goal Tracking', category: 'Performance', icon: 'target', route: all_routes.goalTracking || '/performance/goal-tracking', keywords: 'goals target okr kpi tracking' },
+      { title: 'Performance Review', category: 'Performance', icon: 'stars', route: all_routes.performanceReview || '/performance/performance-review', keywords: 'appraisal review rating evaluation' },
+      { title: 'Performance Indicators', category: 'Performance', icon: 'chart-bar', route: all_routes.performanceIndicator || '/performance/performance-indicator', keywords: 'kpi indicator metrics' },
+      
+      { title: 'Company Policies', category: 'Policies & Docs', icon: 'file-text', route: all_routes.policy || '/policy', keywords: 'policy document hr rules guidelines code of conduct' },
+      { title: 'My Profile & Documents', category: 'Policies & Docs', icon: 'user-circle', route: all_routes.profile || '/pages/profile', keywords: 'profile documents aadhaar pan resume personal info' },
+      
+      { title: 'Leave Settings', category: 'Settings', icon: 'adjustments', route: all_routes.leavesettings || '/leave-settings', keywords: 'leave settings policy types' },
+      { title: 'General Settings', category: 'Settings', icon: 'settings', route: all_routes.profilesettings || '/settings/general-settings', keywords: 'company settings logo system config' },
+    ];
+    return isCompanyOrSuperAdmin ? list.filter(m => m.route !== (all_routes.attendanceemployee || '/attendance-employee')) : list;
+  }, [routes, userRole]);
 
   // Compute Search Results across Employees, Departments, Pages & Modules
   const searchResults = useMemo(() => {

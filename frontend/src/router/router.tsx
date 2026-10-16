@@ -41,9 +41,15 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     return ["COMPANY_ADMIN", "HR", "MANAGER"];
   }
 
+  // Dedicated rule: My Attendance (Self-service attendance tracking for Employees, HR & Managers)
+  // Hidden from and disallowed for Company Admin & Super Admin (Owners/Admins are not tracked)
+  if (p === "/attendance-employee" || p.startsWith("/attendance-employee")) {
+    return ["HR", "MANAGER", "EMPLOYEE"];
+  }
+
   // 3. Employee Self-Service routes (Accessible by all)
   const employeeAllowedPrefixes = [
-    "/employee-dashboard", "/attendance-employee", "/leaves-employee",
+    "/employee-dashboard", "/leaves-employee",
     "/pages/profile", "/hrm/holidays", "/payslip", "/application",
     "/projects", "/tasks", "/task-board", "/clients",
     "/org", "/org-directory"

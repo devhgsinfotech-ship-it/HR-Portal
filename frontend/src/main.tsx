@@ -21,9 +21,13 @@ import React from "react";
 import ErrorBoundary from "./components/ErrorBoundary/ErrorBoundary.js";
 import { initializePreloading } from "./router/preloadUtils";
 import { PerformanceProvider } from "./core/providers/PerformanceProvider";
+import { fetchAndApplyDynamicSeo } from "./core/utils/dynamicSeo";
 
 // Initialize preloading for better performance
 initializePreloading();
+
+// Dynamically fetch and inject SEO meta tags & document title
+fetchAndApplyDynamicSeo();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

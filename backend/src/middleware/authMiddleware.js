@@ -21,7 +21,9 @@ const verifyToken = (req, res, next) => {
         req.user = decoded;
         next();
     } catch (error) {
-        console.error('[AUTH ERROR]', error.message, '| JWT_SECRET:', process.env.JWT_SECRET);
+        if (error.name !== 'TokenExpiredError') {
+            console.warn(`[AUTH] Token verification failed: ${error.message}`);
+        }
         return res.status(401).json({ message: 'Token is invalid or expired' });
     }
 };

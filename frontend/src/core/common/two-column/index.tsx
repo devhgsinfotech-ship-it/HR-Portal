@@ -514,10 +514,6 @@ const TwoColumnSidebar = () => {
                                             <li><Link to={all_routes.businessSettings}>Business Settings</Link></li>
                                             <li><Link to={all_routes.seoSettings}>SEO Settings</Link></li>
                                             <li><Link to={all_routes.localizationSettings}>Localization</Link></li>
-                                            <li><Link to={all_routes.prefixes}>Prefixes</Link></li>
-                                            <li><Link to={all_routes.preference}>Preferences</Link></li>
-                                            <li><Link to={all_routes.performanceAppraisal}>Appearance</Link></li>
-                                            <li><Link to={all_routes.language}>Language</Link></li>
                                             <li><Link to={all_routes.authenticationSettings}>Authentication</Link></li>
                                             <li><Link to={all_routes.aiSettings}>AI Settings</Link></li>
                                         </ul>
@@ -526,7 +522,6 @@ const TwoColumnSidebar = () => {
                                         <Link to="#">App Settings<span className="menu-arrow"></span></Link>
                                         <ul>
                                             <li><Link to={all_routes.salarySettings}>Salary Settings</Link></li>
-                                            <li><Link to={all_routes.approvalSettings}>Approval Settings</Link></li>
                                             <li><Link to={all_routes.invoiceSettings}>Invoice Settings</Link></li>
                                             <li><Link to={all_routes.leaveType}>Leave Type</Link></li>
                                             <li><Link to={all_routes.customFields}>Custom Fields</Link></li>
@@ -561,10 +556,7 @@ const TwoColumnSidebar = () => {
                                     <li className="submenu">
                                         <Link to="#">Other Settings<span className="menu-arrow"></span></Link>
                                         <ul>
-                                            <li><Link to={all_routes.customCss}>Custom CSS</Link></li>
-                                            <li><Link to={all_routes.customJs}>Custom JS</Link></li>
                                             <li><Link to={all_routes.cronjob}>Cronjob</Link></li>
-                                            <li><Link to={all_routes.storage}>Storage</Link></li>
                                             <li><Link to={all_routes.banIpAddress}>Ban IP Address</Link></li>
                                             <li><Link to={all_routes.backup}>Backup</Link></li>
                                             <li><Link to={all_routes.clearcache}>Clear Cache</Link></li>

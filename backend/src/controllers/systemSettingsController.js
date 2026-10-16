@@ -2,6 +2,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { getUsdToInrRate, convertInrToUsd, convertUsdToInr } = require('../utils/currencyRate');
+const emailService = require('../utils/emailService');
 
 // Helper to ensure at least one default system setting exists
 async function getOrCreateSystemSetting() {
@@ -103,8 +104,19 @@ async function getSystemSettings(req, res) {
                 id: settings.id,
                 systemName: settings.systemName,
                 logoUrl: settings.logoUrl,
-                currency: settings.currency,
-                currencySymbol: settings.currencySymbol,
+                currency: settings.currency || 'INR',
+                currencySymbol: settings.currencySymbol || (settings.currency === 'USD' ? '$' : '₹'),
+                timezone: settings.timezone || 'Asia/Kolkata',
+                language: settings.language || 'English',
+                languageSwitcher: settings.languageSwitcher || false,
+                dateFormat: settings.dateFormat || 'DD/MM/YYYY',
+                timeFormat: settings.timeFormat || '12 Hours',
+                financialYear: settings.financialYear || '2026-2027',
+                startingMonth: settings.startingMonth || 'April',
+                currencyPosition: settings.currencyPosition || 'Front',
+                decimalSeparator: settings.decimalSeparator || '.',
+                thousandSeparator: settings.thousandSeparator || ',',
+                countriesRestriction: settings.countriesRestriction || 'Allow All Countries',
             }
         });
     } catch (err) {
@@ -121,7 +133,12 @@ async function updateSystemSettings(req, res) {
         }
 
         const current = await getOrCreateSystemSetting();
-        const { systemName, currency, logoUrl } = req.body;
+        const {
+            systemName, currency, logoUrl,
+            timezone, language, languageSwitcher,
+            dateFormat, timeFormat, financialYear, startingMonth,
+            currencyPosition, decimalSeparator, thousandSeparator, countriesRestriction
+        } = req.body;
 
         let newLogoUrl = logoUrl;
         if (req.file) {
@@ -141,6 +158,18 @@ async function updateSystemSettings(req, res) {
             updateData.currency = cleanCode;
             updateData.currencySymbol = cleanSymbol;
         }
+
+        if (timezone !== undefined) updateData.timezone = timezone;
+        if (language !== undefined) updateData.language = language;
+        if (languageSwitcher !== undefined) updateData.languageSwitcher = Boolean(languageSwitcher);
+        if (dateFormat !== undefined) updateData.dateFormat = dateFormat;
+        if (timeFormat !== undefined) updateData.timeFormat = timeFormat;
+        if (financialYear !== undefined) updateData.financialYear = financialYear;
+        if (startingMonth !== undefined) updateData.startingMonth = startingMonth;
+        if (currencyPosition !== undefined) updateData.currencyPosition = currencyPosition;
+        if (decimalSeparator !== undefined) updateData.decimalSeparator = decimalSeparator;
+        if (thousandSeparator !== undefined) updateData.thousandSeparator = thousandSeparator;
+        if (countriesRestriction !== undefined) updateData.countriesRestriction = countriesRestriction;
 
         const updated = await prisma.systemSetting.update({
             where: { id: current.id },
@@ -303,6 +332,65 @@ async function setDefaultCurrency(req, res) {
     }
 }
 
+/**
+ * GET /system-settings/email-status
+ * Returns current email driver status without exposing passwords
+ */
+async function getEmailStatus(req, res) {
+    try {
+        const isConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER);
+        let maskedUser = null;
+        if (process.env.SMTP_USER) {
+            const parts = process.env.SMTP_USER.split('@');
+            if (parts.length === 2) {
+                const name = parts[0];
+                const domain = parts[1];
+                const visible = name.length > 2 ? name.slice(0, 2) : name.slice(0, 1);
+                maskedUser = `${visible}***@${domain}`;
+            } else {
+                maskedUser = `${process.env.SMTP_USER.slice(0, 3)}***`;
+            }
+        }
+
+        res.json({
+            success: true,
+            isConfigured,
+            mode: isConfigured ? 'PRODUCTION_SMTP' : 'ETHEREAL_SANDBOX',
+            host: process.env.SMTP_HOST || 'smtp.ethereal.email (Local Development Sandbox)',
+            port: process.env.SMTP_PORT || '587',
+            secure: process.env.SMTP_SECURE === 'true',
+            senderEmail: maskedUser || 'Auto-generated sandbox user',
+            managedVia: 'Server Environment Variables (Hostinger hPanel / .env)'
+        });
+    } catch (err) {
+        console.error('Error getting email status:', err);
+        res.status(500).json({ success: false, message: 'Failed to retrieve email status' });
+    }
+}
+
+/**
+ * POST /system-settings/send-test-email
+ * Sends a test email to the requested address
+ */
+async function sendTestEmailHandler(req, res) {
+    try {
+        const { targetEmail } = req.body;
+        if (!targetEmail || !targetEmail.includes('@')) {
+            return res.status(400).json({ success: false, message: 'Valid target email is required' });
+        }
+
+        const result = await emailService.sendTestEmail(targetEmail);
+        res.json({
+            success: true,
+            message: `Test email sent successfully to ${targetEmail}!`,
+            previewUrl: result.testUrl || null
+        });
+    } catch (err) {
+        console.error('Error sending test email:', err);
+        res.status(500).json({ success: false, message: err.message || 'Failed to send test email' });
+    }
+}
+
 module.exports = {
     getSystemSettings,
     updateSystemSettings,
@@ -311,4 +399,6 @@ module.exports = {
     updateCurrency,
     deleteCurrency,
     setDefaultCurrency,
+    getEmailStatus,
+    sendTestEmailHandler,
 };

@@ -16,15 +16,33 @@ const apiClient = axios.create({
     },
 });
 
+// List of public auth endpoints where Authorization header is unnecessary
+const PUBLIC_AUTH_ROUTES = [
+    '/auth/login',
+    '/auth/register',
+    '/auth/forgot-password',
+    '/auth/reset-password',
+    '/auth/company-logo',
+    '/auth/verify-email',
+    '/auth/verify-invite-token',
+    '/auth/accept-invite',
+    '/seo-settings'
+];
+
 // ── REQUEST INTERCEPTOR ──────────────────────────────────────
-// Adds JWT token to every outgoing request automatically
-// Also removes Content-Type for FormData so axios can set multipart boundary correctly
 apiClient.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+        const url = config.url || '';
+        const isPublicAuth = PUBLIC_AUTH_ROUTES.some(route => url.includes(route));
+
+        // Only attach JWT token for protected private endpoints
+        if (!isPublicAuth) {
+            const token = localStorage.getItem('token');
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
         }
+
         // When sending FormData, let axios set the correct Content-Type (with boundary)
         if (config.data instanceof FormData) {
             delete config.headers['Content-Type'];
@@ -36,9 +54,6 @@ apiClient.interceptors.request.use(
 
 // ── RESPONSE INTERCEPTOR ─────────────────────────────────────
 // Handles 401 (expired/invalid token) globally
-// ── RESPONSE INTERCEPTOR ─────────────────────────────────────
-// Handles 401 (expired/invalid token) globally
-// But does NOT redirect if the 401 came from auth endpoints (login/register)
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
@@ -50,10 +65,23 @@ apiClient.interceptors.response.use(
         if (isUnauth) {
             const requestUrl = error.config?.url || '';
 
-            // Skip redirect for auth endpoints — let the component handle those errors
-            const isAuthEndpoint = requestUrl.includes('/auth/login') ||
-                requestUrl.includes('/auth/register') ||
-                requestUrl.includes('/auth/verify-email');
+            // NEVER redirect if user is already on any auth/public page (prevents unexpected kicks / infinite reload loops)
+            const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+            const isPublicPage = 
+                currentPath.includes('/login') ||
+                currentPath.includes('/register') ||
+                currentPath.includes('/forgot-password') ||
+                currentPath.includes('/reset-password') ||
+                currentPath.includes('/reset-password-success') ||
+                currentPath.includes('/invite') ||
+                currentPath.includes('/email-verification');
+
+            if (isPublicPage) {
+                return Promise.reject(error);
+            }
+
+            // Skip redirect for public auth endpoints
+            const isAuthEndpoint = PUBLIC_AUTH_ROUTES.some(route => requestUrl.includes(route));
 
             if (!isAuthEndpoint) {
                 // Token expired for a protected route — clear and redirect
@@ -67,6 +95,4 @@ apiClient.interceptors.response.use(
         return Promise.reject(error);
     }
 );
-
-
 export default apiClient;

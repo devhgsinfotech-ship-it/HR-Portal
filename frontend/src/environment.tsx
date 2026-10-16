@@ -18,5 +18,12 @@ export const APP_CONFIG = {
   // Gets the correct frontend domain based on whether you are running npm run dev or npm run build
   getFrontendDomain: () => {
     return import.meta.env.DEV ? APP_CONFIG.localFrontendDomain : APP_CONFIG.liveFrontendDomain;
+  },
+
+  // Gets the complete frontend base URL (e.g. 'http://localhost:3000' on dev or 'https://aaups.com' on live)
+  getFrontendUrl: () => {
+    const domain = APP_CONFIG.getFrontendDomain();
+    const protocol = domain.includes('localhost') ? 'http' : 'https';
+    return `${protocol}://${domain}`;
   }
 };

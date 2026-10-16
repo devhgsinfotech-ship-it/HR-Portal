@@ -66,7 +66,7 @@ const Customjs = () => {
                                 </Link>
                             </li>
                             <li className="nav-item">
-                                <Link className="nav-link active" to={routes.customCss}>
+                                <Link className="nav-link active" to={routes.cronjob}>
                                     <i className="ti ti-settings-2 me-2" />
                                     Other Settings
                                 </Link>
@@ -78,7 +78,7 @@ const Customjs = () => {
                                     <div className="card-body">
                                         <div className="d-flex flex-column list-group settings-list">
                                             <Link
-                                                to={routes.customCss}
+                                                to={routes.cronjob}
                                                 className="d-inline-flex align-items-center rounded py-2 px-3"
                                             >
 
@@ -96,12 +96,6 @@ const Customjs = () => {
                                                 className="d-inline-flex align-items-center rounded py-2 px-3"
                                             >
                                                 Cronjob
-                                            </Link>
-                                            <Link
-                                                to={routes.storage}
-                                                className="d-inline-flex align-items-center rounded py-2 px-3"
-                                            >
-                                                Storage
                                             </Link>
                                             <Link
                                                 to={routes.banIpAddress}

@@ -66,7 +66,7 @@ const Prefixes = () => {
                 </Link>
               </li>
               <li className="nav-item">
-                <Link className="nav-link" to={routes.customCss}>
+                <Link className="nav-link" to={routes.cronjob}>
                   <i className="ti ti-settings-2 me-2" />
                   Other Settings
                 </Link>
@@ -94,31 +94,6 @@ const Prefixes = () => {
                         className="d-inline-flex align-items-center rounded py-2 px-3"
                       >
                         Localization
-                      </Link>
-                      <Link
-                        to={routes.prefixes}
-                        className="d-inline-flex align-items-center rounded active py-2 px-3"
-                      >
-                        <i className="ti ti-arrow-badge-right me-2" />
-                        Prefixes
-                      </Link>
-                      <Link
-                        to={routes.preference}
-                        className="d-inline-flex align-items-center rounded py-2 px-3"
-                      >
-                        Preferences
-                      </Link>
-                      <Link
-                        to={routes.appearance}
-                        className="d-inline-flex align-items-center rounded py-2 px-3"
-                      >
-                        Appearance
-                      </Link>
-                      <Link
-                        to={routes.language}
-                        className="d-inline-flex align-items-center rounded py-2 px-3"
-                      >
-                        Language
                       </Link>
                       <Link
                         to={routes.authenticationSettings}

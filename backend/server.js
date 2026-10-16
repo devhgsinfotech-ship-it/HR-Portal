@@ -155,6 +155,17 @@ const systemSettingsRoutes = require('./src/routes/systemSettingsRoutes');
 app.use('/system-settings', systemSettingsRoutes);
 app.use('/api/system-settings', systemSettingsRoutes);
 
+// SEO Settings
+const seoSettingsRoutes = require('./src/routes/seoSettingsRoutes');
+app.use('/seo-settings', seoSettingsRoutes);
+app.use('/api/seo-settings', seoSettingsRoutes);
+
+// Email Templates
+const emailTemplateRoutes = require('./src/routes/emailTemplateRoutes');
+app.use('/system-settings/email-templates', emailTemplateRoutes);
+app.use('/api/system-settings/email-templates', emailTemplateRoutes);
+app.use('/api/email-templates', emailTemplateRoutes);
+
 // Phase 4 APIs
 app.use('/assets', assetRoutes);
 app.use('/api/assets', assetRoutes);
@@ -183,6 +194,17 @@ app.get('/login', (req, res) => {
     res.redirect(`${frontendUrl}/login`);
 });
 
+// Cron Jobs
+const cronJobRoutes = require('./src/routes/cronJobRoutes');
+const { initCronJobs } = require('./src/cron/cronManager');
+app.use('/cronjobs', cronJobRoutes);
+app.use('/api/cronjobs', cronJobRoutes);
+
+// Other Settings: Banned IPs, Company & System Backups, Clear Cache
+const otherSettingsRoutes = require('./src/routes/otherSettingsRoutes');
+app.use('/other-settings', otherSettingsRoutes);
+app.use('/api/other-settings', otherSettingsRoutes);
+
 const prisma = require('./src/config/prisma');
 app.get('/health', async (req, res) => {
     try {
@@ -199,4 +221,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     await seedDefaultPlans();
+    await initCronJobs();
 });

@@ -1092,12 +1092,12 @@ export const publicRoutes = [
   },
   {
     path: routes.prefixes,
-    element: <Prefixes />,
+    element: <Navigate to={routes.companySettings} replace />,
     route: Route,
   },
   {
     path: routes.preference,
-    element: <Preference />,
+    element: <Navigate to={routes.companySettings} replace />,
     route: Route,
   },
   {
@@ -1117,22 +1117,22 @@ export const publicRoutes = [
   },
   {
     path: routes.approvalSettings,
-    element: <Approvalsettings />,
+    element: <Navigate to={routes.salarySettings} replace />,
     route: Route,
   },
   {
     path: routes.appearance,
-    element: <Appearance />,
+    element: <Navigate to={routes.companySettings} replace />,
     route: Route,
   },
   {
     path: routes.languageWeb,
-    element: <Languageweb />,
+    element: <Navigate to={routes.companySettings} replace />,
     route: Route,
   },
   {
     path: routes.addLanguage,
-    element: <Addlanguage />,
+    element: <Navigate to={routes.companySettings} replace />,
     route: Route,
   },
   {
@@ -1213,12 +1213,12 @@ export const publicRoutes = [
   },
   {
     path: routes.customCss,
-    element: <Customcss />,
+    element: <Navigate to={routes.cronjob} replace />,
     route: Route,
   },
   {
     path: routes.customJs,
-    element: <Customjs />,
+    element: <Navigate to={routes.cronjob} replace />,
     route: Route,
   },
   {
@@ -1233,7 +1233,7 @@ export const publicRoutes = [
   },
   {
     path: routes.storage,
-    element: <Storage />,
+    element: <Navigate to={routes.cronjob} replace />,
     route: Route,
   },
 
@@ -1879,7 +1879,7 @@ export const publicRoutes = [
   },
   {
     path: routes.language,
-    element: <Language />,
+    element: <Navigate to={routes.companySettings} replace />,
     route: Route,
   },
   {
