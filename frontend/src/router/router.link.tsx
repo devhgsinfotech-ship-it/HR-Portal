@@ -1233,7 +1233,7 @@ export const publicRoutes = [
   },
   {
     path: routes.storage,
-    element: <Storage />,
+    element: <Navigate to={routes.cronjob} replace />,
     route: Route,
   },
 

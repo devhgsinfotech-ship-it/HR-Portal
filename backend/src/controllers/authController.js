@@ -46,6 +46,29 @@ async function login(req, res) {
             return res.status(403).json({ message: 'Your account is pending verification. Please check your email to verify your account.' });
         }
 
+        // 3.1 Check if user IP is banned (globally or for this company)
+        const rawClientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip || '')
+            .split(',')[0].trim().replace(/^::ffff:/, '');
+
+        if (rawClientIp && rawClientIp !== '127.0.0.1' && rawClientIp !== '::1') {
+            const isBanned = await prisma.bannedIp.findFirst({
+                where: {
+                    ipAddress: rawClientIp,
+                    status: 'Active',
+                    OR: [
+                        { companyId: null },
+                        ...(user.companyId ? [{ companyId: user.companyId }] : [])
+                    ]
+                }
+            });
+
+            if (isBanned) {
+                return res.status(403).json({
+                    message: `Access denied: Your IP (${rawClientIp}) has been banned. ${isBanned.reason ? `Reason: ${isBanned.reason}` : ''}`
+                });
+            }
+        }
+
         // 4. Domain Approval Check (for non-Super Admin users)
         if (user.role !== 'SUPER_ADMIN' && user.company) {
             if (user.company.domainStatus === 'REJECTED') {

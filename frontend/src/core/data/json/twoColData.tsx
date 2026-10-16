@@ -1159,11 +1159,6 @@ export const TowColData = [
                 base: 'cronjob',
               },
               {
-                menuValue: 'Storage',
-                route: routes.storage,
-                base: 'storage-settings',
-              },
-              {
                 menuValue: 'Ban IP Address',
                 route: routes.banIpAddress,
                 base: 'ban-ip-address',

@@ -267,12 +267,6 @@ const Cronjob: React.FC = () => {
                     Cronjob
                   </Link>
                   <Link
-                    to={routes.storage}
-                    className="d-inline-flex align-items-center rounded py-2 px-3"
-                  >
-                    Storage
-                  </Link>
-                  <Link
                     to={routes.banIpAddress}
                     className="d-inline-flex align-items-center rounded py-2 px-3"
                   >

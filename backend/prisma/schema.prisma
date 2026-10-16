@@ -50,6 +50,8 @@ model Company {
   timeLogs         TimeLog[]
   users            User[]
   seoSetting       SeoSetting?
+  bannedIps        BannedIp[]
+  backupRecords    BackupRecord[]
 
   @@map("companies")
 }
@@ -1410,4 +1412,41 @@ model CronJob {
   updatedAt     DateTime  @updatedAt
 
   @@map("cron_jobs")
+}
+
+model BannedIp {
+  id          Int       @id @default(autoincrement())
+  companyId   Int?
+  ipAddress   String
+  reason      String?   @db.Text
+  status      String    @default("Active")
+  createdById Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([ipAddress])
+  @@map("banned_ips")
+}
+
+model BackupRecord {
+  id          Int       @id @default(autoincrement())
+  companyId   Int?      // null = Full System / All Companies (Super Admin), otherwise specific company
+  backupType  String    @default("COMPANY") // "COMPANY" or "SYSTEM_ALL"
+  fileName    String
+  fileSize    String
+  filePath    String    @db.Text
+  recordCount Int       @default(0)
+  status      String    @default("COMPLETED") // PENDING, COMPLETED, FAILED
+  createdById Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([backupType])
+  @@map("backup_records")
 }

@@ -73,27 +73,41 @@ const JOB_HANDLERS = {
         const now = new Date();
         const inSevenDays = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-        const probationCount = await prisma.employee.count({
+        const activeEmployees = await prisma.employee.findMany({
             where: {
-                probationEnd: { gte: now, lte: inSevenDays },
                 user: { accountStatus: 'ACTIVE' }
+            },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                dateOfJoining: true
             }
         });
 
-        const noticeCount = await prisma.employee.count({
-            where: {
-                noticePeriodEnd: { gte: now, lte: inSevenDays },
-                user: { accountStatus: 'ACTIVE' }
+        // Calculate standard 90-day probation from dateOfJoining
+        let probationCount = 0;
+        for (const emp of activeEmployees) {
+            if (emp.dateOfJoining) {
+                const probationEnd = new Date(new Date(emp.dateOfJoining).getTime() + 90 * 24 * 60 * 60 * 1000);
+                if (probationEnd >= now && probationEnd <= inSevenDays) {
+                    probationCount++;
+                }
             }
-        });
+        }
 
-        return `Scanned successfully. ${probationCount} probation ending soon, ${noticeCount} notice period ending in next 7 days.`;
+        return `Scanned ${activeEmployees.length} active employees. ${probationCount} probation period(s) ending within the next 7 days.`;
     },
 
     monthly_leave_accrual: async () => {
         const activeEmployees = await prisma.employee.findMany({
             where: { user: { accountStatus: 'ACTIVE' } },
-            select: { id: true, companyId: true }
+            select: {
+                id: true,
+                user: {
+                    select: { companyId: true }
+                }
+            }
         });
 
         // Add monthly 1.5 days credit log or leave allocation record

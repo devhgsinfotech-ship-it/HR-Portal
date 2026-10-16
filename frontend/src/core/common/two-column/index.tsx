@@ -556,10 +556,7 @@ const TwoColumnSidebar = () => {
                                     <li className="submenu">
                                         <Link to="#">Other Settings<span className="menu-arrow"></span></Link>
                                         <ul>
-                                            <li><Link to={all_routes.customCss}>Custom CSS</Link></li>
-                                            <li><Link to={all_routes.customJs}>Custom JS</Link></li>
                                             <li><Link to={all_routes.cronjob}>Cronjob</Link></li>
-                                            <li><Link to={all_routes.storage}>Storage</Link></li>
                                             <li><Link to={all_routes.banIpAddress}>Ban IP Address</Link></li>
                                             <li><Link to={all_routes.backup}>Backup</Link></li>
                                             <li><Link to={all_routes.clearcache}>Clear Cache</Link></li>

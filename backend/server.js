@@ -200,6 +200,11 @@ const { initCronJobs } = require('./src/cron/cronManager');
 app.use('/cronjobs', cronJobRoutes);
 app.use('/api/cronjobs', cronJobRoutes);
 
+// Other Settings: Banned IPs, Company & System Backups, Clear Cache
+const otherSettingsRoutes = require('./src/routes/otherSettingsRoutes');
+app.use('/other-settings', otherSettingsRoutes);
+app.use('/api/other-settings', otherSettingsRoutes);
+
 const prisma = require('./src/config/prisma');
 app.get('/health', async (req, res) => {
     try {

@@ -207,6 +207,11 @@ export const SidebarDataTest = [
             base: routes.superAdminSettings,
           },
           {
+            label: 'Backup & Export',
+            link: routes.backup,
+            base: 'backup',
+          },
+          {
             label: 'Tenant Usage Metrics',
             link: routes.tenantUsageMetrics,
             base: routes.tenantUsageMetrics,
@@ -1233,11 +1238,6 @@ export const SidebarDataTest = [
                 label: 'Cronjob',
                 link: routes.cronjob,
                 base: 'cronjob',
-              },
-              {
-                label: 'Storage',
-                link: routes.storage,
-                base: 'storage-settings',
               },
               {
                 label: 'Ban IP Address',
