@@ -100,6 +100,7 @@ const userRoutes = require('./src/routes/userRoutes');
 // SaaS Subscription Billing Routes & Seeder
 const subscriptionRoutes = require('./src/routes/subscriptionRoutes');
 const { seedDefaultPlans } = require('./src/utils/seedDefaultPlans');
+const { seedDefaultEmailTemplates } = require('./src/utils/seedEmailTemplates');
 
 // Phase 4 Routes: Assets, Documents & Notifications
 const assetRoutes = require('./src/routes/assetRoutes');
@@ -221,5 +222,6 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     await seedDefaultPlans();
+    await seedDefaultEmailTemplates();
     await initCronJobs();
 });
