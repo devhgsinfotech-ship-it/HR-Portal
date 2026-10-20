@@ -115,9 +115,6 @@ const TwoColumnSidebar = () => {
                         <Link to={routes.adminDashboard} className="logo logo-normal">
                             <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
                         </Link>
-                        <Link to={routes.adminDashboard} className="dark-logo">
-                            <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
-                        </Link>
                     </div>
                     <div className="sidebar-scroll">
                         <h6 className="mb-3">Welcome to SmartHR</h6>

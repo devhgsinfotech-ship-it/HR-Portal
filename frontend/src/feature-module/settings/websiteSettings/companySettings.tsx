@@ -78,11 +78,14 @@ const CompanySettings = () => {
     industry: "",
     companySize: "",
     logoUrl: "",
+    iconUrl: "",
     currency: "INR",
   });
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [previewLogo, setPreviewLogo] = useState<string | null>(null);
+  const [iconFile, setIconFile] = useState<File | null>(null);
+  const [previewIcon, setPreviewIcon] = useState<string | null>(null);
   const [subscriptionData, setSubscriptionData] = useState<any>(null);
   const [availablePlans, setAvailablePlans] = useState<any[]>([]);
   const [billingCycleToggle, setBillingCycleToggle] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
@@ -125,13 +128,18 @@ const CompanySettings = () => {
             industry: comp.industry || "",
             companySize: comp.companySize || "",
             logoUrl: comp.logoUrl || "",
+            iconUrl: comp.iconUrl || "",
             currency: activeCompCurrency,
           });
           if (comp.logoUrl) {
             setPreviewLogo(comp.logoUrl);
           }
+          if (comp.iconUrl) {
+            setPreviewIcon(comp.iconUrl);
+          }
           dispatch(updateUser({
             companyLogoUrl: comp.logoUrl || null,
+            companyIconUrl: comp.iconUrl || null,
             subdomain: comp.subdomain,
             currency: activeCompCurrency,
             currencySymbol: compSymbol
@@ -189,6 +197,14 @@ const CompanySettings = () => {
     }
   };
 
+  const handleIconFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setIconFile(file);
+      setPreviewIcon(URL.createObjectURL(file));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -206,6 +222,9 @@ const CompanySettings = () => {
       if (logoFile) {
         submitData.append("logo", logoFile);
       }
+      if (iconFile) {
+        submitData.append("icon", iconFile);
+      }
 
       const res = await apiClient.put('/auth/company-settings', submitData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -214,6 +233,7 @@ const CompanySettings = () => {
       if (res.data?.success) {
         setMessage({ type: 'success', text: "Company settings updated and saved successfully!" });
         const updatedLogo = res.data.company?.logoUrl;
+        const updatedIcon = res.data.company?.iconUrl;
         const updatedCurrency = res.data.company?.currency || formData.currency;
         const updatedSymbol = res.data.company?.currencySymbol || (updatedCurrency === "USD" ? "$" : "₹");
         if (updatedLogo) {
@@ -222,8 +242,15 @@ const CompanySettings = () => {
           setLogoFile(null);
           window.dispatchEvent(new CustomEvent('companyLogoUpdated', { detail: updatedLogo }));
         }
+        if (updatedIcon) {
+          setFormData(prev => ({ ...prev, iconUrl: updatedIcon }));
+          setPreviewIcon(updatedIcon);
+          setIconFile(null);
+          window.dispatchEvent(new CustomEvent('companyIconUpdated', { detail: updatedIcon }));
+        }
         dispatch(updateUser({
           companyLogoUrl: updatedLogo || formData.logoUrl,
+          companyIconUrl: updatedIcon || formData.iconUrl,
           subdomain: res.data.company?.subdomain || formData.subdomain,
           currency: updatedCurrency,
           currencySymbol: updatedSymbol
@@ -561,48 +588,106 @@ const CompanySettings = () => {
                       </div>
 
                       <div className="settings-right-sidebar ms-md-3">
-                        <div className="card">
-                          <div className="card-header">
-                            <h5>Company Logo</h5>
+                        {/* Main Full Logo Card */}
+                        <div className="card shadow-sm border mb-3">
+                          <div className="card-header bg-transparent d-flex align-items-center justify-content-between py-2">
+                            <h6 className="mb-0 fw-semibold text-dark">
+                              <i className="ti ti-photo me-1 text-primary"></i> Company Logo
+                            </h6>
+                            <span className="badge bg-primary-subtle text-primary border border-primary-subtle fs-10">
+                              Full Banner
+                            </span>
                           </div>
-                          <div className="card-body text-center">
-                            <div className="border-bottom mb-3 pb-3">
-                              <div className="d-flex align-items-center justify-content-center mb-3">
-                                <div
-                                  className="border rounded-3 p-2 bg-white shadow-sm d-flex align-items-center justify-content-center"
-                                  style={{ width: "130px", height: "130px", overflow: "hidden" }}
-                                >
-                                  {previewLogo ? (
-                                    <img
-                                      src={resolveImageUrl(previewLogo) || ""}
-                                      alt="Company Logo"
-                                      style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }}
-                                    />
-                                  ) : (
-                                    <div className="text-center p-2">
-                                      <i className="ti ti-building-store fs-32 text-primary mb-1 d-block" />
-                                      <span className="fs-12 text-muted fw-medium d-block">{formData.name || "Logo"}</span>
-                                    </div>
-                                  )}
-                                </div>
+                          <div className="card-body text-center p-3">
+                            <p className="text-muted fs-11 mb-2 text-start">
+                              Standard wide brand logo for expanded sidebar, header & emails.
+                            </p>
+                            <div className="d-flex align-items-center justify-content-center mb-3">
+                              <div
+                                className="border rounded-3 p-2 bg-white shadow-sm d-flex align-items-center justify-content-center position-relative"
+                                style={{ width: "100%", height: "90px", overflow: "hidden", background: "#fbfcfe" }}
+                              >
+                                {previewLogo ? (
+                                  <img
+                                    src={resolveImageUrl(previewLogo) || ""}
+                                    alt="Company Logo"
+                                    style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }}
+                                  />
+                                ) : (
+                                  <div className="text-center p-2">
+                                    <i className="ti ti-building-store fs-28 text-primary mb-1 d-block" />
+                                    <span className="fs-11 text-muted fw-medium d-block">{formData.name || "Main Logo"}</span>
+                                  </div>
+                                )}
                               </div>
-                              <div className="profile-uploader profile-uploader-two mb-0">
-                                <span className="d-block text-center lh-1 fs-24 mb-1">
-                                  <i className="ti ti-upload" />
-                                </span>
-                                <div className="drag-upload-btn bg-transparent me-0 border-0">
-                                  <p className="fs-12 mb-2">
-                                    <span className="text-primary">Click to Upload</span> Logo File
-                                  </p>
-                                  <h6>JPG or PNG</h6>
-                                </div>
-                                <input
-                                  type="file"
-                                  className="form-control image-sign"
-                                  accept="image/*"
-                                  onChange={handleFileChange}
-                                />
+                            </div>
+                            <div className="profile-uploader profile-uploader-two mb-0">
+                              <span className="d-block text-center lh-1 fs-20 mb-1">
+                                <i className="ti ti-upload text-primary" />
+                              </span>
+                              <div className="drag-upload-btn bg-transparent me-0 border-0 py-1">
+                                <p className="fs-12 mb-0">
+                                  <span className="text-primary fw-semibold">Upload Full Logo</span> (PNG, JPG, SVG)
+                                </p>
                               </div>
+                              <input
+                                type="file"
+                                className="form-control image-sign"
+                                accept="image/*"
+                                onChange={handleFileChange}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Mini / Square Icon Logo Card */}
+                        <div className="card shadow-sm border mb-3">
+                          <div className="card-header bg-transparent d-flex align-items-center justify-content-between py-2">
+                            <h6 className="mb-0 fw-semibold text-dark">
+                              <i className="ti ti-layout-sidebar-left-collapse me-1 text-info"></i> Mini / Icon Logo
+                            </h6>
+                            <span className="badge bg-info-subtle text-info border border-info-subtle fs-10">
+                              1:1 Icon
+                            </span>
+                          </div>
+                          <div className="card-body text-center p-3">
+                            <p className="text-muted fs-11 mb-2 text-start">
+                              Compact square mark for 72px collapsed mini sidebar & favicon.
+                            </p>
+                            <div className="d-flex align-items-center justify-content-center mb-3">
+                              <div
+                                className="border rounded-3 p-2 bg-white shadow-sm d-flex align-items-center justify-content-center position-relative"
+                                style={{ width: "76px", height: "76px", overflow: "hidden", background: "#fbfcfe" }}
+                              >
+                                {previewIcon ? (
+                                  <img
+                                    src={resolveImageUrl(previewIcon) || ""}
+                                    alt="Mini Logo"
+                                    style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain", borderRadius: "6px" }}
+                                  />
+                                ) : (
+                                  <div className="text-center p-1">
+                                    <i className="ti ti-brand-appstore fs-24 text-info mb-1 d-block" />
+                                    <span className="fs-10 text-muted fw-medium d-block">Mini Mark</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="profile-uploader profile-uploader-two mb-0">
+                              <span className="d-block text-center lh-1 fs-20 mb-1">
+                                <i className="ti ti-upload text-info" />
+                              </span>
+                              <div className="drag-upload-btn bg-transparent me-0 border-0 py-1">
+                                <p className="fs-12 mb-0">
+                                  <span className="text-info fw-semibold">Upload Mini Icon</span> (Square 1:1)
+                                </p>
+                              </div>
+                              <input
+                                type="file"
+                                className="form-control image-sign"
+                                accept="image/*"
+                                onChange={handleIconFileChange}
+                              />
                             </div>
                           </div>
                         </div>

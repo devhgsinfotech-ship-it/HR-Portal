@@ -217,7 +217,7 @@ const Feature = React.memo(() => {
         {!location.pathname.includes("layout") && <ThemeSettings />}
       </div>
     ),
-    [innerWrapperClass, location.pathname]
+    [innerWrapperClass, location.pathname, dataLayout]
   );
 
   return (

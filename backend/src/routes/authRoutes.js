@@ -47,7 +47,10 @@ router.post('/upload-logo', upload.single('logo'), (req, res) => {
 
 // Company Settings endpoints
 router.get('/company-settings', verifyToken, getCompanySettings);
-router.put('/company-settings', verifyToken, upload.single('logo'), updateCompanySettings);
+router.put('/company-settings', verifyToken, upload.fields([
+    { name: 'logo', maxCount: 1 },
+    { name: 'icon', maxCount: 1 }
+]), updateCompanySettings);
 
 // User Profile endpoints
 router.get('/profile', verifyToken, getProfile);

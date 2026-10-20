@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { HorizontalSidebarData } from "../../data/json/horizontalSidebar";
 import ImageWithBasePath from "../imageWithBasePath";
@@ -68,7 +68,7 @@ const HorizontalSidebar: React.FC = () => {
   const user = useAppSelector((state) => state.auth.user) as any;
   const currentRole = user?.role || "EMPLOYEE";
 
-  // State for open menus at different levels (only opens on click, not auto-open)
+  // State for open menus at different levels
   const [openMenus, setOpenMenus] = useState<Set<string>>(new Set());
   const [openSubMenus, setOpenSubMenus] = useState<Set<string>>(new Set());
   const [openSubMenusTwo, setOpenSubMenusTwo] = useState<Set<string>>(
@@ -78,13 +78,35 @@ const HorizontalSidebar: React.FC = () => {
     new Set()
   );
 
-  // Toggle functions (subdrop class only added on click)
+  const closeAllMenus = useCallback(() => {
+    setOpenMenus(new Set());
+    setOpenSubMenus(new Set());
+    setOpenSubMenusTwo(new Set());
+    setOpenSubMenusThree(new Set());
+  }, []);
+
+  // Close menus on route change
+  useEffect(() => {
+    closeAllMenus();
+  }, [currentPath, closeAllMenus]);
+
+  // Close menus on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const nav = document.getElementById("horizontal-menu");
+      if (nav && !nav.contains(e.target as Node)) {
+        closeAllMenus();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [closeAllMenus]);
+
+  // Toggle functions (click opens selected and closes siblings at same level)
   const toggleMenu = useCallback((menuValue: string) => {
     setOpenMenus((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(menuValue)) {
-        newSet.delete(menuValue);
-      } else {
+      const newSet = new Set<string>();
+      if (!prev.has(menuValue)) {
         newSet.add(menuValue);
       }
       return newSet;
@@ -93,10 +115,8 @@ const HorizontalSidebar: React.FC = () => {
 
   const toggleSubMenu = useCallback((menuValue: string) => {
     setOpenSubMenus((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(menuValue)) {
-        newSet.delete(menuValue);
-      } else {
+      const newSet = new Set<string>();
+      if (!prev.has(menuValue)) {
         newSet.add(menuValue);
       }
       return newSet;
@@ -105,10 +125,8 @@ const HorizontalSidebar: React.FC = () => {
 
   const toggleSubMenuTwo = useCallback((menuValue: string) => {
     setOpenSubMenusTwo((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(menuValue)) {
-        newSet.delete(menuValue);
-      } else {
+      const newSet = new Set<string>();
+      if (!prev.has(menuValue)) {
         newSet.add(menuValue);
       }
       return newSet;
@@ -117,10 +135,8 @@ const HorizontalSidebar: React.FC = () => {
 
   const toggleSubMenuThree = useCallback((menuValue: string) => {
     setOpenSubMenusThree((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(menuValue)) {
-        newSet.delete(menuValue);
-      } else {
+      const newSet = new Set<string>();
+      if (!prev.has(menuValue)) {
         newSet.add(menuValue);
       }
       return newSet;
@@ -152,10 +168,6 @@ const HorizontalSidebar: React.FC = () => {
       <div className="sidebar-menu">
         <div className="main-menu">
           <ul className="nav-menu">
-            <li className="menu-title">
-              <span>Main</span>
-            </li>
-
             {(HorizontalSidebarData as MenuGroup[])?.map((group, groupIdx) =>
               group.menu?.filter((menuItem) => {
                 const valLower = (menuItem.menuValue || "").toLowerCase();
@@ -187,11 +199,13 @@ const HorizontalSidebar: React.FC = () => {
                 return (
                   <li className={hasSubmenu ? "submenu" : ""} key={`menu-${groupIdx}-${i}`}>
                     <Link
-                      to="#"
+                      to={hasSubmenu ? "#" : menuItem.route || "#"}
                       onClick={(e) => {
                         if (hasSubmenu) {
                           e.preventDefault();
                           toggleMenu(menuItem.menuValue);
+                        } else {
+                          closeAllMenus();
                         }
                       }}
                       className={`${isActive ? "active" : ""} ${
@@ -263,6 +277,8 @@ const HorizontalSidebar: React.FC = () => {
                                   if (hasSubTwo) {
                                     e.preventDefault();
                                     toggleSubMenu(subItem.menuValue);
+                                  } else {
+                                    closeAllMenus();
                                   }
                                 }}
                                 className={`${isSubActive ? "active" : ""} ${
@@ -315,6 +331,8 @@ const HorizontalSidebar: React.FC = () => {
                                               toggleSubMenuTwo(
                                                 subTwo.menuValue
                                               );
+                                            } else {
+                                              closeAllMenus();
                                             }
                                           }}
                                           className={`${
@@ -392,6 +410,7 @@ const HorizontalSidebar: React.FC = () => {
                                                               subFour.route ||
                                                               "#"
                                                             }
+                                                            onClick={() => closeAllMenus()}
                                                             className={
                                                               subFour.route ===
                                                               currentPath
@@ -412,6 +431,7 @@ const HorizontalSidebar: React.FC = () => {
                                                 <li key={`sub-three-link-${groupIdx}-${i}-${j}-${k}-${l}`}>
                                                   <Link
                                                     to={subThree.route || "#"}
+                                                    onClick={() => closeAllMenus()}
                                                     className={
                                                       subThree.route ===
                                                       currentPath
@@ -441,17 +461,6 @@ const HorizontalSidebar: React.FC = () => {
               })
             )}
           </ul>
-
-          {/* Profile & Theme Toggle */}
-          <div className="d-xl-flex align-items-center d-none">
-            <Link to="#" className="me-3 avatar avatar-sm">
-              <ImageWithBasePath
-                src="assets/img/profiles/avatar-07.jpg"
-                alt="profile"
-                className="rounded-circle"
-              />
-            </Link>
-          </div>
         </div>
       </div>
     </div>

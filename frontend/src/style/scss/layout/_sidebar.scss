@@ -247,11 +247,11 @@
                         &::before {
                             content: "";
                             position: absolute;
-                            background: variables.$gray-100;
+                            background: variables.$gray-200;
                             width: 1.5px;
-                            height: 100%;
-                            left: 14px;
-                            top: 0;
+                            top: 4px;
+                            bottom: 6px;
+                            left: 20px;
                         }
                         li {
                             margin-bottom: 0;
@@ -300,14 +300,15 @@
                                 justify-content: space-between;
                                 &:before {
                                     content: "";
-                                    width: 2px;
-                                    height: 18px;
-                                    background: variables.$primary;
+                                    width: 5px;
+                                    height: 5px;
+                                    border-radius: 50%;
+                                    background: variables.$gray-400;
                                     position: absolute;
-                                    left: 13px;
+                                    left: 18px;
                                     top: 50%;
                                     transform: translateY(-50%);
-                                    opacity: 0;
+                                    opacity: 1;
                                 }
                                 &.active {
                                     color: variables.$primary;
