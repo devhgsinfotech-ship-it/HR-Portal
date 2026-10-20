@@ -33,6 +33,23 @@ const themeSettingSlice = createSlice({
       state.dataLayout = action.payload;
       localStorage.setItem("dataLayout", action.payload);
       document.documentElement.setAttribute("data-layout", action.payload);
+      if (typeof document !== "undefined") {
+        if (action.payload === "mini") {
+          document.body.classList.add("mini-sidebar");
+          document.body.classList.remove("menu-horizontal");
+        } else if (
+          action.payload === "horizontal" ||
+          action.payload === "horizontal-single" ||
+          action.payload === "horizontal-overlay" ||
+          action.payload === "horizontal-box"
+        ) {
+          document.body.classList.remove("mini-sidebar");
+          document.body.classList.add("menu-horizontal");
+        } else {
+          document.body.classList.remove("mini-sidebar");
+          document.body.classList.remove("menu-horizontal");
+        }
+      }
     },
     setDataWidth: (state, action: PayloadAction<string>) => {
       state.dataWidth = action.payload;

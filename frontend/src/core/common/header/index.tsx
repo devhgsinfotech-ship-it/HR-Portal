@@ -710,20 +710,6 @@ const Header = React.memo(() => {
                 <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
               )}
             </Link>
-            <Link to={routes.adminDashboard} className="dark-logo">
-              {companyLogo || user?.companyLogoUrl ? (
-                <img
-                  src={getLogoSrc(companyLogo || user?.companyLogoUrl)}
-                  alt="Company Logo"
-                  style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = "/assets/img/hgs-logo-HR.webp";
-                  }}
-                />
-              ) : (
-                <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
-              )}
-            </Link>
           </div>
 
           <Link
@@ -739,152 +725,151 @@ const Header = React.memo(() => {
             </span>
           </Link>
 
-          <div className="header-user">
-            <div className="nav user-menu nav-list position-relative">
+          {/* Dynamic Search Component Centered */}
+          <div 
+            className="position-absolute start-50 top-50 translate-middle d-none d-md-block" 
+            ref={searchContainerRef} 
+            style={{ width: "380px", maxWidth: "45vw", zIndex: 100 }}
+          >
+              <div className="input-group input-group-flat">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  className="form-control"
+                  placeholder="Search in HRMS..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => setIsSearchOpen(true)}
+                />
+                <span className="input-group-text cursor-pointer" onClick={() => searchInputRef.current?.focus()}>
+                  <kbd className="bg-light text-muted border px-1">CTRL + /</kbd>
+                </span>
+              </div>
 
-              {/* Dynamic Search Component Centered */}
-              <div 
-                className="position-absolute start-50 top-50 translate-middle d-none d-md-block" 
-                ref={searchContainerRef} 
-                style={{ width: "380px", maxWidth: "45vw", zIndex: 100 }}
-              >
-                  <div className="input-group input-group-flat">
-                    <input
-                      ref={searchInputRef}
-                      type="text"
-                      className="form-control"
-                      placeholder="Search in HRMS..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onFocus={() => setIsSearchOpen(true)}
-                    />
-                    <span className="input-group-text cursor-pointer" onClick={() => searchInputRef.current?.focus()}>
-                      <kbd className="bg-light text-muted border px-1">CTRL + /</kbd>
+              {/* Floating Live Search Dropdown */}
+              {isSearchOpen && searchQuery.trim().length > 0 && (
+                <div 
+                  className="dropdown-menu show shadow-lg border rounded-3 p-3 position-absolute w-100 mt-1 bg-white overflow-auto" 
+                  style={{ maxHeight: '450px', zIndex: 1050, left: 0, minWidth: '360px' }}
+                >
+                  {/* Search Header */}
+                  <div className="d-flex align-items-center justify-content-between pb-2 mb-2 border-bottom">
+                    <span className="fs-11 text-uppercase fw-bold text-muted">
+                      {searchQuery ? `Search Results for "${searchQuery}"` : 'Quick Jump & Navigation'}
                     </span>
+                    <span className="badge bg-light text-muted border fs-10">Esc to close</span>
                   </div>
 
-                  {/* Floating Live Search Dropdown */}
-                  {isSearchOpen && searchQuery.trim().length > 0 && (
-                    <div 
-                      className="dropdown-menu show shadow-lg border rounded-3 p-3 position-absolute w-100 mt-1 bg-white overflow-auto" 
-                      style={{ maxHeight: '450px', zIndex: 1050, left: 0, minWidth: '360px' }}
-                    >
-                      {/* Search Header */}
-                      <div className="d-flex align-items-center justify-content-between pb-2 mb-2 border-bottom">
-                        <span className="fs-11 text-uppercase fw-bold text-muted">
-                          {searchQuery ? `Search Results for "${searchQuery}"` : 'Quick Jump & Navigation'}
-                        </span>
-                        <span className="badge bg-light text-muted border fs-10">Esc to close</span>
+                  {/* Employees Section */}
+                  {searchResults.employees.length > 0 && (
+                    <div className="mb-3">
+                      <div className="fs-11 fw-bold text-primary text-uppercase mb-2 d-flex align-items-center">
+                        <i className="ti ti-user me-1" /> Employees ({searchResults.employees.length})
                       </div>
+                      {searchResults.employees.map((emp) => {
+                        const empName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.user?.name || 'Employee';
+                        const desig = emp.designation?.name || emp.companyRole?.name || 'Staff';
+                        const empCode = emp.employeeCode || emp.employeeId || '';
+                        const userRole = user?.role || localStorage.getItem('userRole') || 'EMPLOYEE';
+                        const targetRoute = userRole === 'EMPLOYEE' ? '/org' : `${all_routes.employeedetails}?id=${emp.id}`;
 
-                      {/* Employees Section */}
-                      {searchResults.employees.length > 0 && (
-                        <div className="mb-3">
-                          <div className="fs-11 fw-bold text-primary text-uppercase mb-2 d-flex align-items-center">
-                            <i className="ti ti-user me-1" /> Employees ({searchResults.employees.length})
-                          </div>
-                          {searchResults.employees.map((emp) => {
-                            const empName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.user?.name || 'Employee';
-                            const desig = emp.designation?.name || emp.companyRole?.name || 'Staff';
-                            const empCode = emp.employeeCode || emp.employeeId || '';
-                            const userRole = user?.role || localStorage.getItem('userRole') || 'EMPLOYEE';
-                            const targetRoute = userRole === 'EMPLOYEE' ? '/org' : `${all_routes.employeedetails}?id=${emp.id}`;
-
-                            return (
-                              <div 
-                                key={emp.id}
-                                className="d-flex align-items-center p-2 rounded hover-bg-light cursor-pointer mb-1 border-bottom-dashed"
-                                onClick={() => {
-                                  navigate(targetRoute);
-                                  setIsSearchOpen(false);
-                                  setSearchQuery('');
-                                }}
-                              >
-                                <div className="avatar avatar-sm rounded-circle me-2 bg-primary-transparent text-primary fw-bold d-flex align-items-center justify-content-center">
-                                  {empName.charAt(0)}
-                                </div>
-                                <div className="flex-grow-1 overflow-hidden">
-                                  <div className="d-flex align-items-center justify-content-between">
-                                    <span className="fw-bold text-dark fs-13 text-truncate">{empName}</span>
-                                    {empCode && <span className="badge bg-light text-secondary border fs-10">{empCode}</span>}
-                                  </div>
-                                  <div className="fs-11 text-muted text-truncate">{desig} {emp.department?.name ? `• ${emp.department.name}` : ''}</div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Departments Section */}
-                      {searchResults.departments.length > 0 && (
-                        <div className="mb-3">
-                          <div className="fs-11 fw-bold text-success text-uppercase mb-2 d-flex align-items-center">
-                            <i className="ti ti-building-community me-1" /> Departments ({searchResults.departments.length})
-                          </div>
-                          {searchResults.departments.map((dept) => (
-                            <div 
-                              key={dept.id}
-                              className="d-flex align-items-center justify-content-between p-2 rounded hover-bg-light cursor-pointer mb-1 border-bottom-dashed"
-                              onClick={() => {
-                                navigate('/departments');
-                                setIsSearchOpen(false);
-                                setSearchQuery('');
-                              }}
-                            >
-                              <div className="d-flex align-items-center">
-                                <i className="ti ti-building-arch text-success me-2 fs-16" />
-                                <span className="fw-semibold text-dark fs-13">{dept.name}</span>
-                              </div>
-                              <span className="fs-11 text-muted">View Department</span>
+                        return (
+                          <div 
+                            key={emp.id}
+                            className="d-flex align-items-center p-2 rounded hover-bg-light cursor-pointer mb-1 border-bottom-dashed"
+                            onClick={() => {
+                              navigate(targetRoute);
+                              setIsSearchOpen(false);
+                              setSearchQuery('');
+                            }}
+                          >
+                            <div className="avatar avatar-sm rounded-circle me-2 bg-primary-transparent text-primary fw-bold d-flex align-items-center justify-content-center">
+                              {empName.charAt(0)}
                             </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* System Pages & Modules Section */}
-                      {searchResults.pages.length > 0 && (
-                        <div className="mb-2">
-                          <div className="fs-11 fw-bold text-secondary text-uppercase mb-2 d-flex align-items-center">
-                            <i className="ti ti-layout-grid me-1" /> System Modules & Pages ({searchResults.pages.length})
-                          </div>
-                          {searchResults.pages.map((m, idx) => (
-                            <div 
-                              key={idx}
-                              className="d-flex align-items-center justify-content-between p-2 rounded hover-bg-light cursor-pointer mb-1"
-                              onClick={() => {
-                                navigate(m.route);
-                                setIsSearchOpen(false);
-                                setSearchQuery('');
-                              }}
-                            >
-                              <div className="d-flex align-items-center">
-                                <i className={`ti ti-${m.icon} text-primary me-2 fs-16`} />
-                                <div>
-                                  <div className="fw-semibold text-dark fs-13">{m.title}</div>
-                                  <div className="fs-10 text-muted">{m.category}</div>
-                                </div>
+                            <div className="flex-grow-1 overflow-hidden">
+                              <div className="d-flex align-items-center justify-content-between">
+                                <span className="fw-bold text-dark fs-13 text-truncate">{empName}</span>
+                                {empCode && <span className="badge bg-light text-secondary border fs-10">{empCode}</span>}
                               </div>
-                              <i className="ti ti-chevron-right text-muted fs-12" />
+                              <div className="fs-11 text-muted text-truncate">{desig} {emp.department?.name ? `• ${emp.department.name}` : ''}</div>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                      {/* No Results Fallback */}
-                      {searchResults.employees.length === 0 && searchResults.departments.length === 0 && searchResults.pages.length === 0 && (
-                        <div className="text-center py-4 text-muted">
-                          <i className="ti ti-search-off fs-24 mb-1 d-block text-secondary" />
-                          <div className="fs-13 fw-semibold">No results found for "{searchQuery}"</div>
-                          <div className="fs-11">Try searching by module name, employee name, or department</div>
+                  {/* Departments Section */}
+                  {searchResults.departments.length > 0 && (
+                    <div className="mb-3">
+                      <div className="fs-11 fw-bold text-success text-uppercase mb-2 d-flex align-items-center">
+                        <i className="ti ti-building-community me-1" /> Departments ({searchResults.departments.length})
+                      </div>
+                      {searchResults.departments.map((dept) => (
+                        <div 
+                          key={dept.id}
+                          className="d-flex align-items-center justify-content-between p-2 rounded hover-bg-light cursor-pointer mb-1 border-bottom-dashed"
+                          onClick={() => {
+                            navigate('/departments');
+                            setIsSearchOpen(false);
+                            setSearchQuery('');
+                          }}
+                        >
+                          <div className="d-flex align-items-center">
+                            <i className="ti ti-building-arch text-success me-2 fs-16" />
+                            <span className="fw-semibold text-dark fs-13">{dept.name}</span>
+                          </div>
+                          <span className="fs-11 text-muted">View Department</span>
                         </div>
-                      )}
+                      ))}
+                    </div>
+                  )}
+
+                  {/* System Pages & Modules Section */}
+                  {searchResults.pages.length > 0 && (
+                    <div className="mb-2">
+                      <div className="fs-11 fw-bold text-secondary text-uppercase mb-2 d-flex align-items-center">
+                        <i className="ti ti-layout-grid me-1" /> System Modules & Pages ({searchResults.pages.length})
+                      </div>
+                      {searchResults.pages.map((m, idx) => (
+                        <div 
+                          key={idx}
+                          className="d-flex align-items-center justify-content-between p-2 rounded hover-bg-light cursor-pointer mb-1"
+                          onClick={() => {
+                            navigate(m.route);
+                            setIsSearchOpen(false);
+                            setSearchQuery('');
+                          }}
+                        >
+                          <div className="d-flex align-items-center">
+                            <i className={`ti ti-${m.icon} text-primary me-2 fs-16`} />
+                            <div>
+                              <div className="fw-semibold text-dark fs-13">{m.title}</div>
+                              <div className="fs-10 text-muted">{m.category}</div>
+                            </div>
+                          </div>
+                          <i className="ti ti-chevron-right text-muted fs-12" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* No Results Fallback */}
+                  {searchResults.employees.length === 0 && searchResults.departments.length === 0 && searchResults.pages.length === 0 && (
+                    <div className="text-center py-4 text-muted">
+                      <i className="ti ti-search-off fs-24 mb-1 d-block text-secondary" />
+                      <div className="fs-13 fw-semibold">No results found for "{searchQuery}"</div>
+                      <div className="fs-11">Try searching by module name, employee name, or department</div>
                     </div>
                   )}
                 </div>
-                {/* /Dynamic Search Component */}
+              )}
+            </div>
+            {/* /Dynamic Search Component */}
 
-                <div className="ms-auto d-flex align-items-center">
+          <div className="header-user">
+            <div className="nav user-menu nav-list">
+              <div className="ms-auto d-flex align-items-center">
                 <Link
                   to={all_routes.profilesettings}
                   className="btn btn-menubar"

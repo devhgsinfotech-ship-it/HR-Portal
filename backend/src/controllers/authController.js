@@ -151,6 +151,7 @@ async function login(req, res) {
                 companyName: user.company?.name || null,
                 subdomain: user.company?.subdomain || null,
                 companyLogoUrl: user.role === 'SUPER_ADMIN' ? superAdminLogo : (user.company?.logoUrl || null),
+                companyIconUrl: user.role === 'SUPER_ADMIN' ? null : (user.company?.iconUrl || null),
                 currency: user.company?.settings?.currency || 'INR',
                 currencySymbol: user.company?.settings?.currencySymbol || (user.company?.settings?.currency === 'USD' ? '$' : '₹'),
                 profilePhotoUrl: user.employee?.profilePhotoUrl || null,
@@ -809,20 +810,20 @@ async function getCompanyLogo(req, res) {
         if (!company && subdomain) {
             company = await prisma.company.findUnique({
                 where: { subdomain },
-                select: { logoUrl: true, name: true }
+                select: { logoUrl: true, iconUrl: true, name: true }
             });
         } else if (!company && email) {
             const domain = email.split('@')[1]?.toLowerCase();
             if (domain) {
                 company = await prisma.company.findFirst({
                     where: { emailDomain: domain },
-                    select: { logoUrl: true, name: true }
+                    select: { logoUrl: true, iconUrl: true, name: true }
                 });
             }
         } else if (!company && emailDomain) {
             company = await prisma.company.findFirst({
                 where: { emailDomain: emailDomain.toLowerCase() },
-                select: { logoUrl: true, name: true }
+                select: { logoUrl: true, iconUrl: true, name: true }
             });
         }
 
@@ -834,12 +835,12 @@ async function getCompanyLogo(req, res) {
                     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretkey');
                     if (decoded?.role === 'SUPER_ADMIN') {
                         const sys = await prisma.systemSetting.findFirst();
-                        return res.json({ success: true, logoUrl: sys?.logoUrl || null, companyName: sys?.systemName || 'HR Portal' });
+                        return res.json({ success: true, logoUrl: sys?.logoUrl || null, iconUrl: null, companyName: sys?.systemName || 'HR Portal' });
                     }
                     if (decoded?.companyId) {
                         company = await prisma.company.findUnique({
                             where: { id: decoded.companyId },
-                            select: { logoUrl: true, name: true }
+                            select: { logoUrl: true, iconUrl: true, name: true }
                         });
                     }
                 }
@@ -849,10 +850,10 @@ async function getCompanyLogo(req, res) {
         }
 
         if (!company) {
-            return res.json({ success: false, logoUrl: null });
+            return res.json({ success: false, logoUrl: null, iconUrl: null });
         }
 
-        res.json({ success: true, logoUrl: company.logoUrl, companyName: company.name });
+        res.json({ success: true, logoUrl: company.logoUrl, iconUrl: company.iconUrl, companyName: company.name });
     } catch (err) {
         console.error('Error fetching company logo:', err);
         res.status(500).json({ message: 'Internal server error' });
@@ -904,6 +905,7 @@ async function getCompanySettings(req, res) {
                 companySize: company.companySize,
                 address: company.address,
                 logoUrl: company.logoUrl,
+                iconUrl: company.iconUrl,
                 createdAt: company.createdAt,
                 currency: settings.currency || 'INR',
                 currencySymbol: settings.currencySymbol || (settings.currency === 'USD' ? '$' : '₹'),
@@ -928,15 +930,22 @@ async function updateCompanySettings(req, res) {
         }
 
         const {
-            name, phone, email, address, industry, companySize, logoUrl,
+            name, phone, email, address, industry, companySize, logoUrl, iconUrl,
             currency, currencySymbol, timezone, language, languageSwitcher,
             dateFormat, timeFormat, financialYear, startingMonth,
             currencyPosition, decimalSeparator, thousandSeparator, countriesRestriction
         } = req.body;
         
         let newLogoUrl = logoUrl;
-        if (req.file) {
+        if (req.files?.logo?.[0]) {
+            newLogoUrl = `/uploads/logos/${req.files.logo[0].filename}`;
+        } else if (req.file) {
             newLogoUrl = `/uploads/logos/${req.file.filename}`;
+        }
+
+        let newIconUrl = iconUrl;
+        if (req.files?.icon?.[0]) {
+            newIconUrl = `/uploads/logos/${req.files.icon[0].filename}`;
         }
 
         const updateData = {};
@@ -947,6 +956,7 @@ async function updateCompanySettings(req, res) {
         if (industry !== undefined) updateData.industry = industry;
         if (companySize !== undefined) updateData.companySize = companySize;
         if (newLogoUrl !== undefined) updateData.logoUrl = newLogoUrl;
+        if (newIconUrl !== undefined) updateData.iconUrl = newIconUrl;
 
         let updatedCompany = null;
         if (Object.keys(updateData).length > 0) {
@@ -1042,6 +1052,7 @@ async function getProfile(req, res) {
             companyName: user.company?.name || null,
             subdomain: user.company?.subdomain || null,
             companyLogoUrl: user.role === 'SUPER_ADMIN' ? superAdminLogo : (user.company?.logoUrl || null),
+            companyIconUrl: user.role === 'SUPER_ADMIN' ? null : (user.company?.iconUrl || null),
             currency: user.company?.settings?.currency || 'INR',
             currencySymbol: user.company?.settings?.currencySymbol || (user.company?.settings?.currency === 'USD' ? '$' : '₹'),
             firstName: user.employee?.firstName || user.name.split(' ')[0] || '',

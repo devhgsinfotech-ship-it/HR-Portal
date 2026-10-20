@@ -396,6 +396,7 @@ const Sidebar = React.memo(() => {
   const user = useAppSelector((state) => state.auth.user) as any;
   const currentRole = (user?.role as Role) || "EMPLOYEE";
   const [companyLogo, setCompanyLogo] = useState<string | null>(user?.companyLogoUrl || null);
+  const [companyIcon, setCompanyIcon] = useState<string | null>(user?.companyIconUrl || null);
 
   const getLogoSrc = (logoPath: string | null | undefined) => {
     if (!logoPath) return "";
@@ -414,17 +415,31 @@ const Sidebar = React.memo(() => {
   }, [user?.companyLogoUrl]);
 
   useEffect(() => {
+    if (user?.companyIconUrl) {
+      setCompanyIcon(user.companyIconUrl);
+    }
+  }, [user?.companyIconUrl]);
+
+  useEffect(() => {
     const handleLogoUpdate = (event: any) => {
       const newLogo = event?.detail;
       if (newLogo) {
         setCompanyLogo(newLogo);
       }
     };
+    const handleIconUpdate = (event: any) => {
+      const newIcon = event?.detail;
+      if (newIcon) {
+        setCompanyIcon(newIcon);
+      }
+    };
     window.addEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
     window.addEventListener("systemLogoUpdated", handleLogoUpdate as EventListener);
+    window.addEventListener("companyIconUpdated", handleIconUpdate as EventListener);
     return () => {
       window.removeEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
       window.removeEventListener("systemLogoUpdated", handleLogoUpdate as EventListener);
+      window.removeEventListener("companyIconUpdated", handleIconUpdate as EventListener);
     };
   }, []);
 
@@ -433,10 +448,20 @@ const Sidebar = React.memo(() => {
       try {
         const sub = user?.subdomain;
         const res = await apiClient.get(`/auth/company-logo${sub ? `?subdomain=${encodeURIComponent(sub)}` : ''}`);
-        if (res.data?.success && res.data.logoUrl) {
-          setCompanyLogo(res.data.logoUrl);
-          if (user && res.data.logoUrl !== user.companyLogoUrl) {
-            dispatch(updateUser({ companyLogoUrl: res.data.logoUrl }));
+        if (res.data?.success) {
+          if (res.data.logoUrl) {
+            setCompanyLogo(res.data.logoUrl);
+          }
+          if (res.data.iconUrl) {
+            setCompanyIcon(res.data.iconUrl);
+          }
+          const logoDiff = res.data.logoUrl && res.data.logoUrl !== user?.companyLogoUrl;
+          const iconDiff = res.data.iconUrl && res.data.iconUrl !== user?.companyIconUrl;
+          if (user && (logoDiff || iconDiff)) {
+            dispatch(updateUser({
+              companyLogoUrl: res.data.logoUrl || user.companyLogoUrl,
+              companyIconUrl: res.data.iconUrl || user.companyIconUrl,
+            }));
           }
         }
       } catch (err) {
@@ -590,9 +615,10 @@ const Sidebar = React.memo(() => {
     dispatch(setExpandMenu(true));
     const body = document.body;
     const html = document.documentElement;
-    // Add expand-menu class to body if mini-sidebar is present OR hoverview mode is active
+    // Add expand-menu class to body if mini-sidebar is present OR data-layout is mini OR hoverview mode is active
     if (
       body.classList.contains("mini-sidebar") ||
+      html.getAttribute("data-layout") === "mini" ||
       html.getAttribute("data-size") === "hoverview"
     ) {
       body.classList.add("expand-menu");
@@ -645,32 +671,14 @@ const Sidebar = React.memo(() => {
           )}
         </Link>
         <Link to={all_routes.adminDashboard} className="logo-small">
-          {companyLogo || user?.companyLogoUrl ? (
-            <img
-              src={getLogoSrc(companyLogo || user?.companyLogoUrl)}
-              alt="Logo"
-              style={{ maxHeight: "25px", maxWidth: "25px", objectFit: "contain", borderRadius: "4px" }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = "/assets/img/hgs-logo-HR.webp";
-              }}
-            />
-          ) : (
-            <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "25px", maxWidth: "25px", objectFit: "contain", borderRadius: "4px" }} />
-          )}
-        </Link>
-        <Link to={all_routes.adminDashboard} className="dark-logo">
-          {companyLogo || user?.companyLogoUrl ? (
-            <img
-              src={getLogoSrc(companyLogo || user?.companyLogoUrl)}
-              alt="Logo"
-              style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = "/assets/img/hgs-logo-HR.webp";
-              }}
-            />
-          ) : (
-            <img src="/assets/img/hgs-logo-HR.webp" alt="Logo" style={{ maxHeight: "35px", maxWidth: "140px", objectFit: "contain" }} />
-          )}
+          <img
+            src={getLogoSrc(companyIcon || user?.companyIconUrl) || "/assets/img/favicon.png"}
+            alt="Mini Logo"
+            style={{ maxHeight: "32px", maxWidth: "32px", objectFit: "contain", borderRadius: "6px" }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = "/assets/img/favicon.png";
+            }}
+          />
         </Link>
       </div>
 

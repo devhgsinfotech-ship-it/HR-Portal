@@ -18,6 +18,7 @@ model Company {
   companySize      String?
   address          String?
   logoUrl          String?
+  iconUrl          String?
   isEmailVerified  Boolean           @default(false)
   isActive         Boolean           @default(true)
   domainStatus     String            @default("APPROVED")

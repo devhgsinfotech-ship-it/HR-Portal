@@ -19,6 +19,7 @@ import {
   setTopBarColor,
   setTopBarColor2,
 } from "../../data/redux/themeSettingSlice";
+import { setMiniSidebar } from "../../data/redux/sidebarSlice";
 import { Link } from "react-router-dom";
 import ImageWithBasePath from "../imageWithBasePath";
 import { all_routes } from "../../../router/all_routes";
@@ -81,6 +82,7 @@ useEffect(() => {
 
   const handleLayoutChange = (layout: string) => {
     dispatch(setDataLayout(layout));
+    dispatch(setMiniSidebar(layout === "mini"));
   };
   const handleLayoutWidthChange = (layout: string) => {
     dispatch(setDataWidth(layout));
@@ -109,6 +111,7 @@ useEffect(() => {
 
   const handleReset = () => {
     dispatch(resetAllMode());
+    dispatch(setMiniSidebar(false));
   };
   useEffect(() => {
     document.documentElement.setAttribute("data-layout", dataLayout);
