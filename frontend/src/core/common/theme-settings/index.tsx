@@ -230,27 +230,7 @@ useEffect(() => {
                       </label>
                     </div>
                   </div>
-                  <div className="col-4">
-                    <div className="theme-layout mb-3">
-                      <input
-                        type="radio"
-                        name="LayoutTheme"
-                        id="horizontal-singleLayout"
-                        value="horizontal-single"
-                        checked={dataLayout === "horizontal-single" ? true : false}
-                        onChange={() => handleLayoutChange("horizontal-single")}
-                      />
-                      <label htmlFor="horizontal-singleLayout">
-                        <span className="d-block mb-2 layout-img">
-                          <ImageWithBasePath
-                            src="assets/img/theme/horizontal-single.svg"
-                            alt="img"
-                          />
-                        </span>
-                        <span className="layout-type">Horizontal Single</span>
-                      </label>
-                    </div>
-                  </div>
+
                   <div className="col-4">
                     <div className="theme-layout mb-3">
                       <input
@@ -264,7 +244,7 @@ useEffect(() => {
                       <label htmlFor="detachedLayout">
                         <span className="d-block mb-2 layout-img">
                           <ImageWithBasePath
-                            src="assets/img/theme/horizontal-single.svg"
+                            src="assets/img/theme/detached.svg"
                             alt="img"
                           />
                         </span>

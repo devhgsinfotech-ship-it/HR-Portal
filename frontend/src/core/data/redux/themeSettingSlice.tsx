@@ -3,7 +3,7 @@ import type { PayloadAction } from "@reduxjs/toolkit";
 import type { ThemeSettingState } from "../types";
 
 const initialState: ThemeSettingState = {
-  dataLayout: localStorage.getItem("dataLayout") || "detached",
+  dataLayout: localStorage.getItem("dataLayout") || "default",
   dataWidth: localStorage.getItem("dataWidth") || "fluid",
   dataCard: localStorage.getItem("dataCard") || "bordered",
   dataSidebar: localStorage.getItem("dataSidebar") || "light",
@@ -39,7 +39,6 @@ const themeSettingSlice = createSlice({
           document.body.classList.remove("menu-horizontal");
         } else if (
           action.payload === "horizontal" ||
-          action.payload === "horizontal-single" ||
           action.payload === "horizontal-overlay" ||
           action.payload === "horizontal-box"
         ) {

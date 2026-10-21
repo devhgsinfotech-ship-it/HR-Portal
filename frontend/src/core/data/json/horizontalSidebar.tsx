@@ -340,7 +340,6 @@ export const HorizontalSidebarData = [
         base2: 'layout-vertical-transparent',
         base3: 'layout-horizontal-box',
         base4: 'layout-horizontal-overlay',
-        base5: 'layout-horizontal-single',
         base6: 'layout-modern',
         base7: 'layout-detached',
         subMenus: [
@@ -385,13 +384,6 @@ export const HorizontalSidebarData = [
             hasSubRoute: false,
             showSubRoute: false,
             base: 'layout-boxed',
-          },
-          {
-            menuValue: 'Horizontal Single',
-            route: routes.HorizontalSingle,
-            hasSubRoute: false,
-            showSubRoute: false,
-            base: 'layout-horizontal-single',
           },
           {
             menuValue: 'Horizontal Overlay',
