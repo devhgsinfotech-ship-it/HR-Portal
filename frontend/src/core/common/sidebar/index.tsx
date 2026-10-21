@@ -393,10 +393,12 @@ const Sidebar = React.memo(() => {
   const dispatch = useDispatch<AppDispatch>();
   const currentPath = location.pathname;
 
+  const dataLayout = useAppSelector((state) => state.themeSetting.dataLayout);
   const user = useAppSelector((state) => state.auth.user) as any;
   const currentRole = (user?.role as Role) || "EMPLOYEE";
   const [companyLogo, setCompanyLogo] = useState<string | null>(user?.companyLogoUrl || null);
   const [companyIcon, setCompanyIcon] = useState<string | null>(user?.companyIconUrl || null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const getLogoSrc = (logoPath: string | null | undefined) => {
     if (!logoPath) return "";
@@ -407,6 +409,29 @@ const Sidebar = React.memo(() => {
     const cleanPath = logoPath.startsWith("/") ? logoPath : `/${logoPath}`;
     return `${base}${cleanPath}`;
   };
+
+  const getProfilePhotoSrc = useCallback((photoUrl: string | null | undefined) => {
+    if (!photoUrl) return "/assets/img/profiles/avatar-12.jpg";
+    if (photoUrl.startsWith("http://") || photoUrl.startsWith("https://") || photoUrl.startsWith("blob:")) {
+      return photoUrl;
+    }
+    const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+    const cleanPath = photoUrl.startsWith("/") ? photoUrl : `/${photoUrl}`;
+    return `${base}${cleanPath}`;
+  }, []);
+
+  const formatUserRole = useCallback((role?: string, designation?: string) => {
+    if (designation) return designation;
+    if (!role) return "Employee";
+    switch (role.toUpperCase()) {
+      case "SUPER_ADMIN": return "Super Admin";
+      case "COMPANY_ADMIN": return "Company Admin";
+      case "HR": return "HR Manager";
+      case "MANAGER": return "Manager";
+      case "EMPLOYEE": return "Employee";
+      default: return role.replace(/_/g, " ");
+    }
+  }, []);
 
   useEffect(() => {
     if (user?.companyLogoUrl) {
@@ -487,15 +512,49 @@ const Sidebar = React.memo(() => {
       .filter(mainMenu => mainMenu.submenuItems.length > 0);
   }, [currentRole]);
 
+  // Search filtered sidebar data
+  const displayedSidebarData = useMemo(() => {
+    if (!searchTerm.trim()) return filteredSidebarData;
+    const term = searchTerm.toLowerCase().trim();
+    return filteredSidebarData
+      .map((mainMenu) => {
+        const matchingItems = (mainMenu.submenuItems || []).filter((item) => {
+          if (item.label.toLowerCase().includes(term)) return true;
+          if (item.submenuItems?.some((sub) => sub.label.toLowerCase().includes(term))) return true;
+          return false;
+        });
+        if (matchingItems.length > 0) {
+          return { ...mainMenu, submenuItems: matchingItems };
+        }
+        return null;
+      })
+      .filter(Boolean) as SidebarMainMenu[];
+  }, [filteredSidebarData, searchTerm]);
+
   const [openMenus, setOpenMenus] = useState<Set<string>>(
     new Set(["Dashboard"]),
   );
   const [openSubMenus, setOpenSubMenus] = useState<Set<string>>(new Set());
 
-  // Find which menus should be open based on current path
+  // Find which menus should be open based on current path or search
   const findActiveMenus = useMemo(() => {
     const activeMenuLabels: string[] = [];
     const activeSubMenuLabels: string[] = [];
+
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      displayedSidebarData.forEach((mainMenu) => {
+        mainMenu.submenuItems?.forEach((menuItem) => {
+          if (
+            menuItem.label.toLowerCase().includes(term) ||
+            menuItem.submenuItems?.some((sub) => sub.label.toLowerCase().includes(term))
+          ) {
+            activeMenuLabels.push(menuItem.label);
+          }
+        });
+      });
+      return { activeMenuLabels, activeSubMenuLabels };
+    }
 
     filteredSidebarData.forEach((mainMenu) => {
       mainMenu.submenuItems?.forEach((menuItem) => {
@@ -514,7 +573,7 @@ const Sidebar = React.memo(() => {
     });
 
     return { activeMenuLabels, activeSubMenuLabels };
-  }, [currentPath]);
+  }, [currentPath, searchTerm, displayedSidebarData, filteredSidebarData]);
 
   // Auto-open menus when route changes
   useEffect(() => {
@@ -574,7 +633,6 @@ const Sidebar = React.memo(() => {
       Modern: "modern",
       "Two Column": "twocolumn",
       Hovered: "hovered",
-      "Horizontal Single": "horizontal-single",
       "Horizontal Overlay": "horizontal-overlay",
       "Horizontal Box": "horizontal-box",
       "Menu Aside": "horizontal-sidemenu",
@@ -682,81 +740,58 @@ const Sidebar = React.memo(() => {
         </Link>
       </div>
 
-      {/* Modern Profile */}
-      <div className="modern-profile p-3 pb-0">
-        <div className="text-center rounded bg-light p-3 mb-4 user-profile">
-          <div className="avatar avatar-lg online mb-3">
-            <ImageWithBasePath
-              src="assets/img/profiles/avatar-02.jpg"
-              alt="Img"
-              className="img-fluid rounded-circle"
-            />
-          </div>
-          <h6 className="fs-12 fw-normal mb-1">Adrian Herman</h6>
-          <p className="fs-10">System Admin</p>
-        </div>
-        <div className="sidebar-nav mb-3">
-          <ul
-            className="nav nav-tabs nav-tabs-solid nav-tabs-rounded nav-justified bg-transparent"
-            role="tablist"
-          >
-            <li className="nav-item">
-              <Link className="nav-link active border-0" to="#">
-                Menu
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link className="nav-link border-0" to={all_routes.chat}>
-                Chats
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link className="nav-link border-0" to={all_routes.email}>
-                Inbox
-              </Link>
-            </li>
-          </ul>
-        </div>
-      </div>
 
-      {/* Sidebar Header */}
+      {/* Sidebar Header (Active in Without Header layout or when header is absent) */}
       <div className="sidebar-header p-3 pb-0 pt-2">
-        <div className="text-center rounded bg-light p-2 mb-4 sidebar-profile d-flex align-items-center">
-          <div className="avatar avatar-md onlin">
-            <ImageWithBasePath
-              src="assets/img/profiles/avatar-02.jpg"
-              alt="Img"
+        <Link
+          to={all_routes.profile}
+          className="rounded sidebar-profile d-flex align-items-center text-decoration-none p-2 mb-3"
+        >
+          <div className="avatar avatar-md online flex-shrink-0">
+            <img
+              src={getProfilePhotoSrc(user?.profilePhotoUrl)}
+              alt={user?.name || "User"}
               className="img-fluid rounded-circle"
+              style={{ width: "38px", height: "38px", objectFit: "cover" }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "/assets/img/profiles/avatar-12.jpg";
+              }}
             />
           </div>
-          <div className="text-start sidebar-profile-info ms-2">
-            <h6 className="fs-12 fw-normal mb-1">Adrian Herman</h6>
-            <p className="fs-10">System Admin</p>
+          <div className="text-start sidebar-profile-info ms-2 overflow-hidden flex-grow-1">
+            <h6 className="fs-13 fw-semibold mb-0 text-truncate sidebar-profile-name">
+              {user?.name || "Admin"}
+            </h6>
+            <p className="fs-11 fw-normal mb-0 text-truncate sidebar-profile-role">
+              {user?.companyRoleName || formatUserRole(user?.role)}
+            </p>
           </div>
-        </div>
-        <div className="input-group input-group-flat d-inline-flex mb-4">
+        </Link>
+        <div className="input-group input-group-flat d-inline-flex mb-3">
           <span className="input-icon-addon">
             <i className="ti ti-search"></i>
           </span>
           <input
             type="text"
             className="form-control"
-            placeholder="Search in HRMS"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
           <span className="input-group-text">
             <kbd>CTRL + / </kbd>
           </span>
         </div>
-        <div className="d-flex align-items-center justify-content-between menu-item mb-3">
-          <div className="me-3">
-            <Link to={all_routes.calendar} className="btn btn-menubar">
+        <div className="d-flex align-items-center justify-content-between menu-item mb-2">
+          <div className="me-2">
+            <Link to={all_routes.calendar} className="btn btn-menubar" title="Calendar">
               <i className="ti ti-layout-grid-remove"></i>
             </Link>
           </div>
-          <div className="me-3">
+          <div className="me-2">
             <Link
               to={all_routes.chat}
               className="btn btn-menubar position-relative"
+              title="Chat"
             >
               <i className="ti ti-brand-hipchat"></i>
               <span className="badge bg-info rounded-pill d-flex align-items-center justify-content-center header-badge">
@@ -764,17 +799,18 @@ const Sidebar = React.memo(() => {
               </span>
             </Link>
           </div>
-          <div className="me-3 notification-item">
+          <div className="me-2 notification-item">
             <Link
               to={all_routes.activity}
               className="btn btn-menubar position-relative me-1"
+              title="Notifications"
             >
               <i className="ti ti-bell"></i>
               <span className="notification-status-dot"></span>
             </Link>
           </div>
           <div className="me-0">
-            <Link to={all_routes.email} className="btn btn-menubar">
+            <Link to={all_routes.email} className="btn btn-menubar" title="Email">
               <i className="ti ti-message"></i>
             </Link>
           </div>
@@ -786,7 +822,7 @@ const Sidebar = React.memo(() => {
         <div className="sidebar-inner slimscroll">
           <div id="sidebar-menu" className="sidebar-menu">
             <ul>
-              {filteredSidebarData?.map(
+              {displayedSidebarData?.map(
                 (mainMenu: SidebarMainMenu, index: number) => (
                   <React.Fragment key={`main-${index}`}>
                     <li className="menu-title">
@@ -827,11 +863,6 @@ const Sidebar = React.memo(() => {
                                   {menuItem.dot && (
                                     <span className="badge badge-danger fs-10 fw-medium text-white p-1 me-4">
                                       Hot
-                                    </span>
-                                  )}
-                                  {menuItem.newBadge && (
-                                    <span className="badge badge-danger fs-10 fw-medium text-white p-1">
-                                      New
                                     </span>
                                   )}
                                   {menuItem.changeLogVersion && (
@@ -887,11 +918,6 @@ const Sidebar = React.memo(() => {
                                                 }`}
                                             >
                                               {subItem.label}
-                                              {subItem.newBadge && (
-                                                <span className="badge badge-danger fs-10 fw-medium text-white p-1">
-                                                  New
-                                                </span>
-                                              )}
 
                                               {hasNestedSubmenu && (
                                                 <span className="menu-arrow inside-submenu"></span>

@@ -33,6 +33,7 @@ interface MenuItem {
   showSubRoute?: boolean;
   icon?: string;
   base?: string;
+  route?: string;
   subMenus?: SubMenu[];
 }
 

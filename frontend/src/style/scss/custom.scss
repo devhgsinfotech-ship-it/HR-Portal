@@ -4835,17 +4835,941 @@ html:not([data-sidebar]) #horizontal-menu.sidebar-horizontal {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22) !important;
 }
 
-// Boxed Layout support for Horizontal Layout
-html[data-layout="horizontal"][data-width="boxed"],
-body.menu-horizontal[data-width="boxed"] {
-  .header .main-header,
-  #horizontal-menu.sidebar-horizontal .sidebar-menu,
-  .page-wrapper .content {
-    max-width: 1320px !important;
-    margin: 0 auto !important;
-    padding-left: 24px !important;
-    padding-right: 24px !important;
+// ==========================================================================
+// PREMIUM BOXED LAYOUT SYSTEM (data-width="box" / body.layout-box-mode)
+// ==========================================================================
+
+// 1. Outer page backdrop when Boxed Layout is active
+html[data-width="box"],
+html[data-width="boxed"],
+body.layout-box-mode {
+  background-color: #f0f3f8 !important;
+  min-height: 100vh;
+
+  // Dark mode outer backdrop
+  &[data-theme="dark"],
+  body[data-theme="dark"] & {
+    background-color: #0b111a !important;
   }
 }
 
+// 2. Main Boxed Wrapper Canvas (1360px max-width, centered)
+html[data-width="box"] .main-wrapper,
+html[data-width="boxed"] .main-wrapper,
+body.layout-box-mode .main-wrapper {
+  max-width: 1360px !important;
+  margin: 0 auto !important;
+  min-height: 100vh;
+  position: relative !important;
+  background-color: #ffffff;
+  box-shadow: 0 0 35px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-width="box"][data-theme="dark"] .main-wrapper,
+html[data-width="boxed"][data-theme="dark"] .main-wrapper,
+html[data-theme="dark"] body.layout-box-mode .main-wrapper {
+  background-color: #111a28 !important;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+// 3. Large Screens (Viewport > 1360px): Precise Alignment inside the 1360px Box
+@media (min-width: 1361px) {
+  // --- Case A: Vertical Layout - Normal Sidebar (252px width) ---
+  html[data-width="box"]:not([data-layout^="horizontal"]) body:not(.mini-sidebar),
+  html[data-width="boxed"]:not([data-layout^="horizontal"]) body:not(.mini-sidebar),
+  body.layout-box-mode:not(.menu-horizontal):not(.mini-sidebar) {
+    .sidebar {
+      left: calc((100vw - 1360px) / 2) !important;
+      width: 252px !important;
+      top: 0 !important;
+      bottom: 0 !important;
+      right: auto !important;
+      margin: 0 !important;
+      z-index: 1001 !important;
+
+      .sidebar-logo {
+        left: calc((100vw - 1360px) / 2) !important;
+        width: 252px !important;
+        display: flex !important;
+        align-items: center !important;
+        height: 52px !important;
+        top: 0 !important;
+        position: fixed !important;
+        z-index: 1002 !important;
+      }
+    }
+
+    .header {
+      left: calc((100vw - 1360px) / 2 + 252px) !important;
+      width: calc(1360px - 252px) !important;
+      max-width: calc(1360px - 252px) !important;
+      right: calc((100vw - 1360px) / 2) !important;
+      top: 0 !important;
+      height: 52px !important;
+      margin: 0 !important;
+      z-index: 999 !important;
+      border-radius: 0 !important;
+
+      // Hide duplicate header logo because sidebar has the logo
+      .header-left {
+        display: none !important;
+      }
+
+      .main-header {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 15px !important;
+        padding-right: 15px !important;
+        margin: 0 !important;
+      }
+    }
+
+    .page-wrapper {
+      margin-left: 252px !important;
+      width: calc(1360px - 252px) !important;
+      max-width: calc(1360px - 252px) !important;
+      padding-top: 52px !important;
+
+      .content {
+        max-width: 100% !important;
+      }
+    }
+  }
+
+  // --- Case B: Vertical Layout - Mini Sidebar (72px width) ---
+  html[data-width="box"]:not([data-layout^="horizontal"]) body.mini-sidebar,
+  html[data-width="boxed"]:not([data-layout^="horizontal"]) body.mini-sidebar,
+  body.layout-box-mode:not(.menu-horizontal).mini-sidebar {
+    .sidebar {
+      left: calc((100vw - 1360px) / 2) !important;
+      width: 72px !important;
+      top: 0 !important;
+      bottom: 0 !important;
+      right: auto !important;
+      margin: 0 !important;
+      z-index: 1001 !important;
+
+      .sidebar-logo {
+        left: calc((100vw - 1360px) / 2) !important;
+        width: 72px !important;
+        display: flex !important;
+        align-items: center !important;
+        height: 52px !important;
+        top: 0 !important;
+        position: fixed !important;
+        z-index: 1002 !important;
+      }
+    }
+
+    .header {
+      left: calc((100vw - 1360px) / 2 + 72px) !important;
+      width: calc(1360px - 72px) !important;
+      max-width: calc(1360px - 72px) !important;
+      right: calc((100vw - 1360px) / 2) !important;
+      top: 0 !important;
+      height: 52px !important;
+      margin: 0 !important;
+      z-index: 999 !important;
+      border-radius: 0 !important;
+
+      .header-left {
+        display: none !important;
+      }
+
+      .main-header {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 15px !important;
+        padding-right: 15px !important;
+        margin: 0 !important;
+      }
+    }
+
+    .page-wrapper {
+      margin-left: 72px !important;
+      width: calc(1360px - 72px) !important;
+      max-width: calc(1360px - 72px) !important;
+      padding-top: 52px !important;
+
+      .content {
+        max-width: 100% !important;
+      }
+    }
+  }
+
+  // --- Case C: Horizontal Layouts (Horizontal / Horizontal Box) ---
+  html[data-width="box"][data-layout^="horizontal"],
+  html[data-width="boxed"][data-layout^="horizontal"],
+  html[data-width="box"] body.menu-horizontal,
+  html[data-width="boxed"] body.menu-horizontal,
+  body.layout-box-mode.menu-horizontal {
+    .header {
+      left: calc((100vw - 1360px) / 2) !important;
+      width: 1360px !important;
+      max-width: 1360px !important;
+      right: calc((100vw - 1360px) / 2) !important;
+      top: 0 !important;
+      height: 52px !important;
+      margin: 0 !important;
+      z-index: 1001 !important;
+
+      .header-left {
+        display: flex !important;
+        align-items: center;
+        height: 52px;
+        padding-left: 20px;
+      }
+
+      .main-header {
+        width: 100% !important;
+        padding-left: 10px;
+        padding-right: 20px;
+      }
+    }
+
+    #horizontal-menu.sidebar-horizontal {
+      left: calc((100vw - 1360px) / 2) !important;
+      width: 1360px !important;
+      max-width: 1360px !important;
+      right: calc((100vw - 1360px) / 2) !important;
+      top: 52px !important;
+      margin: 0 !important;
+      z-index: 1000 !important;
+
+      .sidebar-menu {
+        max-width: 100% !important;
+      }
+    }
+
+    .page-wrapper {
+      margin-left: 0 !important;
+      width: 100% !important;
+      max-width: 1360px !important;
+      padding-top: 104px !important;
+    }
+  }
+
+  // Bulletproof Global Rule for .sidebar-logo in Boxed Mode
+  html[data-width="box"]:not([data-layout^="horizontal"]) .sidebar .sidebar-logo,
+  html[data-width="boxed"]:not([data-layout^="horizontal"]) .sidebar .sidebar-logo,
+  body.layout-box-mode:not(.menu-horizontal) .sidebar .sidebar-logo {
+    left: calc((100vw - 1360px) / 2) !important;
+  }
+}
+
+// 4. Screens <= 1360px: Fluid fallback within available screen
+@media (max-width: 1360px) {
+  html[data-width="box"],
+  html[data-width="boxed"],
+  body.layout-box-mode {
+    .main-wrapper {
+      max-width: 100% !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+    }
+
+    .sidebar {
+      left: 0 !important;
+
+      .sidebar-logo {
+        left: 0 !important;
+      }
+    }
+  }
+
+  html[data-width="box"]:not([data-layout^="horizontal"]) body:not(.mini-sidebar),
+  html[data-width="boxed"]:not([data-layout^="horizontal"]) body:not(.mini-sidebar),
+  body.layout-box-mode:not(.menu-horizontal):not(.mini-sidebar) {
+    .header {
+      left: 252px !important;
+      width: calc(100% - 252px) !important;
+      max-width: calc(100% - 252px) !important;
+      right: 0 !important;
+
+      .header-left {
+        display: none !important;
+      }
+    }
+
+    .page-wrapper {
+      margin-left: 252px !important;
+    }
+  }
+
+  html[data-width="box"]:not([data-layout^="horizontal"]) body.mini-sidebar,
+  html[data-width="boxed"]:not([data-layout^="horizontal"]) body.mini-sidebar,
+  body.layout-box-mode:not(.menu-horizontal).mini-sidebar {
+    .header {
+      left: 72px !important;
+      width: calc(100% - 72px) !important;
+      max-width: calc(100% - 72px) !important;
+      right: 0 !important;
+
+      .header-left {
+        display: none !important;
+      }
+    }
+
+    .page-wrapper {
+      margin-left: 72px !important;
+    }
+  }
+
+  html[data-width="box"][data-layout^="horizontal"],
+  html[data-width="boxed"][data-layout^="horizontal"],
+  html[data-width="box"] body.menu-horizontal,
+  html[data-width="boxed"] body.menu-horizontal,
+  body.layout-box-mode.menu-horizontal {
+    .header {
+      left: 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      right: 0 !important;
+
+      .header-left {
+        display: flex !important;
+      }
+    }
+
+    #horizontal-menu.sidebar-horizontal {
+      left: 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+
+    .page-wrapper {
+      margin-left: 0 !important;
+    }
+  }
+}
+
+// 5. Neutralize legacy broken rules for box mode
+html[data-width="box"],
+html[data-width="boxed"],
+body.layout-box-mode {
+  .sidebar {
+    top: 0 !important;
+
+    .sidebar-logo {
+      display: flex !important;
+      top: 0 !important;
+    }
+  }
+
+  .header {
+    border-radius: 0 !important;
+  }
+}
+
+// =============================================================================
+//  WITHOUT HEADER LAYOUT (Premium Customizer Enhancement)
+// =============================================================================
+html[data-layout="without-header"],
+body.layout-without-header {
+  // Completely hide top header
+  .header {
+    display: none !important;
+  }
+
+  // Adjust page wrapper for full height without header
+  .page-wrapper {
+    margin-left: 252px !important;
+    width: calc(100% - 252px) !important;
+    padding-top: 15px !important;
+    min-height: 100vh !important;
+    transition: margin-left 0.25s ease, width 0.25s ease !important;
+
+    .content {
+      padding-top: 10px !important;
+    }
+  }
+
+  body.mini-sidebar:not(.expand-menu) .page-wrapper {
+    margin-left: 72px !important;
+    width: calc(100% - 72px) !important;
+  }
+
+  // Explicitly hide horizontal sidebar menu in without-header layout
+  .sidebar-horizontal,
+  #horizontal-menu,
+  .horizontal-sidebar {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  // 1. Target ONLY the vertical sidebar
+  #sidebar.sidebar,
+  .sidebar:not(.sidebar-horizontal) {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 252px !important;
+    overflow: hidden !important;
+    z-index: 1040 !important;
+    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+
+    // 2. Company Logo: static in flex flow at the top
+    .sidebar-logo {
+      position: relative !important;
+      top: auto !important;
+      left: auto !important;
+      width: 100% !important;
+      min-height: 58px !important;
+      height: 58px !important;
+      flex-shrink: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      padding: 0 16px !important;
+      z-index: 10 !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+
+      .logo,
+      .logo-normal {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        max-height: 38px !important;
+
+        img {
+          max-height: 34px !important;
+          max-width: 150px !important;
+          object-fit: contain !important;
+        }
+      }
+    }
+
+    // 3. Remove modern-profile completely in without-header to prevent cutting
+    .modern-profile {
+      display: none !important;
+      height: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+    }
+
+    // 4. Sidebar Header: Profile card, search, and action buttons
+    .sidebar-header {
+      display: block !important;
+      flex-shrink: 0 !important;
+      padding: 12px 14px 8px 14px !important;
+      width: 100% !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+
+      // Profile Card for Logged In Employee
+      .sidebar-profile {
+        padding: 8px 12px !important;
+        border-radius: 12px !important;
+        margin-bottom: 12px !important;
+        background: rgba(255, 255, 255, 0.06) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(8px) !important;
+        transition: all 0.22s ease !important;
+        cursor: pointer !important;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.1) !important;
+          border-color: rgba(0, 188, 212, 0.4) !important;
+          transform: translateY(-1px) !important;
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12) !important;
+        }
+
+        .avatar {
+          width: 38px !important;
+          height: 38px !important;
+          border-radius: 50% !important;
+          border: 2px solid #00BCD4 !important;
+          box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.25) !important;
+          position: relative !important;
+          overflow: visible !important;
+          flex-shrink: 0 !important;
+
+          img {
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 50% !important;
+            object-fit: cover !important;
+          }
+
+          &.online::after {
+            content: '' !important;
+            position: absolute !important;
+            bottom: 0 !important;
+            right: 0 !important;
+            width: 10px !important;
+            height: 10px !important;
+            border-radius: 50% !important;
+            background-color: #10B981 !important;
+            border: 2px solid #111827 !important;
+            box-shadow: 0 0 4px rgba(16, 185, 129, 0.6) !important;
+          }
+        }
+
+        .sidebar-profile-info {
+          min-width: 0 !important;
+
+          .sidebar-profile-name {
+            color: #ffffff !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            line-height: 1.3 !important;
+          }
+
+          .sidebar-profile-role {
+            color: #38BDF8 !important;
+            font-size: 11px !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.02em !important;
+            line-height: 1.2 !important;
+            margin-top: 2px !important;
+          }
+        }
+      }
+
+      // Search Input
+      .input-group {
+        border-radius: 8px !important;
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        transition: all 0.2s ease !important;
+        overflow: hidden !important;
+        margin-bottom: 10px !important;
+
+        &:focus-within {
+          border-color: #00BCD4 !important;
+          background: rgba(255, 255, 255, 0.08) !important;
+          box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.15) !important;
+        }
+
+        .input-icon-addon {
+          padding-left: 10px !important;
+          color: rgba(255, 255, 255, 0.6) !important;
+        }
+
+        input.form-control {
+          background: transparent !important;
+          border: none !important;
+          color: #ffffff !important;
+          font-size: 12px !important;
+          padding: 6px 8px !important;
+          height: 32px !important;
+
+          &::placeholder {
+            color: rgba(255, 255, 255, 0.45) !important;
+            font-size: 12px !important;
+          }
+        }
+
+        .input-group-text {
+          background: transparent !important;
+          border: none !important;
+          padding: 2px 8px !important;
+
+          kbd {
+            font-size: 10px !important;
+            background: rgba(255, 255, 255, 0.1) !important;
+            color: rgba(255, 255, 255, 0.7) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 4px !important;
+            padding: 2px 5px !important;
+          }
+        }
+      }
+
+      // Action Menubar Buttons
+      .menu-item {
+        margin-bottom: 4px !important;
+
+        .btn-menubar {
+          width: 34px !important;
+          height: 34px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          background: rgba(255, 255, 255, 0.06) !important;
+          border: 1px solid rgba(255, 255, 255, 0.08) !important;
+          border-radius: 8px !important;
+          color: rgba(255, 255, 255, 0.85) !important;
+          transition: all 0.2s ease !important;
+          font-size: 16px !important;
+
+          &:hover {
+            background: rgba(0, 188, 212, 0.22) !important;
+            color: #00BCD4 !important;
+            border-color: rgba(0, 188, 212, 0.4) !important;
+            transform: translateY(-1px) !important;
+          }
+
+          .header-badge {
+            font-size: 9px !important;
+            padding: 1px 4px !important;
+            top: -4px !important;
+            right: -4px !important;
+            position: absolute !important;
+          }
+
+          .notification-status-dot {
+            width: 7px !important;
+            height: 7px !important;
+            background: #EF4444 !important;
+            border-radius: 50% !important;
+            position: absolute !important;
+            top: 5px !important;
+            right: 5px !important;
+            border: 1px solid #111827 !important;
+          }
+        }
+      }
+    }
+
+    // 5. Scrollable Menus Container (Fills exact remaining height, smoothly scrollable!)
+    .slimScrollDiv {
+      position: relative !important;
+      top: 0 !important;
+      left: 0 !important;
+      flex: 1 1 0% !important;
+      width: 100% !important;
+      height: 100% !important;
+      max-height: none !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      padding: 10px 14px 40px 14px !important;
+
+      .sidebar-inner.slimscroll {
+        height: auto !important;
+        min-height: 100% !important;
+        overflow: visible !important;
+      }
+
+      .sidebar-menu {
+        margin-top: 0 !important;
+        padding-bottom: 24px !important;
+      }
+    }
+  }
+
+  // Light theme overrides for without-header if user selects light sidebar
+  &:not([data-sidebar="darkgray"]):not([data-sidebar="nightblue"]):not([data-sidebar="darkaqua"]):not([data-sidebar="royalblue"]):not([data-sidebar="indigo"]):not([data-theme="dark"]) {
+    .sidebar {
+      .sidebar-logo {
+        border-bottom-color: #f1f5f9 !important;
+      }
+
+      .sidebar-header {
+        border-bottom-color: #f1f5f9 !important;
+
+        .sidebar-profile {
+          background: #f8fafc !important;
+          border-color: #e2e8f0 !important;
+
+          &:hover {
+            background: #f1f5f9 !important;
+            border-color: rgba(0, 188, 212, 0.4) !important;
+          }
+
+          .sidebar-profile-name {
+            color: #0f172a !important;
+          }
+
+          .sidebar-profile-role {
+            color: #0284c7 !important;
+          }
+
+          .avatar.online::after {
+            border-color: #ffffff !important;
+          }
+        }
+
+        .input-group {
+          background: #ffffff !important;
+          border-color: #e2e8f0 !important;
+
+          .input-icon-addon {
+            color: #64748b !important;
+          }
+
+          input.form-control {
+            color: #0f172a !important;
+
+            &::placeholder {
+              color: #94a3b8 !important;
+            }
+          }
+
+          kbd {
+            background: #f1f5f9 !important;
+            color: #475569 !important;
+            border-color: #cbd5e1 !important;
+          }
+        }
+
+        .menu-item .btn-menubar {
+          background: #f8fafc !important;
+          border-color: #e2e8f0 !important;
+          color: #475569 !important;
+
+          &:hover {
+            background: rgba(0, 188, 212, 0.1) !important;
+            color: #00838f !important;
+            border-color: rgba(0, 188, 212, 0.3) !important;
+          }
+
+          .notification-status-dot {
+            border-color: #ffffff !important;
+          }
+        }
+      }
+    }
+  }
+
+  // Mini-sidebar collapsed state in without-header layout
+  body.mini-sidebar:not(.expand-menu) {
+    #sidebar.sidebar,
+    .sidebar:not(.sidebar-horizontal) {
+      width: 72px !important;
+
+      .sidebar-logo {
+        width: 72px !important;
+        padding: 0 !important;
+
+        .logo-normal {
+          display: none !important;
+        }
+
+        .logo-small {
+          display: flex !important;
+          justify-content: center !important;
+        }
+      }
+
+      .sidebar-header {
+        padding: 8px 6px !important;
+
+        .input-group,
+        .menu-item {
+          display: none !important;
+        }
+
+        .sidebar-profile {
+          padding: 4px !important;
+          background: transparent !important;
+          border-color: transparent !important;
+          justify-content: center !important;
+          margin-bottom: 4px !important;
+
+          .sidebar-profile-info {
+            display: none !important;
+          }
+        }
+      }
+
+      .slimScrollDiv {
+        width: 72px !important;
+        padding: 6px 4px 20px 4px !important;
+      }
+    }
+  }
+
+  // Boxed width mode support in without-header layout
+  &[data-width="box"],
+  &[data-width="boxed"],
+  body.layout-box-mode {
+    #sidebar.sidebar,
+    .sidebar:not(.sidebar-horizontal) {
+      left: calc((100vw - 1360px) / 2) !important;
+    }
+
+    .page-wrapper {
+      margin-left: calc((100vw - 1360px) / 2 + 252px) !important;
+      width: calc(1360px - 252px) !important;
+      max-width: calc(1360px - 252px) !important;
+    }
+
+    &.mini-sidebar .page-wrapper,
+    body.mini-sidebar .page-wrapper {
+      margin-left: calc((100vw - 1360px) / 2 + 72px) !important;
+      width: calc(1360px - 72px) !important;
+      max-width: calc(1360px - 72px) !important;
+    }
+  }
+}
+
+// Two Column, Stacked & Standard Sidebar Profile Card (Matching User Reference)
+.twocol-user-profile {
+  position: relative;
+  background: #141b4d;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  padding: 20px 14px 18px !important;
+  margin-bottom: 20px;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    border-color: rgba(0, 188, 212, 0.5);
+  }
+
+  .twocol-avatar-img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border: 3px solid #00bcd4 !important;
+    padding: 1.5px;
+    background-color: #141b4d;
+    box-shadow: 0 0 14px rgba(0, 188, 212, 0.35);
+    transition: transform 0.25s ease;
+  }
+
+  &:hover .twocol-avatar-img {
+    transform: scale(1.05);
+  }
+
+  .twocol-avatar-status {
+    width: 12px;
+    height: 12px;
+    background-color: #10b981;
+    border: 2.5px solid #141b4d;
+    bottom: 2px;
+    right: 2px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  }
+
+  .twocol-user-name {
+    color: #ffffff !important;
+    max-width: 140px;
+    margin: 10px auto 6px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
+
+  .twocol-user-role {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    max-width: 135px;
+    padding: 3px 12px;
+    border-radius: 20px;
+    background: rgba(0, 188, 212, 0.15) !important;
+    color: #00bcd4 !important;
+    border: 1.5px solid #00bcd4 !important;
+    text-transform: uppercase;
+    display: inline-block;
+  }
+}
+
+// Light theme adjustment for profile card
+[data-theme="light"]:not([data-sidebar="dark"]):not([data-sidebar="nightblue"]):not([data-sidebar="darkgreen"]):not([data-sidebar="royalblue"]):not([data-sidebar="indigo"]):not([data-sidebar="darkgray"]) {
+  .twocol-user-profile {
+    background: linear-gradient(145deg, #ffffff 0%, #f1f5f9 100%);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+    .twocol-avatar-img {
+      background-color: #ffffff;
+    }
+
+    .twocol-avatar-status {
+      border-color: #ffffff;
+    }
+
+    .twocol-user-name {
+      color: #1e293b !important;
+    }
+
+    .twocol-user-role {
+      background: rgba(0, 188, 212, 0.12) !important;
+      color: #0097a7 !important;
+      border-color: rgba(0, 188, 212, 0.3) !important;
+    }
+  }
+}
+
+// Sidebar Category Titles & Active Submenu links (Two-Column & Stacked sidebars only)
+.sidebar-twocol .sidebar-right,
+.sidebar-stacked .sidebar-right {
+  .menu-title {
+    color: #00bcd4 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.6px !important;
+    text-transform: uppercase !important;
+    margin: 14px 0 10px 4px !important;
+
+    span {
+      color: #00bcd4 !important;
+    }
+  }
+
+  ul li a {
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+
+    &.active {
+      background: #ffffff !important;
+      color: #0c123a !important;
+      font-weight: 700 !important;
+      border-radius: 8px !important;
+      padding: 10px 14px !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+
+      i {
+        color: #0c123a !important;
+      }
+    }
+
+    &:hover:not(.active) {
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: #ffffff !important;
+    }
+  }
+}
+
+// Two-Column Icon Rail Styling
+.sidebar-twocol .sidebar-left .nav-link {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-bottom: 14px !important;
+  color: rgba(255, 255, 255, 0.75) !important;
+  transition: all 0.2s ease !important;
+
+  i {
+    font-size: 18px !important;
+  }
+
+  &.active {
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+  }
+
+  &:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+  }
+}
+
+// Hide full profile card in collapsed mini-sidebar mode
+body.mini-sidebar:not(.expand-menu) {
+  .sidebar-profile-card-container {
+    display: none !important;
+  }
+}
 

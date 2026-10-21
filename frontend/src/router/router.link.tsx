@@ -2093,11 +2093,6 @@ export const layoutRoutes = [
     route: Route,
   },
   {
-    path: routes.HorizontalSingle,
-    element: <LayoutDemo />,
-    route: Route,
-  },
-  {
     path: routes.HorizontalOverlay,
     element: <LayoutDemo />,
     route: Route,

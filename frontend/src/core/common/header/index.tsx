@@ -21,7 +21,6 @@ import type {
   HorizontalMenuItem,
   HorizontalSubMenu,
 } from "../../data/types";
-import HorizontalSignalSidebar from "../horizontal-sidebar/horizontalsingalMenu";
 import { APP_CONFIG } from "../../../environment";
 
 // Helper to get all routes from a menu item recursively
@@ -877,8 +876,6 @@ const Header = React.memo(() => {
                   <i className="ti ti-settings-cog" />
                 </Link>
               </div>
-              <HorizontalSignalSidebar />
-              {/* /Horizontal Single */}
               <div className="d-flex align-items-center">
                 {userRole !== "COMPANY_ADMIN" && (
                   <div className="dropdown ai-dropdown me-2">

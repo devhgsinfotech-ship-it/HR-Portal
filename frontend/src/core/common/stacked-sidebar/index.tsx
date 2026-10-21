@@ -1,10 +1,9 @@
-import { useState } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { TowColData } from '../../data/json/twoColData'
-import ImageWithBasePath from '../imageWithBasePath';
 import { all_routes } from '../../../router/all_routes';
-import React from 'react';
 import { useAppSelector } from '../../data/redux/store';
+import apiClient from "../../../core/utils/apiClient";
 
 const StackedSidebar = () => {
     const user = useAppSelector((state) => state.auth.user) as any;
@@ -13,6 +12,95 @@ const StackedSidebar = () => {
     const Location = useLocation();
     const [showSubMenusTab, SetShowSubMenusTab] = useState(false);
     const [subOpen, setSubopen] = useState<any>("");
+    const [companyLogo, setCompanyLogo] = useState<string | null>(user?.companyLogoUrl || null);
+    const [companyIcon, setCompanyIcon] = useState<string | null>(user?.companyIconUrl || null);
+
+    const getLogoSrc = (logoPath: string | null | undefined) => {
+        if (!logoPath) return "";
+        if (logoPath.startsWith("http://") || logoPath.startsWith("https://") || logoPath.startsWith("blob:")) {
+            return logoPath;
+        }
+        const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+        const cleanPath = logoPath.startsWith("/") ? logoPath : `/${logoPath}`;
+        return `${base}${cleanPath}`;
+    };
+
+    useEffect(() => {
+        if (user?.companyLogoUrl) {
+            setCompanyLogo(user.companyLogoUrl);
+        }
+        if (user?.companyIconUrl) {
+            setCompanyIcon(user.companyIconUrl);
+        }
+    }, [user?.companyLogoUrl, user?.companyIconUrl]);
+
+    useEffect(() => {
+        const handleLogoUpdate = (event: any) => {
+            const newLogo = event?.detail;
+            if (newLogo) setCompanyLogo(newLogo);
+        };
+        const handleIconUpdate = (event: any) => {
+            const newIcon = event?.detail;
+            if (newIcon) setCompanyIcon(newIcon);
+        };
+        window.addEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
+        window.addEventListener("systemLogoUpdated", handleLogoUpdate as EventListener);
+        window.addEventListener("companyIconUpdated", handleIconUpdate as EventListener);
+        return () => {
+            window.removeEventListener("companyLogoUpdated", handleLogoUpdate as EventListener);
+            window.removeEventListener("systemLogoUpdated", handleLogoUpdate as EventListener);
+            window.removeEventListener("companyIconUpdated", handleIconUpdate as EventListener);
+        };
+    }, []);
+
+    useEffect(() => {
+        const fetchLogo = async () => {
+            try {
+                const sub = user?.subdomain;
+                const res = await apiClient.get(`/auth/company-logo${sub ? `?subdomain=${encodeURIComponent(sub)}` : ''}`);
+                if (res.data?.success) {
+                    if (res.data.logoUrl) {
+                        setCompanyLogo(res.data.logoUrl);
+                    }
+                    if (res.data.iconUrl) {
+                        setCompanyIcon(res.data.iconUrl);
+                    }
+                }
+            } catch (err) {
+                // Ignore fallback
+            }
+        };
+        fetchLogo();
+    }, [user?.subdomain]);
+
+    const smallLogoSrc =
+        getLogoSrc(companyIcon || user?.companyIconUrl) ||
+        getLogoSrc(companyLogo || user?.companyLogoUrl) ||
+        "/assets/img/favicon.jfif";
+
+    const getProfilePhotoSrc = useCallback((photoUrl: string | null | undefined) => {
+        if (!photoUrl) return "/assets/img/profiles/avatar-12.jpg";
+        if (photoUrl.startsWith("http://") || photoUrl.startsWith("https://") || photoUrl.startsWith("blob:")) {
+            return photoUrl;
+        }
+        const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+        const cleanPath = photoUrl.startsWith("/") ? photoUrl : `/${photoUrl}`;
+        return `${base}${cleanPath}`;
+    }, []);
+
+    const formatUserRole = useCallback((userRole?: string, designation?: string) => {
+        if (designation) return designation;
+        if (!userRole) return "Employee";
+        switch (userRole.toUpperCase()) {
+            case "SUPER_ADMIN": return "Super Admin";
+            case "COMPANY_ADMIN": return "Company Admin";
+            case "HR": return "HR Manager";
+            case "MANAGER": return "Manager";
+            case "EMPLOYEE": return "Employee";
+            default: return userRole.replace(/_/g, " ");
+        }
+    }, []);
+
     const showTabs = (res:any) => {
         TowColData.forEach((menus:any)=>{
             menus.menu.forEach((mainMenus:any) => {
@@ -22,10 +110,9 @@ const StackedSidebar = () => {
                     mainMenus.showMyTab = false;
                   }
             })
-        }
-
-        )
+        })
     }
+
     const toggleSidebar = (title: any) => {
         localStorage.setItem("menuOpened", title);
         if (title === subOpen) {
@@ -38,8 +125,20 @@ const StackedSidebar = () => {
     <div className="stacked-sidebar" id="stacked-sidebar">
         <div className="sidebar sidebar-stacked" style={{display: 'flex' }}>
             <div className="stacked-mini">
-                <Link to={routes.adminDashboard} className="logo-small">
-                    <ImageWithBasePath src="assets/img/logo-small.svg" alt="Logo" />
+                <Link to={routes.adminDashboard} className="logo-small d-flex align-items-center justify-content-center p-2 mb-3" title="Dashboard">
+                    <img
+                        src={smallLogoSrc}
+                        alt="Company Logo"
+                        style={{ maxHeight: "32px", maxWidth: "32px", objectFit: "contain", borderRadius: "6px" }}
+                        onError={(e) => {
+                            const img = e.target as HTMLImageElement;
+                            if (!img.src.includes("favicon.jfif")) {
+                                img.src = "/assets/img/favicon.jfif";
+                            } else if (!img.src.includes("favicon.png")) {
+                                img.src = "/assets/img/favicon.png";
+                            }
+                        }}
+                    />
                 </Link>
                 <div className="sidebar-left slimscroll">
                     <div className="d-flex align-items-center flex-column">
@@ -82,19 +181,39 @@ const StackedSidebar = () => {
             </div>
             <div className="sidebar-right d-flex justify-content-between flex-column">
                 <div className="sidebar-scroll">
-                    <h6 className="mb-3">Welcome to SmartHR</h6>
-                    <div className="sidebar-profile text-center rounded bg-light p-3 mb-4">
-                        <div className="avatar avatar-lg online mb-3">
-                            <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="Img" className="img-fluid rounded-circle" />
+                    <Link
+                        to={routes.profile}
+                        className="twocol-user-profile text-center d-block text-decoration-none mb-3"
+                        title="View Profile"
+                    >
+                        <div className="position-relative d-inline-block mb-2">
+                            <img
+                                src={getProfilePhotoSrc(user?.profilePhotoUrl)}
+                                alt={user?.name || "User"}
+                                className="twocol-avatar-img rounded-circle shadow-sm"
+                                onError={(e) => {
+                                    (e.target as HTMLImageElement).src = "/assets/img/profiles/avatar-12.jpg";
+                                }}
+                            />
+                            <span className="twocol-avatar-status position-absolute rounded-circle" />
                         </div>
-                        <h6 className="fs-12 fw-normal mb-1">Adrian Herman</h6>
-                        <p className="fs-10">System Admin</p>
-                    </div>
+                        <h6 className="fs-15 fw-bold mb-1 text-truncate twocol-user-name">
+                            {user?.name || "Admin"}
+                        </h6>
+                        <div className="d-flex justify-content-center">
+                            <span className="badge text-truncate twocol-user-role">
+                                {user?.companyRoleName || formatUserRole(user?.role)}
+                            </span>
+                        </div>
+                    </Link>
                     <div className="stack-menu">
                         <div className="nav flex-column align-items-center nav-pills" role="tablist"
                             aria-orientation="vertical">
                             <div className="row g-2">
-                            {TowColData.filter((mainMenu: any) => { const t = (mainMenu.tittle || "").toLowerCase(); return t !== "authentication" && t !== "crm"; }).map((mainMenu, index) => (
+                            {TowColData.filter((mainMenu: any) => { 
+                                const t = (mainMenu.tittle || "").toLowerCase(); 
+                                return t !== "authentication" && t !== "crm" && t !== "pages" && t !== "ui interface" && t !== "content"; 
+                            }).map((mainMenu, index) => (
                                 <React.Fragment key={`main-${index}`}>
                                 {mainMenu.menu.filter((title: any) => {
                                     const valLower = (title.menuValue || "").toLowerCase();
@@ -136,7 +255,10 @@ const StackedSidebar = () => {
                         <div className="tab-content">
                             <div className={`tab-pane ${showSubMenusTab ? 'd-block':'d-none'}`} id="menu-dashboard">
                                 <ul className="stack-submenu">
-                                {TowColData.filter((mainMenu: any) => { const t = (mainMenu.tittle || "").toLowerCase(); return t !== "authentication" && t !== "crm"; }).map((mainMenu, index) => (
+                                {TowColData.filter((mainMenu: any) => { 
+                                    const t = (mainMenu.tittle || "").toLowerCase(); 
+                                    return t !== "authentication" && t !== "crm" && t !== "pages" && t !== "ui interface" && t !== "content"; 
+                                }).map((mainMenu, index) => (
                                     <React.Fragment key={`main-${index}`}>
                                         {mainMenu.menu.filter((title: any) => {
                                             const valLower = (title.menuValue || "").toLowerCase();

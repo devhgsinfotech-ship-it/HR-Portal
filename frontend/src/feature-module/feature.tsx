@@ -17,7 +17,6 @@ import type {
   AppRootState as RootState,
   AppDispatch,
 } from "../core/data/redux/store";
-import HorizontalSignalSidebar from "@/core/common/horizontal-sidebar/horizontalsingalMenu";
 
 const Feature = React.memo(() => {
   const [showLoader, setShowLoader] = useState<boolean>(true);
@@ -90,13 +89,13 @@ const Feature = React.memo(() => {
   // Memoize the body class names
   const bodyClasses = useMemo(() => {
     const classes = [
-      dataLayout === "mini" || dataWidth === "box" ? "mini-sidebar" : "",
+      dataLayout === "mini" ? "mini-sidebar" : "",
       dataLayout === "horizontal" ||
-      dataLayout === "horizontal-single" ||
       dataLayout === "horizontal-overlay" ||
       dataLayout === "horizontal-box"
         ? "menu-horizontal"
         : "",
+      dataLayout === "without-header" ? "layout-without-header" : "",
       miniSidebar && dataLayout !== "mini" ? "mini-sidebar" : "",
       dataWidth === "box" ? "layout-box-mode" : "",
       headerCollapse ? "header-collapse" : "",
@@ -114,6 +113,7 @@ const Feature = React.memo(() => {
     body.classList.remove(
       "mini-sidebar",
       "menu-horizontal",
+      "layout-without-header",
       "layout-box-mode",
       "header-collapse"
     );
@@ -127,6 +127,7 @@ const Feature = React.memo(() => {
       body.classList.remove(
         "mini-sidebar",
         "menu-horizontal",
+        "layout-without-header",
         "layout-box-mode",
         "header-collapse",
         "expand-menu"
@@ -207,11 +208,16 @@ const Feature = React.memo(() => {
       <div className={innerWrapperClass}>
         <ThemeInitializer />
         <Header />
-        <Sidebar />
-        <HorizontalSidebar />
-   
-        <TwoColumnSidebar />
-        <StackedSidebar />
+        {dataLayout !== "horizontal" &&
+          dataLayout !== "horizontal-overlay" &&
+          dataLayout !== "horizontal-box" &&
+          dataLayout !== "twocolumn" &&
+          dataLayout !== "stacked" && <Sidebar />}
+        {(dataLayout === "horizontal" ||
+          dataLayout === "horizontal-overlay" ||
+          dataLayout === "horizontal-box") && <HorizontalSidebar />}
+        {dataLayout === "twocolumn" && <TwoColumnSidebar />}
+        {dataLayout === "stacked" && <StackedSidebar />}
         <Outlet />
         <DeleteModal />
         {!location.pathname.includes("layout") && <ThemeSettings />}

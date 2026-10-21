@@ -20,7 +20,6 @@ const layoutConfig: Record<string, {
   removeTopbarColor?: boolean;
 }> = {
   "/layout-horizontal": { dataLayout: "horizontal", bodyClass: "menu-horizontal" },
-  "/layout-horizontal-single": { dataLayout: "horizontal-single", bodyClass: "" },
   "/layout-horizontal-overlay": { dataLayout: "horizontal-overlay", bodyClass: "" },
   "/layout-horizontal-box": { dataLayout: "horizontal-box", bodyClass: "layout-box-mode", dataWidth: "box" },
   "/layout-horizontal-sidemenu": { dataLayout: "horizontal-sidemenu", bodyClass: "", removeTopbarColor: true },
@@ -93,7 +92,7 @@ const LayoutFeature = React.memo(() => {
     if (layoutConfig[location.pathname]) {
       return layoutConfig[location.pathname];
     }
-    return { dataLayout: dataLayoutRedux || "detached", bodyClass: "" };
+    return { dataLayout: dataLayoutRedux || "default", bodyClass: "" };
   }, [location.pathname, dataLayoutRedux]);
 
   // Memoize the CSS variables string

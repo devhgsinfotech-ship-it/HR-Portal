@@ -25,14 +25,14 @@ export const SidebarDataTest = [
           { label: "Employee Dashboard", link: routes.employeeDashboard, base: routes.employeeDashboard },
           { label: "Deals Dashboard", link: routes.dealsDashboard, base: routes.dealsDashboard },
           { label: "Leads Dashboard", link: routes.leadsDashboard, base: routes.leadsDashboard },
-          { label: "HR Dashboard", link: routes.hrDashboard, base: routes.hrDashboard, newBadge: true },
-          { label: "Payroll Dashboard", link: routes.payrollDashboard, base: routes.payrollDashboard, newBadge: true },
-          { label: "Recruitment Dashboard", link: routes.recruitmentDashboard, base: routes.recruitmentDashboard, newBadge: true },
-          { label: "Attendance Dashboard", link: routes.attendanceDashboard, base: routes.attendanceDashboard, newBadge: true },
-          { label: "Finance Dashboard", link: routes.financeDashboard, base: routes.financeDashboard, newBadge: true },
-          { label: "IT Admin Dashboard", link: routes.itAdminDashboard, base: routes.itAdminDashboard, newBadge: true },
-          { label: "Asset Dashboard", link: routes.assetDashboard, base: routes.assetDashboard, newBadge: true },
-          { label: "Help Desk Dashboard", link: routes.helpDeskDashboard, base: routes.helpDeskDashboard, newBadge: true },
+          { label: "HR Dashboard", link: routes.hrDashboard, base: routes.hrDashboard },
+          { label: "Payroll Dashboard", link: routes.payrollDashboard, base: routes.payrollDashboard },
+          { label: "Recruitment Dashboard", link: routes.recruitmentDashboard, base: routes.recruitmentDashboard },
+          { label: "Attendance Dashboard", link: routes.attendanceDashboard, base: routes.attendanceDashboard },
+          { label: "Finance Dashboard", link: routes.financeDashboard, base: routes.financeDashboard },
+          { label: "IT Admin Dashboard", link: routes.itAdminDashboard, base: routes.itAdminDashboard },
+          { label: "Asset Dashboard", link: routes.assetDashboard, base: routes.assetDashboard },
+          { label: "Help Desk Dashboard", link: routes.helpDeskDashboard, base: routes.helpDeskDashboard },
 
         ],
       },
@@ -215,14 +215,12 @@ export const SidebarDataTest = [
             label: 'Tenant Usage Metrics',
             link: routes.tenantUsageMetrics,
             base: routes.tenantUsageMetrics,
-            newBadge: true,
           },
           {
             label: 'Tenant Support Tickets',
             link: routes.tenantSupportTickets,
             base: routes.tenantSupportTickets,
             base2: routes.tenentTicketDetails,
-            newBadge: true,
           },
           {
             label: 'Tickets',
@@ -237,7 +235,6 @@ export const SidebarDataTest = [
             base3: routes.escalationRules,
             base4: routes.ticketAutomation,
             base5: routes.ticketReports,
-            newBadge: true,
             submenuItems: [
               {
                 label: 'Agents ',
@@ -519,7 +516,6 @@ export const SidebarDataTest = [
             submenu: false,
             showSubRoute: false,
             base: routes.ticketAutomation,
-            newBadge: true,
           },
           {
             label: 'Ticket Reports',
@@ -527,7 +523,6 @@ export const SidebarDataTest = [
             submenu: false,
             showSubRoute: false,
             base: routes.ticketReports,
-            newBadge: true,
           },
         ],
       },
@@ -619,7 +614,6 @@ export const SidebarDataTest = [
             link: routes.shiftSwapRequests,
             base: 'shift-swap-requests',
             customSubmenuTwo: false,
-            newBadge: true,
           },
           {
             label: 'Overtime',
@@ -632,14 +626,12 @@ export const SidebarDataTest = [
             link: routes.holidayCalendar,
             base: 'holiday-calendar',
             customSubmenuTwo: false,
-            newBadge: true,
           },
           {
             label: 'WFH Management',
             link: routes.wfhManagement,
             base: 'wfh-management',
             customSubmenuTwo: false,
-            newBadge: true,
           },
         ],
       },
@@ -691,8 +683,8 @@ export const SidebarDataTest = [
           { label: 'Training List', link: routes.trainingList, base: 'lists' },
           { label: 'Trainers', link: routes.trainers, base: 'trainer' },
           { label: 'Training Type', link: routes.trainingType, base: 'types' },
-          { label: 'Certification Tracking', link: routes.certificationTracking, base: 'certificationTracking', newBadge: true },
-          { label: 'Learning Analytics', link: routes.learningAnalytics, base: 'learningAnalytics', newBadge: true },
+          { label: 'Certification Tracking', link: routes.certificationTracking, base: 'certificationTracking' },
+          { label: 'Learning Analytics', link: routes.learningAnalytics, base: 'learningAnalytics' },
         ],
       },
       {
@@ -704,7 +696,6 @@ export const SidebarDataTest = [
         base: 'Probation Management',
         materialicons: 'group_add',
         submenuItems: [],
-        newBadge: true,
       },
       {
         label: 'Notice Period Tracker',
@@ -715,7 +706,6 @@ export const SidebarDataTest = [
         base: 'Notice Period Tracker',
         materialicons: 'group_add',
         submenuItems: [],
-        newBadge: true,
       },
       {
         label: 'Promotion',
@@ -796,7 +786,6 @@ export const SidebarDataTest = [
         base: 'Resume Parsing',
         materialicons: 'account_balance_wallet',
         submenuItems: [],
-        newBadge: true,
       },
       {
         label: 'Campus Hiring',
@@ -807,7 +796,6 @@ export const SidebarDataTest = [
         base: 'Campus Hiring',
         materialicons: 'account_balance_wallet',
         submenuItems: [],
-        newBadge: true,
       },
 
     ],
