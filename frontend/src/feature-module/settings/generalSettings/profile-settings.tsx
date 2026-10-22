@@ -3,13 +3,14 @@ import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 
 const resolveImageUrl = (url: string | null | undefined) => {
   if (!url) return null;
   if (url.startsWith("blob:") || url.startsWith("http://") || url.startsWith("https://")) {
     return url;
   }
-  const backendBase = apiClient.defaults.baseURL || "http://localhost:5000";
+  const backendBase = apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl();
   return `${backendBase.replace(/\/$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 

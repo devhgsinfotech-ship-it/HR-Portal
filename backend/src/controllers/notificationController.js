@@ -74,6 +74,18 @@ async function getNotifications(req, res) {
         case 'JOB_APPLICATION_RECEIVED':
           targetUrl = '/candidates';
           break;
+        case 'PROMOTION':
+          targetUrl = '/promotion';
+          break;
+        case 'TERMINATION':
+          targetUrl = '/termination';
+          break;
+        case 'RESIGNATION':
+          targetUrl = '/resignation';
+          break;
+        case 'PROBATION':
+          targetUrl = '/probation-management';
+          break;
         default:
           targetUrl = null;
       }

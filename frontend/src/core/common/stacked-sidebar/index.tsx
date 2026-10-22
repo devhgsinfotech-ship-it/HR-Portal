@@ -4,6 +4,7 @@ import { TowColData } from '../../data/json/twoColData'
 import { all_routes } from '../../../router/all_routes';
 import { useAppSelector } from '../../data/redux/store';
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 
 const StackedSidebar = () => {
     const user = useAppSelector((state) => state.auth.user) as any;
@@ -20,7 +21,7 @@ const StackedSidebar = () => {
         if (logoPath.startsWith("http://") || logoPath.startsWith("https://") || logoPath.startsWith("blob:")) {
             return logoPath;
         }
-        const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+        const base = (apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()).replace(/\/+$/, "");
         const cleanPath = logoPath.startsWith("/") ? logoPath : `/${logoPath}`;
         return `${base}${cleanPath}`;
     };
@@ -83,7 +84,7 @@ const StackedSidebar = () => {
         if (photoUrl.startsWith("http://") || photoUrl.startsWith("https://") || photoUrl.startsWith("blob:")) {
             return photoUrl;
         }
-        const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+        const base = (apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()).replace(/\/+$/, "");
         const cleanPath = photoUrl.startsWith("/") ? photoUrl : `/${photoUrl}`;
         return `${base}${cleanPath}`;
     }, []);

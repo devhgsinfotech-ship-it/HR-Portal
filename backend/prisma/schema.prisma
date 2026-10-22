@@ -53,6 +53,9 @@ model Company {
   seoSetting       SeoSetting?
   bannedIps        BannedIp[]
   backupRecords    BackupRecord[]
+  promotions       Promotion[]
+  resignations     Resignation[]
+  terminations     Termination[]
 
   @@map("companies")
 }
@@ -191,6 +194,18 @@ model Employee {
   spouseEmployed               String?
   spouseName                   String?
   companyRoleId                Int?
+
+  // Lifecycle Management Fields (Phase 1)
+  probationDurationMonths      Int?
+  probationEndDate             DateTime?
+  probationStatus              String?             // ON_PROBATION, CONFIRMED, EXTENDED, FAILED
+  noticePeriodDays             Int?
+  noticeStartDate              DateTime?
+  noticeEndDate                DateTime?
+  noticeStatus                 String?             // SERVING, COMPLETED, WAIVED
+  exitDate                     DateTime?
+  exitType                     String?             // RESIGNATION, TERMINATION, RETIREMENT
+
   announcementsCreated         Announcement[]      @relation("AnnouncementsCreated")
   assetAssignments             AssetAssignment[]
   attendanceRecords            AttendanceRecord[]
@@ -226,6 +241,9 @@ model Employee {
   tasksAssigned                Task[]              @relation("TaskAssignee")
   timeLogs                     TimeLog[]
   leavePolicies                LeavePolicy[]       @relation("EmployeeToLeavePolicy")
+  promotions                   Promotion[]
+  resignations                 Resignation[]
+  terminations                 Termination[]
 
   @@index([companyRoleId], map: "employees_companyRoleId_fkey")
   @@index([departmentId], map: "employees_departmentId_fkey")
@@ -236,29 +254,34 @@ model Employee {
 }
 
 model Department {
-  id          Int          @id @default(autoincrement())
-  companyId   Int
-  name        String
-  description String?
-  headId      Int?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employees   Employee[]
-  jobPostings JobPosting[]
+  id           Int           @id @default(autoincrement())
+  companyId    Int
+  name         String
+  description  String?
+  headId       Int?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees    Employee[]
+  jobPostings  JobPosting[]
+  promotions   Promotion[]
+  resignations Resignation[]
+  terminations Termination[]
 
   @@unique([companyId, name])
   @@map("departments")
 }
 
 model Designation {
-  id          Int        @id @default(autoincrement())
-  companyId   Int
-  name        String
-  description String?
-  createdAt   DateTime   @default(now())
-  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employees   Employee[]
+  id             Int         @id @default(autoincrement())
+  companyId      Int
+  name           String
+  description    String?
+  createdAt      DateTime    @default(now())
+  company        Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees      Employee[]
+  promotionsFrom Promotion[] @relation("PrevDesignation")
+  promotionsTo   Promotion[] @relation("NewDesignation")
 
   @@unique([companyId, name])
   @@map("designations")
@@ -1231,6 +1254,10 @@ enum NotificationType {
   ASSET_RETURN_REQUESTED
   DOCUMENT_VERIFIED
   JOB_APPLICATION_RECEIVED
+  PROMOTION
+  TERMINATION
+  RESIGNATION
+  PROBATION
 }
 
 enum ProjectStatus {
@@ -1450,4 +1477,86 @@ model BackupRecord {
   @@index([companyId])
   @@index([backupType])
   @@map("backup_records")
+}
+
+// ==========================================
+// Phase 1: Employee Lifecycle Models
+// ==========================================
+
+model Promotion {
+  id                    Int          @id @default(autoincrement())
+  companyId             Int
+  employeeId            Int
+  departmentId          Int?
+  previousDesignationId Int?
+  newDesignationId      Int
+  promotionDate         DateTime
+  previousSalary        Float?
+  newSalary             Float?
+  description           String?      @db.Text
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  company               Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee              Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  department            Department?  @relation(fields: [departmentId], references: [id])
+  previousDesignation   Designation? @relation("PrevDesignation", fields: [previousDesignationId], references: [id])
+  newDesignation        Designation  @relation("NewDesignation", fields: [newDesignationId], references: [id])
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([departmentId])
+  @@index([previousDesignationId])
+  @@index([newDesignationId])
+  @@map("promotions")
+}
+
+model Resignation {
+  id              Int          @id @default(autoincrement())
+  companyId       Int
+  employeeId      Int
+  departmentId    Int?
+  noticeDate      DateTime
+  resignationDate DateTime
+  reason          String?      @db.Text
+  status          String       @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvedById    Int?
+  approvedAt      DateTime?
+  rejectionReason String?      @db.Text
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee        Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  department      Department?  @relation(fields: [departmentId], references: [id])
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([departmentId])
+  @@map("resignations")
+}
+
+model Termination {
+  id              Int          @id @default(autoincrement())
+  companyId       Int
+  employeeId      Int
+  departmentId    Int?
+  terminationType String       // e.g. "Performance", "Misconduct", "Redundancy", "Other"
+  noticeDate      DateTime
+  terminationDate DateTime
+  reason          String?      @db.Text
+  status          String       @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvedById    Int?
+  approvedAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee        Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  department      Department?  @relation(fields: [departmentId], references: [id])
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([departmentId])
+  @@map("terminations")
 }

@@ -1,6 +1,7 @@
 // frontend/src/core/utils/dynamicSeo.ts
 import axios from "axios";
 import apiClient from "./apiClient";
+import { APP_CONFIG } from "../../environment";
 
 export interface SeoData {
   id?: number;
@@ -19,7 +20,7 @@ export const resolveImageUrl = (url: string | null | undefined): string | null =
   if (url.startsWith("blob:") || url.startsWith("http://") || url.startsWith("https://")) {
     return url;
   }
-  const backendBase = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+  const backendBase = (apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()).replace(/\/+$/, "");
   const clean = url.startsWith("/") ? url : `/${url}`;
   return `${backendBase}${clean}`;
 };
@@ -102,7 +103,7 @@ export async function fetchAndApplyDynamicSeo(): Promise<SeoData | null> {
     }
 
     if (!seoData) {
-      const backendBase = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+      const backendBase = (apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()).replace(/\/+$/, "");
       const pubRes = await axios.get(`${backendBase}/seo-settings/public`).catch(() => null);
       if (pubRes?.data?.success && pubRes.data.seo) {
         seoData = pubRes.data.seo;

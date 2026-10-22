@@ -368,7 +368,7 @@ const Register = () => {
                       <div className="avatar avatar-lg rounded overflow-hidden bg-white border d-flex align-items-center justify-content-center" style={{ width: "50px", height: "50px" }}>
                         {logoUrl ? (
                           <img
-                            src={logoUrl.startsWith("http") ? logoUrl : `${apiClient.defaults.baseURL || "http://localhost:5000"}${logoUrl}`}
+                            src={logoUrl.startsWith("http") ? logoUrl : `${apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()}${logoUrl}`}
                             alt="Company Logo Preview"
                             className="img-fluid"
                             style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}

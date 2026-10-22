@@ -571,10 +571,8 @@ async function acceptInvite(req, res) {
             console.warn('Secondary cleanup error ignored:', secondaryErr.message);
         }
 
-        // Auto-login & Return JWT token and Onboarding redirect URL based on company subdomain
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_DOMAIN === 'aaups.com';
-        const baseDomain = process.env.FRONTEND_DOMAIN || (isProduction ? 'aaups.com' : 'localhost:3000');
-        const protocol = baseDomain.includes('localhost') ? 'http' : 'https';
+        // Auto-login & Return JWT token and Onboarding redirect URL
+        const frontendBaseUrl = getDynamicFrontendUrl(req);
 
         const updatedUser = await prisma.user.findUnique({
             where: { id: targetUserId },
@@ -602,7 +600,7 @@ async function acceptInvite(req, res) {
             { expiresIn: '7d' }
         );
 
-        const redirectUrl = `${protocol}://${baseDomain}/onboarding`;
+        const redirectUrl = `${frontendBaseUrl}/onboarding`;
 
         return res.json({
             success: true,

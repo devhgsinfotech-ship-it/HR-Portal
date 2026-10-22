@@ -58,6 +58,18 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
 
+  // Employee Lifecycle routes (Probation, Notice, Promotion, Resignation, Termination)
+  if (
+    p.includes("probation") ||
+    p.includes("notice-period") ||
+    p.includes("notice period") ||
+    p.includes("promotion") ||
+    p.includes("resignation") ||
+    p.includes("termination")
+  ) {
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
   // 3. Asset Categories (Admin/HR Configuration — Exclude Employee)
   if (p.includes("category") || p.includes("categories")) {
     return ["COMPANY_ADMIN", "HR", "MANAGER"];

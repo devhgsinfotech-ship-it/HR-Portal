@@ -11,6 +11,7 @@ import { useAppSelector } from "../../data/redux/store";
 import type { AppDispatch } from "../../data/redux/store";
 import { updateUser } from "../../data/redux/authSlice";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 
 // Define flexible types for sidebar data
 interface SidebarMenuItem {
@@ -140,6 +141,18 @@ const getRouteRoles = (path: string | undefined): Role[] => {
   
   if (p === "/payslip" || p.startsWith("/payslip/")) {
     return ["COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
+  // Employee Lifecycle routes (Probation, Notice, Promotion, Resignation, Termination)
+  if (
+    p.includes("probation") ||
+    p.includes("notice-period") ||
+    p.includes("notice period") ||
+    p.includes("promotion") ||
+    p.includes("resignation") ||
+    p.includes("termination")
+  ) {
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
 
   if (p.includes("category") || p.includes("categories")) {
@@ -405,7 +418,7 @@ const Sidebar = React.memo(() => {
     if (logoPath.startsWith("http://") || logoPath.startsWith("https://") || logoPath.startsWith("blob:")) {
       return logoPath;
     }
-    const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+    const base = (apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()).replace(/\/+$/, "");
     const cleanPath = logoPath.startsWith("/") ? logoPath : `/${logoPath}`;
     return `${base}${cleanPath}`;
   };
@@ -415,7 +428,7 @@ const Sidebar = React.memo(() => {
     if (photoUrl.startsWith("http://") || photoUrl.startsWith("https://") || photoUrl.startsWith("blob:")) {
       return photoUrl;
     }
-    const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+    const base = (apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()).replace(/\/+$/, "");
     const cleanPath = photoUrl.startsWith("/") ? photoUrl : `/${photoUrl}`;
     return `${base}${cleanPath}`;
   }, []);

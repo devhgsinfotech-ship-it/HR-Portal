@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const emailService = require('../utils/emailService');
 const cache = require('../config/cache');
 const { generateEmployeeCode, autoAssignEmployeeDefaults } = require('../utils/codeGenerator');
-const { getDynamicFrontendUrl } = require('../utils/urlHelper');
+const { getDynamicFrontendUrl, getDynamicBackendUrl } = require('../utils/urlHelper');
 const { seedDefaultCompanyRoles } = require('../utils/seedDefaultRoles');
 
 function getCompanyPrefix(companyName) {
@@ -231,7 +231,8 @@ async function createEmployee(req, res) {
 
         // 4. Send Email (non-blocking)
         const workspaceUrl = getDynamicFrontendUrl(req);
-        const logoUrl = company.logoUrl ? (company.logoUrl.startsWith('http') ? company.logoUrl : `https://api.aaups.com${company.logoUrl}`) : null;
+        const backendUrl = getDynamicBackendUrl(req);
+        const logoUrl = company.logoUrl ? (company.logoUrl.startsWith('http') ? company.logoUrl : `${backendUrl}${company.logoUrl}`) : null;
         emailService.sendEmployeeInviteEmail(
             email,
             inviteToken,
@@ -1197,7 +1198,8 @@ async function resendInvite(req, res) {
         // Send email
         const company = employee.user.company;
         const workspaceUrl = getDynamicFrontendUrl(req);
-        const logoUrl = company.logoUrl ? (company.logoUrl.startsWith('http') ? company.logoUrl : `https://api.aaups.com${company.logoUrl}`) : null;
+        const backendUrl = getDynamicBackendUrl(req);
+        const logoUrl = company.logoUrl ? (company.logoUrl.startsWith('http') ? company.logoUrl : `${backendUrl}${company.logoUrl}`) : null;
 
         emailService.sendEmployeeInviteEmail(
             employee.user.email,
