@@ -1,120 +1,209 @@
+import React, { useState, useEffect, useCallback } from "react";
+import { useSelector } from "react-redux";
 import CollapseHeader from "@/core/common/collapse-header/collapse-header";
-import ImageWithBasePath from "@/core/common/imageWithBasePath";
 import Table from "../../../core/common/dataTable/index";
 import { Link } from "react-router";
 import CommonFooter from "@/core/common/commonFooter/footer";
-import { noticePeriodTrackerData } from "@/core/data/json/noticePeriodTrackerData";
-import PredefinedDatePicker from "@/core/common/datePicker";
 import { all_routes } from "@/router/all_routes";
 import NoticePeriodTrackerModal from "./modal/noticePeriodTrackerModal";
+import EmployeeAvatar from "@/core/common/employeeAvatar";
+import apiClient from "@/core/utils/apiClient";
+import { message, Spin } from "antd";
 
-
-interface NoticePeriodTrackerData {
-    EmpId: string;
-    Image1: string;
+interface NoticePeriodRecord {
+    id: number;
+    employeeCode: string;
     name: string;
-    Designation: string;
-    Start_Date: string;
-    End_Days: string;
-    Total_Day: string;
-    Completed: string;
-    Remaining: string;
-    Status: string;
+    profilePhotoUrl: string | null;
+    department: string;
+    designation: string;
+    startDate: string | null;
+    endDate: string | null;
+    totalDays: number;
+    completedDays: number;
+    remainingDays: number;
+    status: string;
+    exitType: string;
 }
+
+
 const NoticePeriodTracker = () => {
-    const data: NoticePeriodTrackerData[] = noticePeriodTrackerData;
+    const user = useSelector((state: any) => state.auth?.user);
+    const isEmployee = user?.role === 'EMPLOYEE';
+
+    const [data, setData] = useState<NoticePeriodRecord[]>([]);
+    const [metadata, setMetadata] = useState<{ employees: any[]; departments: any[]; designations: any[] }>({
+        employees: [],
+        departments: [],
+        designations: []
+    });
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [selectedStatus, setSelectedStatus] = useState<string>("All");
+    const [searchText, setSearchText] = useState<string>("");
+    const [selectedRecord, setSelectedRecord] = useState<NoticePeriodRecord | null>(null);
+
+    const fetchNoticePeriods = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            const params: any = {};
+            if (selectedStatus && selectedStatus !== "All") params.status = selectedStatus;
+            if (searchText) params.search = searchText;
+
+            const res = await apiClient.get('/api/lifecycle/notice-periods', { params });
+            setData(res.data || []);
+        } catch (error: any) {
+            console.error("Failed to load notice periods:", error);
+            message.error("Failed to load notice period records");
+        } finally {
+            setIsLoading(false);
+        }
+    }, [selectedStatus, searchText]);
+
+    const fetchMetadata = async () => {
+        try {
+            const res = await apiClient.get('/api/lifecycle/metadata');
+            setMetadata(res.data);
+        } catch (error) {
+            console.error("Failed to load metadata:", error);
+        }
+    };
+
+    useEffect(() => {
+        fetchMetadata();
+    }, []);
+
+    useEffect(() => {
+        fetchNoticePeriods();
+    }, [fetchNoticePeriods]);
+
     const columns = [
         {
             title: "Emp Id",
-            dataIndex: "EmpId",
-            render: (text: string, _record: NoticePeriodTrackerData) => (
-                <Link to="#" className="link-default" data-bs-toggle="offcanvas" data-bs-target="#probation_details">
-                    {text}
-                </Link>
-            ),
-            sorter: (a: NoticePeriodTrackerData, b: NoticePeriodTrackerData) => a.EmpId.length - b.EmpId.length,
-        },
-        {
-            title: "Name",
-            dataIndex: "name",
-            render: (_text: string, record: NoticePeriodTrackerData) => (
-                <div className="d-flex align-items-center file-name-icon">
-                    <Link to="#" className="avatar avatar-md border avatar-rounded">
-                        <ImageWithBasePath
-                            src={`assets/img/users/${record.Image1}`}
-                            className="img-fluid"
-                            alt={`${record.name} logo`}
-                        />
-                    </Link>
-                    <div className="ms-2">
-                        <h6 className="fw-medium">
-                            <Link to="#">{record.name}</Link>
-                        </h6>
-                    </div>
-                </div>
-            ),
-            sorter: (a: NoticePeriodTrackerData, b: NoticePeriodTrackerData) => a.name.length - b.name.length,
-        },
-        {
-            title: "Designation",
-            dataIndex: "Designation",
-            sorter: (a: NoticePeriodTrackerData, b: NoticePeriodTrackerData) => a.Designation.length - b.Designation.length,
-        },
-        {
-            title: "Start Date",
-            dataIndex: "Start_Date",
-            sorter: (a: NoticePeriodTrackerData, b: NoticePeriodTrackerData) => a.Start_Date.length - b.Start_Date.length,
-        },
-        {
-            title: "End Days",
-            dataIndex: "End_Days",
-            sorter: (a: NoticePeriodTrackerData, b: NoticePeriodTrackerData) => a.End_Days.length - b.End_Days.length,
-        },
-        {
-            title: "Total Day",
-            dataIndex: "Total_Day",
-            sorter: (a: NoticePeriodTrackerData, b: NoticePeriodTrackerData) => a.Total_Day.length - b.Total_Day.length,
-        },
-        {
-            title: "Completed",
-            dataIndex: "Completed",
-            sorter: (a: NoticePeriodTrackerData, b: NoticePeriodTrackerData) => a.Completed.length - b.Completed.length,
-        },
-        {
-            title: "Remaining",
-            dataIndex: "Remaining",
-            sorter: (a: NoticePeriodTrackerData, b: NoticePeriodTrackerData) => a.Remaining.length - b.Remaining.length,
-        },
-        {
-            title: "Status",
-            dataIndex: "Status",
-            render: (text: NoticePeriodTrackerData['Status'], _record: NoticePeriodTrackerData) => (
+            dataIndex: "employeeCode",
+            render: (text: string, record: NoticePeriodRecord) => (
                 <Link
                     to="#"
-                    className={`badge ${text === 'Completed' ? 'badge-soft-success' : text === 'Closing Soon' ? 'badge-soft-purple' : text === 'Active' ? 'badge-pink-transparent' : 'badge-soft-danger'} d-inline-flex align-items-center badge-xs`}
+                    className="link-default fw-medium"
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#notice_details"
+                    onClick={() => setSelectedRecord(record)}
                 >
                     {text}
                 </Link>
             ),
-            sorter: (a: NoticePeriodTrackerData, b: NoticePeriodTrackerData) => a.Status.length - b.Status.length,
+            sorter: (a: NoticePeriodRecord, b: NoticePeriodRecord) => a.employeeCode.localeCompare(b.employeeCode),
         },
         {
-            title: "",
-            dataIndex: "action",
-            render: (_text: string, record: any) => (
-                <div className="action-icon d-inline-flex">
+            title: "Employee",
+            dataIndex: "name",
+            render: (_text: string, record: NoticePeriodRecord) => (
+                <div className="d-flex align-items-center file-name-icon">
                     <Link
                         to="#"
-                        className="me-2"
+                        className="flex-shrink-0"
                         data-bs-toggle="offcanvas"
-                        data-bs-target="#probation_details"
+                        data-bs-target="#notice_details"
+                        onClick={() => setSelectedRecord(record)}
+                    >
+                        <EmployeeAvatar
+                            url={record.profilePhotoUrl}
+                            name={record.name}
+                            size={38}
+                        />
+                    </Link>
+                    <div className="ms-2">
+                        <h6 className="fw-medium mb-0">
+                            <Link
+                                to="#"
+                                data-bs-toggle="offcanvas"
+                                data-bs-target="#notice_details"
+                                onClick={() => setSelectedRecord(record)}
+                            >
+                                {record.name}
+                            </Link>
+                        </h6>
+                        <span className="fs-12 text-muted">{record.department}</span>
+                    </div>
+                </div>
+            ),
+            sorter: (a: NoticePeriodRecord, b: NoticePeriodRecord) => a.name.localeCompare(b.name),
+        },
+        {
+            title: "Designation",
+            dataIndex: "designation",
+            sorter: (a: NoticePeriodRecord, b: NoticePeriodRecord) => a.designation.localeCompare(b.designation),
+        },
+        {
+            title: "Start Date",
+            dataIndex: "startDate",
+            render: (text: string | null) => text || "—",
+            sorter: (a: NoticePeriodRecord, b: NoticePeriodRecord) => (a.startDate || "").localeCompare(b.startDate || ""),
+        },
+        {
+            title: "End Date",
+            dataIndex: "endDate",
+            render: (text: string | null) => text || "—",
+            sorter: (a: NoticePeriodRecord, b: NoticePeriodRecord) => (a.endDate || "").localeCompare(b.endDate || ""),
+        },
+        {
+            title: "Total Days",
+            dataIndex: "totalDays",
+            render: (text: number) => `${text} Days`,
+            sorter: (a: NoticePeriodRecord, b: NoticePeriodRecord) => a.totalDays - b.totalDays,
+        },
+        {
+            title: "Completed",
+            dataIndex: "completedDays",
+            render: (text: number) => `${text} Days`,
+            sorter: (a: NoticePeriodRecord, b: NoticePeriodRecord) => a.completedDays - b.completedDays,
+        },
+        {
+            title: "Remaining",
+            dataIndex: "remainingDays",
+            render: (text: number) => (
+                <span className={text <= 7 && text > 0 ? "text-danger fw-semibold" : ""}>
+                    {text} Days
+                </span>
+            ),
+            sorter: (a: NoticePeriodRecord, b: NoticePeriodRecord) => a.remainingDays - b.remainingDays,
+        },
+        {
+            title: "Status",
+            dataIndex: "status",
+            render: (text: string) => {
+                const badgeClass =
+                    text === "Completed" ? "badge-soft-success" :
+                    text === "Closing Soon" ? "badge-soft-danger" :
+                    text === "Waived" ? "badge-soft-info" :
+                    "badge-soft-warning";
+                return (
+                    <span className={`badge ${badgeClass} d-inline-flex align-items-center badge-xs`}>
+                        {text}
+                    </span>
+                );
+            },
+            sorter: (a: NoticePeriodRecord, b: NoticePeriodRecord) => a.status.localeCompare(b.status),
+        },
+        {
+            title: "Actions",
+            dataIndex: "action",
+            render: (_text: string, record: NoticePeriodRecord) => (
+                <div className="action-icon d-inline-flex">
+                    <button
+                        type="button"
+                        className="btn btn-sm btn-icon btn-light"
+                        title="View Notice Details"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#notice_details"
+                        onClick={() => setSelectedRecord(record)}
                     >
                         <i className="ti ti-eye" />
-                    </Link>
+                    </button>
                 </div>
             ),
         },
-    ]
+    ];
+
     return (
         <>
             {/* Page Wrapper */}
@@ -138,139 +227,117 @@ const NoticePeriodTracker = () => {
                                 </ol>
                             </nav>
                         </div>
-                        <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
+                        <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
                             <div className="mb-2 me-2">
-                                <div className="dropdown">
-                                    <Link
-                                        to="#"
-                                        className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                    >
-                                        <i className="ti ti-file-export me-1" />
-                                        Export
-                                    </Link>
-                                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                                        <li>
-                                            <Link to="#" className="dropdown-item rounded-1">
-                                                <i className="ti ti-file-type-pdf me-1" />
-                                                Export as PDF
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link to="#" className="dropdown-item rounded-1">
-                                                <i className="ti ti-file-type-xls me-1" />
-                                                Export as Excel{" "}
-                                            </Link>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div className="mb-2">
-                                <Link
-                                    to="#"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#add_modal"
-                                    className="btn btn-primary d-flex align-items-center"
+                                <button
+                                    type="button"
+                                    className="btn btn-white d-inline-flex align-items-center border"
+                                    onClick={fetchNoticePeriods}
+                                    title="Refresh Data"
                                 >
-                                    <i className="ti ti-circle-plus me-2" />
-                                    Add New Employee
-                                </Link>
+                                    <i className="ti ti-refresh me-1" />
+                                    Refresh
+                                </button>
                             </div>
+                            {!isEmployee && (
+                                <div className="mb-2">
+                                    <button
+                                        type="button"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#add_notice_modal"
+                                        className="btn btn-primary d-flex align-items-center"
+                                    >
+                                        <i className="ti ti-circle-plus me-2" />
+                                        Start Notice Period
+                                    </button>
+                                </div>
+                            )}
                             <div className="ms-2 head-icons">
                                 <CollapseHeader />
                             </div>
                         </div>
                     </div>
                     {/* /Breadcrumb */}
+
                     <div className="card">
                         <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-                            <h5>Notice Period Tracker</h5>
-                            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-                                <div className="me-3 input-icon position-relative">
-                                    <PredefinedDatePicker />
+                            <h5 className="mb-0">Employees on Notice ({data.length})</h5>
+                            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap gap-2">
+                                {/* Search input */}
+                                <div className="position-relative">
+                                    <input
+                                        type="text"
+                                        className="form-control form-control-sm"
+                                        placeholder="Search employee / code..."
+                                        value={searchText}
+                                        onChange={(e) => setSearchText(e.target.value)}
+                                        style={{ width: "220px" }}
+                                    />
+                                    {searchText && (
+                                        <button
+                                            type="button"
+                                            className="btn-close position-absolute end-0 top-50 translate-middle-y me-2"
+                                            style={{ fontSize: "10px" }}
+                                            onClick={() => setSearchText("")}
+                                        />
+                                    )}
                                 </div>
-                                <div className="dropdown me-3">
-                                    <Link
-                                        to="#"
-                                        className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                    >
-                                        Designation
-                                    </Link>
-                                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                                        <li>
-                                            <Link to="#" className="dropdown-item rounded-1">
-                                                Accountant
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link to="#" className="dropdown-item rounded-1">
-                                                App Developer
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link to="#" className="dropdown-item rounded-1">
-                                                Technician
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link to="#" className="dropdown-item rounded-1">
-                                                Web Developer
-                                            </Link>
-                                        </li>
-                                    </ul>
-                                </div>
+
+                                {/* Status Filter */}
                                 <div className="dropdown">
-                                    <Link
-                                        to="#"
-                                        className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
+                                    <button
+                                        type="button"
+                                        className="dropdown-toggle btn btn-white btn-sm border d-inline-flex align-items-center"
                                         data-bs-toggle="dropdown"
                                     >
-                                        Sort By : Last 7 Days
-                                    </Link>
-                                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                                        <li>
-                                            <Link to="#" className="dropdown-item rounded-1">
-                                                Recently Added
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link to="#" className="dropdown-item rounded-1">
-                                                Ascending
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link to="#" className="dropdown-item rounded-1">
-                                                Descending
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link to="#" className="dropdown-item rounded-1">
-                                                Last Month
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link to="#" className="dropdown-item rounded-1">
-                                                Last 7 Days
-                                            </Link>
-                                        </li>
+                                        Status: {selectedStatus}
+                                    </button>
+                                    <ul className="dropdown-menu dropdown-menu-end p-2">
+                                        {["All", "Active", "Closing Soon", "Completed", "Waived"].map((st) => (
+                                            <li key={st}>
+                                                <button
+                                                    type="button"
+                                                    className={`dropdown-item rounded-1 ${selectedStatus === st ? "active" : ""}`}
+                                                    onClick={() => setSelectedStatus(st)}
+                                                >
+                                                    {st}
+                                                </button>
+                                            </li>
+                                        ))}
                                     </ul>
                                 </div>
                             </div>
                         </div>
 
-
                         <div className="card-body p-0">
-                            <Table dataSource={data} columns={columns} Selection={true} />
+                            {isLoading ? (
+                                <div className="text-center py-5">
+                                    <Spin size="large" />
+                                    <p className="mt-2 text-muted">Loading notice period records...</p>
+                                </div>
+                            ) : data.length === 0 ? (
+                                <div className="text-center py-5 text-muted">
+                                    <i className="ti ti-hourglass-empty fs-36 text-gray-4 d-block mb-2" />
+                                    <p className="mb-1 fw-medium">No employees currently serving notice</p>
+                                    <small>Employees who submit a resignation or are in notice will appear here automatically</small>
+                                </div>
+                            ) : (
+                                <Table dataSource={data} columns={columns} Selection={false} />
+                            )}
                         </div>
                     </div>
                 </div>
                 <CommonFooter />
             </div>
             {/* /Page Wrapper */}
-            <NoticePeriodTrackerModal />
-        </>
-    )
-}
 
-export default NoticePeriodTracker
+            <NoticePeriodTrackerModal
+                selectedRecord={selectedRecord}
+                metadata={metadata}
+                onSuccess={fetchNoticePeriods}
+            />
+        </>
+    );
+};
+
+export default NoticePeriodTracker;

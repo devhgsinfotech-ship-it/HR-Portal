@@ -52,6 +52,31 @@ function getDynamicFrontendUrl(req) {
     return `http://${domain}${port}`;
 }
 
+/**
+ * Dynamically resolves the Backend Base URL for both Local and Production environments.
+ * 
+ * @param {Object} [req] - Express request object
+ * @returns {string} Dynamic Backend Base URL (e.g. 'http://localhost:5000' or 'https://api.aaups.com')
+ */
+function getDynamicBackendUrl(req) {
+    if (process.env.BACKEND_URL) {
+        return process.env.BACKEND_URL.replace(/\/$/, '');
+    }
+
+    if (req && req.get) {
+        const protocol = (req.headers && req.headers['x-forwarded-proto']) || req.protocol || 'http';
+        const host = req.get('host') || '';
+        if (host) {
+            return `${protocol}://${host}`.replace(/\/$/, '');
+        }
+    }
+
+    const domain = process.env.BACKEND_DOMAIN || 'localhost';
+    const port = process.env.PORT ? `:${process.env.PORT}` : (process.env.NODE_ENV === 'production' ? '' : ':5000');
+    return `http://${domain}${port}`;
+}
+
 module.exports = {
-    getDynamicFrontendUrl
+    getDynamicFrontendUrl,
+    getDynamicBackendUrl
 };

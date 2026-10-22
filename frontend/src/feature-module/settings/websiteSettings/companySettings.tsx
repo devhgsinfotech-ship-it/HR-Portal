@@ -4,6 +4,7 @@ import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { all_routes } from "../../../router/all_routes";
 import { OverlayTrigger, Tooltip } from "react-bootstrap";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 import { useDispatch, useSelector } from "react-redux";
 import { updateUser } from "../../../core/data/redux/authSlice";
 import type { AppDispatch } from "../../../core/data/redux/store";
@@ -13,7 +14,7 @@ const resolveImageUrl = (url: string | null | undefined) => {
   if (url.startsWith("blob:") || url.startsWith("http://") || url.startsWith("https://")) {
     return url;
   }
-  const backendBase = apiClient.defaults.baseURL || "http://localhost:5000";
+  const backendBase = apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl();
   return `${backendBase.replace(/\/$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 

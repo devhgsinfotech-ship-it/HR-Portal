@@ -5,6 +5,7 @@ import CollapseHeader from '../../../core/common/collapse-header/collapse-header
 import ImageWithBasePath from '../../../core/common/imageWithBasePath'
 import { all_routes } from '../../../router/all_routes'
 import apiClient from '../../../core/utils/apiClient'
+import { APP_CONFIG } from '../../../environment'
 import { LoadingSpinner } from '../../../core/common/LoadingSpinner'
 
 const PaySlip = () => {
@@ -108,7 +109,7 @@ const PaySlip = () => {
                                                 <div className="mb-3">
                                                     <div className="mb-2 invoice-logo">
                                                         {company.logoUrl ? (
-                                                            <img src={`http://localhost:5000${company.logoUrl}`} className="img-fluid logo" alt="logo" style={{ maxHeight: '50px' }} />
+                                                            <img src={company.logoUrl.startsWith('http') ? company.logoUrl : `${APP_CONFIG.getBackendUrl()}${company.logoUrl}`} className="img-fluid logo" alt="logo" style={{ maxHeight: '50px' }} />
                                                         ) : (
                                                             <ImageWithBasePath src="assets/img/logo.svg" className="img-fluid logo" alt="logo" />
                                                         )}

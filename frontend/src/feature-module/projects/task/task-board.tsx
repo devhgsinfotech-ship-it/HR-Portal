@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 import { useAppSelector } from "../../../core/data/redux/store";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 
@@ -550,7 +551,7 @@ const TaskBoard = () => {
                         const activeProj = projects.find(p => p.id.toString() === selectedProjectId);
                         return activeProj?.logoUrl ? (
                           <img
-                            src={activeProj.logoUrl.startsWith("http") ? activeProj.logoUrl : `${apiClient.defaults.baseURL || "http://localhost:5000"}${activeProj.logoUrl}`}
+                            src={activeProj.logoUrl.startsWith("http") ? activeProj.logoUrl : `${apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()}${activeProj.logoUrl}`}
                             className="img-fluid"
                             alt="Project Logo"
                             style={{ width: "30px", height: "30px", objectFit: "cover" }}

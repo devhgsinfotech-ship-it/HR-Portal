@@ -186,6 +186,12 @@ app.use('/api/applicants', applicantRoutes);
 app.use('/referrals', referralRoutes);
 app.use('/api/referrals', referralRoutes);
 
+// Employee Lifecycle Routes (Phase 1: Probation, Notice Period, Promotions, Resignations, Terminations)
+const lifecycleRoutes = require('./src/routes/lifecycleRoutes');
+app.use('/lifecycle', lifecycleRoutes);
+app.use('/api/lifecycle', lifecycleRoutes);
+app.use('/api/v1/lifecycle', lifecycleRoutes);
+
 
 const { getDynamicFrontendUrl } = require('./src/utils/urlHelper');
 

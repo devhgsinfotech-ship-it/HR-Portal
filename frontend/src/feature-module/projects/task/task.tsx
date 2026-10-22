@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 import { useAppSelector } from "../../../core/data/redux/store";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 
@@ -409,7 +410,7 @@ const Task = () => {
                         <div className="avatar avatar-md rounded-circle overflow-hidden bg-light d-inline-flex align-items-center justify-content-center">
                           {proj.logoUrl ? (
                             <img
-                              src={proj.logoUrl.startsWith("http") ? proj.logoUrl : `${apiClient.defaults.baseURL || "http://localhost:5000"}${proj.logoUrl}`}
+                              src={proj.logoUrl.startsWith("http") ? proj.logoUrl : `${apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()}${proj.logoUrl}`}
                               className="img-fluid"
                               alt="Project Logo"
                               style={{ width: "38px", height: "38px", objectFit: "cover" }}

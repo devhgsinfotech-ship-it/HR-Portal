@@ -1,98 +1,325 @@
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSelector } from 'react-redux';
+import { Link } from 'react-router-dom';
 import Table from "../../core/common/dataTable/index";
-import { resignation_table } from '../../core/data/json/resignation_table';
 import { all_routes } from '../../router/all_routes';
-import ImageWithBasePath from '../../core/common/imageWithBasePath';
-import CommonSelect from '../../core/common/commonSelect';
-import { DatePicker } from "antd";
-import { termination } from '../../core/common/selectoption/selectoption';
+import { DatePicker, message, Spin } from "antd";
+import dayjs from "dayjs";
 import CollapseHeader from '../../core/common/collapse-header/collapse-header';
+import apiClient from '@/core/utils/apiClient';
+import EmployeeAvatar from '@/core/common/employeeAvatar';
 
-// Define an interface for resignation data
-interface ResignationData {
-    Resigning_Employee: string;
-    Image: string;
-    Department: string;
-    Reason: string;
-    Notice_Date: string;
-    Resignation_Date: string;
+interface ResignationItem {
+    id: number;
+    employeeId: number;
+    employeeName: string;
+    employeeCode: string;
+    profilePhotoUrl: string | null;
+    departmentId: number | null;
+    department: string;
+    reason: string;
+    noticeDate: string | null;
+    resignationDate: string | null;
+    status: string;
 }
 
+
 const Resignation = () => {
-    const getModalContainer = () => {
-        const modalElement = document.getElementById('modal-datepicker');
-        return modalElement ? modalElement : document.body; // Fallback to document.body if modalElement is null
+    const user = useSelector((state: any) => state.auth?.user);
+    const isEmployee = user?.role === 'EMPLOYEE';
+
+    const [data, setData] = useState<ResignationItem[]>([]);
+    const [metadata, setMetadata] = useState<{ employees: any[]; departments: any[]; designations: any[] }>({
+        employees: [],
+        departments: [],
+        designations: []
+    });
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [searchText, setSearchText] = useState<string>('');
+    const [selectedResignation, setSelectedResignation] = useState<ResignationItem | null>(null);
+
+    // Add Form State
+    const [addEmployeeId, setAddEmployeeId] = useState<number | ''>('');
+    const [addDeptId, setAddDeptId] = useState<number | ''>('');
+    const [addNoticeDate, setAddNoticeDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
+    const [addResignationDate, setAddResignationDate] = useState<string>(dayjs().add(30, 'day').format('YYYY-MM-DD'));
+    const [addReason, setAddReason] = useState<string>('');
+    const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+    // Edit Form State
+    const [editNoticeDate, setEditNoticeDate] = useState<string>('');
+    const [editResignationDate, setEditResignationDate] = useState<string>('');
+    const [editReason, setEditReason] = useState<string>('');
+    const [editStatus, setEditStatus] = useState<string>('PENDING');
+
+    const fetchResignations = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            const res = await apiClient.get('/api/lifecycle/resignations');
+            setData(res.data || []);
+        } catch (error) {
+            console.error('Failed to load resignations:', error);
+            message.error('Failed to load resignations');
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    const fetchMetadata = async () => {
+        try {
+            const res = await apiClient.get('/api/lifecycle/metadata');
+            setMetadata(res.data);
+        } catch (error) {
+            console.error('Failed to load metadata:', error);
+        }
     };
 
+    useEffect(() => {
+        fetchMetadata();
+        fetchResignations();
+    }, [fetchResignations]);
 
-    const data: ResignationData[] = resignation_table;
+    useEffect(() => {
+        if (isEmployee && metadata.employees.length > 0) {
+            const myEmp = metadata.employees[0];
+            setAddEmployeeId(myEmp.id);
+            setAddDeptId(myEmp.departmentId || '');
+        }
+    }, [isEmployee, metadata.employees]);
+
+    const handleEmployeeSelect = (empIdStr: string) => {
+        const empId = parseInt(empIdStr, 10);
+        setAddEmployeeId(empId || '');
+        const emp = metadata.employees.find(e => e.id === empId);
+        if (emp) {
+            setAddDeptId(emp.departmentId || '');
+        } else {
+            setAddDeptId('');
+        }
+    };
+
+    const closeModal = (modalId: string) => {
+        const modalEl = document.getElementById(modalId);
+        if (modalEl) {
+            const closeBtn = modalEl.querySelector('[data-bs-dismiss="modal"]') as HTMLButtonElement;
+            if (closeBtn) closeBtn.click();
+        }
+    };
+
+    const handleAddResignation = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!addEmployeeId || !addNoticeDate || !addResignationDate) {
+            message.error('Please select an employee, notice date, and resignation date');
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            await apiClient.post('/api/lifecycle/resignations', {
+                employeeId: addEmployeeId,
+                departmentId: addDeptId || undefined,
+                noticeDate: addNoticeDate,
+                resignationDate: addResignationDate,
+                reason: addReason || 'Personal reasons'
+            });
+
+            message.success(isEmployee ? 'Resignation application submitted successfully' : 'Resignation record submitted successfully');
+            closeModal('new_resignation');
+            if (isEmployee && metadata.employees.length > 0) {
+                setAddEmployeeId(metadata.employees[0].id);
+                setAddDeptId(metadata.employees[0].departmentId || '');
+            } else {
+                setAddEmployeeId('');
+            }
+            setAddReason('');
+            fetchResignations();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Failed to submit resignation');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleOpenEdit = (record: ResignationItem) => {
+        setSelectedResignation(record);
+        setEditNoticeDate(record.noticeDate || '');
+        setEditResignationDate(record.resignationDate || '');
+        setEditReason(record.reason || '');
+        setEditStatus(record.status || 'PENDING');
+    };
+
+    const handleEditResignation = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedResignation) return;
+
+        try {
+            setIsSubmitting(true);
+            await apiClient.put(`/api/lifecycle/resignations/${selectedResignation.id}`, {
+                noticeDate: editNoticeDate,
+                resignationDate: editResignationDate,
+                reason: editReason,
+                status: editStatus
+            });
+
+            message.success('Resignation updated successfully');
+            closeModal('edit_resignation');
+            fetchResignations();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Failed to update resignation');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleQuickStatus = async (record: ResignationItem, status: 'APPROVED' | 'REJECTED') => {
+        try {
+            await apiClient.put(`/api/lifecycle/resignations/${record.id}`, { status });
+            message.success(`Resignation marked as ${status}`);
+            fetchResignations();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Failed to update status');
+        }
+    };
+
+    const handleDeleteResignation = async () => {
+        if (!selectedResignation) return;
+
+        try {
+            setIsSubmitting(true);
+            await apiClient.delete(`/api/lifecycle/resignations/${selectedResignation.id}`);
+            message.success('Resignation deleted successfully');
+            closeModal('delete_modal');
+            fetchResignations();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Failed to delete resignation');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const filteredData = data.filter(item => {
+        if (!searchText) return true;
+        const q = searchText.toLowerCase();
+        return (
+            item.employeeName.toLowerCase().includes(q) ||
+            item.employeeCode.toLowerCase().includes(q) ||
+            item.department.toLowerCase().includes(q) ||
+            item.reason.toLowerCase().includes(q)
+        );
+    });
+
     const columns = [
         {
             title: "Resigning Employee",
-            dataIndex: "Resigning_Employee",
-            render: (_text: string, record: ResignationData) => (
+            dataIndex: "employeeName",
+            render: (_text: string, record: ResignationItem) => (
                 <div className="d-flex align-items-center">
-                    <Link to={all_routes.resignation} className="avatar avatar-md me-2">
-                        <ImageWithBasePath
-                            src={`assets/img/users/${record.Image}`}
-                            className="rounded-circle"
-                            alt={`${record.Resigning_Employee}'s profile image`}
-                        />
-                    </Link>
-                    <h6 className="fw-medium">
-                        <Link to={all_routes.resignation}>{record.Resigning_Employee}</Link>
-                    </h6>
+                    <EmployeeAvatar
+                        url={record.profilePhotoUrl}
+                        name={record.employeeName}
+                        size={38}
+                        className="me-2"
+                    />
+                    <div>
+                        <h6 className="fw-medium mb-0">{record.employeeName}</h6>
+                        <span className="fs-12 text-muted">{record.employeeCode}</span>
+                    </div>
                 </div>
-
             ),
-            sorter: (a: ResignationData, b: ResignationData) => a.Resigning_Employee.length - b.Resigning_Employee.length,
+            sorter: (a: ResignationItem, b: ResignationItem) => a.employeeName.localeCompare(b.employeeName),
         },
         {
             title: "Department",
-            dataIndex: "Department",
-            sorter: (a: ResignationData, b: ResignationData) => a.Department.length - b.Department.length,
+            dataIndex: "department",
+            sorter: (a: ResignationItem, b: ResignationItem) => a.department.localeCompare(b.department),
         },
         {
             title: "Reason",
-            dataIndex: "Reason",
-            sorter: (a: ResignationData, b: ResignationData) => a.Reason.length - b.Reason.length,
+            dataIndex: "reason",
+            render: (text: string) => <span className="text-truncate d-inline-block" style={{ maxWidth: '200px' }}>{text}</span>,
+            sorter: (a: ResignationItem, b: ResignationItem) => a.reason.localeCompare(b.reason),
         },
         {
             title: "Notice Date",
-            dataIndex: "Notice_Date",
-            sorter: (a: ResignationData, b: ResignationData) => a.Notice_Date.length - b.Notice_Date.length,
+            dataIndex: "noticeDate",
+            render: (text: string | null) => text || '—',
+            sorter: (a: ResignationItem, b: ResignationItem) => (a.noticeDate || "").localeCompare(b.noticeDate || ""),
         },
         {
             title: "Resignation Date",
-            dataIndex: "Resignation_Date",
-            sorter: (a: ResignationData, b: ResignationData) => a.Resignation_Date.length - b.Resignation_Date.length,
+            dataIndex: "resignationDate",
+            render: (text: string | null) => text || '—',
+            sorter: (a: ResignationItem, b: ResignationItem) => (a.resignationDate || "").localeCompare(b.resignationDate || ""),
         },
         {
-            title: "",
+            title: "Status",
+            dataIndex: "status",
+            render: (status: string) => {
+                const s = (status || "").toUpperCase();
+                const badgeClass =
+                    s === "APPROVED" ? "badge-soft-success" :
+                    s === "REJECTED" ? "badge-soft-danger" :
+                    "badge-soft-warning";
+                return (
+                    <span className={`badge ${badgeClass} d-inline-flex align-items-center badge-xs`}>
+                        {s}
+                    </span>
+                );
+            },
+            sorter: (a: ResignationItem, b: ResignationItem) => a.status.localeCompare(b.status),
+        },
+        {
+            title: "Actions",
             dataIndex: "actions",
-            render: () => (
-                <div className="action-icon d-inline-flex">
-                    <Link
-                        to="#"
-                        className="me-2"
-                        data-bs-toggle="modal" data-inert={true}
+            render: (_: any, record: ResignationItem) => (
+                <div className="action-icon d-inline-flex align-items-center">
+                    {record.status === "PENDING" && (
+                        <>
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-icon btn-soft-success me-1"
+                                title="Approve Resignation"
+                                onClick={() => handleQuickStatus(record, "APPROVED")}
+                            >
+                                <i className="ti ti-check" />
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-icon btn-soft-danger me-1"
+                                title="Reject Resignation"
+                                onClick={() => handleQuickStatus(record, "REJECTED")}
+                            >
+                                <i className="ti ti-x" />
+                            </button>
+                        </>
+                    )}
+                    <button
+                        type="button"
+                        className="btn btn-sm btn-icon btn-light me-1"
+                        title="Edit Resignation"
+                        data-bs-toggle="modal"
                         data-bs-target="#edit_resignation"
+                        onClick={() => handleOpenEdit(record)}
                     >
                         <i className="ti ti-edit" />
-                    </Link>
-                    <Link to="#" data-bs-toggle="modal" data-inert={true} data-bs-target="#delete_modal">
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-sm btn-icon btn-light text-danger"
+                        title="Delete Resignation"
+                        data-bs-toggle="modal"
+                        data-bs-target="#delete_modal"
+                        onClick={() => setSelectedResignation(record)}
+                    >
                         <i className="ti ti-trash" />
-                    </Link>
+                    </button>
                 </div>
-
-
-
             ),
         },
-    ]
+    ];
+
     return (
         <>
-            {/* Page Wrapper */}
             <div className="page-wrapper">
                 <div className="content">
                     {/* Breadcrumb */}
@@ -113,325 +340,312 @@ const Resignation = () => {
                                 </ol>
                             </nav>
                         </div>
-                        <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
+                        <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
+                            <div className="mb-2 me-2">
+                                <button
+                                    type="button"
+                                    className="btn btn-white border d-inline-flex align-items-center"
+                                    onClick={fetchResignations}
+                                    title="Refresh"
+                                >
+                                    <i className="ti ti-refresh me-1" />
+                                    Refresh
+                                </button>
+                            </div>
                             <div className="mb-2">
-                                <Link
-                                    to="#"
-                                    className="btn btn-primary d-flex align-items-center"
-                                    data-bs-toggle="modal" data-inert={true}
+                                <button
+                                    type="button"
+                                    data-bs-toggle="modal"
                                     data-bs-target="#new_resignation"
+                                    className="btn btn-primary d-flex align-items-center"
                                 >
                                     <i className="ti ti-circle-plus me-2" />
-                                    Add Resignation
-                                </Link>
+                                    {isEmployee ? "Apply Resignation" : "Add Resignation"}
+                                </button>
                             </div>
-                            <div className="head-icons ms-2">
+                            <div className="ms-2 head-icons">
                                 <CollapseHeader />
                             </div>
                         </div>
                     </div>
                     {/* /Breadcrumb */}
-                    {/* Resignation List */}
-                    <div className="row">
-                        <div className="col-sm-12">
-                            <div className="card">
-                                <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-                                    <h5 className="d-flex align-items-center">Resignation List</h5>
-                                    <div className="d-flex align-items-center flex-wrap row-gap-3">
-                                        <div className="input-icon position-relative me-2">
-                                            <span className="input-icon-addon">
-                                                <i className="ti ti-calendar" />
-                                            </span>
-                                            <input
-                                                type="text"
-                                                className="form-control date-range bookingrange"
-                                                placeholder="dd/mm/yyyy - dd/mm/yyyy "
-                                            />
-                                        </div>
-                                        <div className="dropdown">
-                                            <Link
-                                                to="#"
-                                                className="dropdown-toggle btn btn-white d-inline-flex align-items-center fs-12"
-                                                data-bs-toggle="dropdown"
-                                            >
-                                                <p className="fs-12 d-inline-flex me-1">Sort By : </p>
-                                                Last 7 Days
-                                            </Link>
-                                            <ul className="dropdown-menu  dropdown-menu-end p-3">
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Recently Added
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Ascending
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        Descending
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="card-body p-0">
-                                    <Table dataSource={data} columns={columns} Selection={true} />
-                                </div>
+
+                    <div className="card">
+                        <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
+                            <h5 className="mb-0">Resignation Applications ({filteredData.length})</h5>
+                            <div className="position-relative">
+                                <input
+                                    type="text"
+                                    className="form-control form-control-sm"
+                                    placeholder="Search employee / reason..."
+                                    value={searchText}
+                                    onChange={(e) => setSearchText(e.target.value)}
+                                    style={{ width: "240px" }}
+                                />
+                                {searchText && (
+                                    <button
+                                        type="button"
+                                        className="btn-close position-absolute end-0 top-50 translate-middle-y me-2"
+                                        style={{ fontSize: "10px" }}
+                                        onClick={() => setSearchText("")}
+                                    />
+                                )}
                             </div>
                         </div>
+                        <div className="card-body p-0">
+                            {isLoading ? (
+                                <div className="text-center py-5">
+                                    <Spin size="large" />
+                                    <p className="mt-2 text-muted">Loading resignations...</p>
+                                </div>
+                            ) : filteredData.length === 0 ? (
+                                <div className="text-center py-5 text-muted">
+                                    <i className="ti ti-user-x fs-36 text-gray-4 d-block mb-2" />
+                                    <p className="mb-1 fw-medium">No resignation records found</p>
+                                    <small>{isEmployee ? 'You have not submitted any resignation requests' : 'Click "Add Resignation" to record an employee resignation'}</small>
+                                </div>
+                            ) : (
+                                <Table
+                                    dataSource={filteredData}
+                                    columns={isEmployee ? columns.filter(col => col.dataIndex !== 'actions') : columns}
+                                    Selection={false}
+                                />
+                            )}
+                        </div>
                     </div>
-                    {/* /Resignation List  */}
                 </div>
-                {/* Footer */}
+
                 <div className="footer d-sm-flex align-items-center justify-content-between bg-white border-top p-3">
                     <p className="mb-0">2014 - 2026 © SmartHR.</p>
-                    <p>
-                        Designed &amp; Developed By{" "}
-                        <Link to="#" className="text-primary">
-                            Dreams
-                        </Link>
-                    </p>
                 </div>
-                {/* /Footer */}
             </div>
-            {/* /Page Wrapper */}
-            <>
-                {/* Add Resignation */}
-                <div className="modal fade" id="new_resignation">
-                    <div className="modal-dialog modal-dialog-centered modal-md">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h4 className="modal-title">Add Resignation</h4>
-                                <button
-                                    type="button"
-                                    className="btn-close custom-btn-close"
-                                    data-bs-dismiss="modal"
-                                    aria-label="Close"
-                                >
-                                    <i className="ti ti-x" />
-                                </button>
-                            </div>
-                            <form>
-                                <div className="modal-body pb-0">
-                                    <div className="row">
-                                        <div className="col-md-12">
-                                            <div className="mb-3">
-                                                <label className="form-label">Resigning Employee</label>
-                                                <CommonSelect
-                                                    className="select"
-                                                    options={termination}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="col-md-12">
-                                            <div className="mb-3">
-                                                <label className="form-label">Notice Date</label>
-                                                <div className="input-icon-end position-relative">
-                                                    <DatePicker
-                                                        className="form-control datetimepicker"
-                                                        format={{
-                                                            format: "DD-MM-YYYY",
-                                                            type: "mask",
-                                                        }}
-                                                        getPopupContainer={getModalContainer}
-                                                        placeholder="DD-MM-YYYY"
-                                                    />
-                                                    <span className="input-icon-addon">
-                                                        <i className="ti ti-calendar text-gray-7" />
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="col-md-12">
-                                            <div className="mb-3">
-                                                <label className="form-label">Resignation Date</label>
-                                                <div className="input-icon-end position-relative">
-                                                    <DatePicker
-                                                        className="form-control datetimepicker"
-                                                        format={{
-                                                            format: "DD-MM-YYYY",
-                                                            type: "mask",
-                                                        }}
-                                                        getPopupContainer={getModalContainer}
-                                                        placeholder="DD-MM-YYYY"
-                                                    />
-                                                    <span className="input-icon-addon">
-                                                        <i className="ti ti-calendar text-gray-7" />
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="col-md-12">
-                                            <div className="mb-3">
-                                                <label className="form-label">Reason</label>
-                                                <textarea
-                                                    className="form-control"
-                                                    rows={3}
-                                                    defaultValue={""}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="modal-footer">
-                                    <button
-                                        type="button"
-                                        className="btn btn-white border me-2"
-                                        data-bs-dismiss="modal"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                                        Add Resignation
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                {/* /Add Resignation */}
-                {/* Edit Resignation */}
-                <div className="modal fade" id="edit_resignation">
-                    <div className="modal-dialog modal-dialog-centered modal-md">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h4 className="modal-title">Edit Resignation</h4>
-                                <button
-                                    type="button"
-                                    className="btn-close custom-btn-close"
-                                    data-bs-dismiss="modal"
-                                    aria-label="Close"
-                                >
-                                    <i className="ti ti-x" />
-                                </button>
-                            </div>
-                            <form >
-                                <div className="modal-body pb-0">
-                                    <div className="row">
-                                        <div className="col-md-12">
-                                            <div className="mb-3">
-                                                <label className="form-label">Resigning Employee</label>
-                                                <input
-                                                    type="text"
-                                                    className="form-control"
-                                                    defaultValue="Anthony Lewis"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="col-md-12">
-                                            <div className="mb-3">
-                                                <label className="form-label">Notice Date</label>
-                                                <div className="input-icon-end position-relative">
-                                                    <DatePicker
-                                                        className="form-control datetimepicker"
-                                                        format={{
-                                                            format: "DD-MM-YYYY",
-                                                            type: "mask",
-                                                        }}
-                                                        getPopupContainer={getModalContainer}
-                                                        placeholder="DD-MM-YYYY"
-                                                    />
-                                                    <span className="input-icon-addon">
-                                                        <i className="ti ti-calendar text-gray-7" />
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="col-md-12">
-                                            <div className="mb-3">
-                                                <label className="form-label">Resignation Date</label>
-                                                <div className="input-icon-end position-relative">
-                                                    <DatePicker
-                                                        className="form-control datetimepicker"
-                                                        format={{
-                                                            format: "DD-MM-YYYY",
-                                                            type: "mask",
-                                                        }}
-                                                        getPopupContainer={getModalContainer}
-                                                        placeholder="DD-MM-YYYY"
-                                                    />
-                                                    <span className="input-icon-addon">
-                                                        <i className="ti ti-calendar text-gray-7" />
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="col-md-12">
-                                            <div className="mb-3">
-                                                <label className="form-label">Reason</label>
-                                                <textarea
-                                                    className="form-control"
-                                                    rows={3}
-                                                    defaultValue={"Career Change"}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="modal-footer">
-                                    <button
-                                        type="button"
-                                        className="btn btn-white border me-2"
-                                        data-bs-dismiss="modal"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                                        Save Changes
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                {/* /Edit Resignation */}
-                {/* Delete Modal */}
-                <div className="modal fade" id="delete_modal">
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content">
-                            <div className="modal-body text-center">
-                                <span className="avatar avatar-xl bg-transparent-danger text-danger mb-3">
-                                    <i className="ti ti-trash-x fs-36" />
-                                </span>
-                                <h4 className="mb-1">Confirm Delete</h4>
-                                <p className="mb-3">
-                                    You want to delete all the marked items, this cant be undone once
-                                    you delete.
-                                </p>
-                                <div className="d-flex justify-content-center">
-                                    <Link
-                                        to="#"
-                                        className="btn btn-light me-3"
-                                        data-bs-dismiss="modal"
-                                    >
-                                        Cancel
-                                    </Link>
-                                    <Link to={all_routes.resignation} className="btn btn-danger">
-                                        Yes, Delete
-                                    </Link>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {/* /Delete Modal */}
-            </>
 
+            {/* Add Resignation Modal */}
+            <div className="modal fade" id="new_resignation" tabIndex={-1} aria-hidden="true">
+                <div className="modal-dialog modal-dialog-centered modal-md">
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <h4 className="modal-title">{isEmployee ? "Apply for Resignation" : "Add Resignation"}</h4>
+                            <button
+                                type="button"
+                                className="btn-close custom-btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Close"
+                            >
+                                <i className="ti ti-x" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleAddResignation}>
+                            <div className="modal-body pb-0">
+                                <div className="row">
+                                    <div className="col-md-12 mb-3">
+                                        <label className="form-label">
+                                            Resigning Employee <span className="text-danger">*</span>
+                                        </label>
+                                        <select
+                                            className="form-select"
+                                            value={addEmployeeId}
+                                            onChange={(e) => handleEmployeeSelect(e.target.value)}
+                                            disabled={isEmployee}
+                                            required
+                                        >
+                                            <option value="">-- Choose Employee --</option>
+                                            {metadata.employees.map(emp => (
+                                                <option key={emp.id} value={emp.id}>
+                                                    {emp.name} ({emp.employeeCode}) - {emp.departmentName || 'General'}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="col-md-12 mb-3">
+                                        <label className="form-label">Department</label>
+                                        <select
+                                            className="form-select"
+                                            value={addDeptId}
+                                            onChange={(e) => setAddDeptId(parseInt(e.target.value, 10) || '')}
+                                        >
+                                            <option value="">-- Department --</option>
+                                            {metadata.departments.map(d => (
+                                                <option key={d.id} value={d.id}>{d.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="col-md-6 mb-3">
+                                        <label className="form-label">
+                                            Notice Date <span className="text-danger">*</span>
+                                        </label>
+                                        <DatePicker
+                                            className="form-control"
+                                            value={addNoticeDate ? dayjs(addNoticeDate) : null}
+                                            onChange={(d) => setAddNoticeDate(d ? d.format('YYYY-MM-DD') : '')}
+                                            format="DD-MM-YYYY"
+                                        />
+                                    </div>
+
+                                    <div className="col-md-6 mb-3">
+                                        <label className="form-label">
+                                            Resignation Date <span className="text-danger">*</span>
+                                        </label>
+                                        <DatePicker
+                                            className="form-control"
+                                            value={addResignationDate ? dayjs(addResignationDate) : null}
+                                            onChange={(d) => setAddResignationDate(d ? d.format('YYYY-MM-DD') : '')}
+                                            format="DD-MM-YYYY"
+                                        />
+                                    </div>
+
+                                    <div className="col-md-12 mb-3">
+                                        <label className="form-label">Reason</label>
+                                        <textarea
+                                            className="form-control"
+                                            rows={3}
+                                            placeholder="Enter reason for resignation..."
+                                            value={addReason}
+                                            onChange={(e) => setAddReason(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-white border me-2"
+                                    data-bs-dismiss="modal"
+                                >
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                                    {isSubmitting ? 'Submitting...' : 'Submit Resignation'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            {/* Edit Resignation Modal */}
+            <div className="modal fade" id="edit_resignation" tabIndex={-1} aria-hidden="true">
+                <div className="modal-dialog modal-dialog-centered modal-md">
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <h4 className="modal-title">Edit Resignation</h4>
+                            <button
+                                type="button"
+                                className="btn-close custom-btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Close"
+                            >
+                                <i className="ti ti-x" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleEditResignation}>
+                            <div className="modal-body pb-0">
+                                {selectedResignation && (
+                                    <div className="p-2 mb-3 bg-light rounded">
+                                        <h6 className="mb-0 fw-semibold">{selectedResignation.employeeName}</h6>
+                                        <small className="text-muted">{selectedResignation.department} &bull; {selectedResignation.employeeCode}</small>
+                                    </div>
+                                )}
+                                <div className="row">
+                                    <div className="col-md-6 mb-3">
+                                        <label className="form-label">Notice Date</label>
+                                        <DatePicker
+                                            className="form-control"
+                                            value={editNoticeDate ? dayjs(editNoticeDate) : null}
+                                            onChange={(d) => setEditNoticeDate(d ? d.format('YYYY-MM-DD') : '')}
+                                            format="DD-MM-YYYY"
+                                        />
+                                    </div>
+
+                                    <div className="col-md-6 mb-3">
+                                        <label className="form-label">Resignation Date</label>
+                                        <DatePicker
+                                            className="form-control"
+                                            value={editResignationDate ? dayjs(editResignationDate) : null}
+                                            onChange={(d) => setEditResignationDate(d ? d.format('YYYY-MM-DD') : '')}
+                                            format="DD-MM-YYYY"
+                                        />
+                                    </div>
+
+                                    <div className="col-md-12 mb-3">
+                                        <label className="form-label">Approval Status</label>
+                                        <select
+                                            className="form-select"
+                                            value={editStatus}
+                                            onChange={(e) => setEditStatus(e.target.value)}
+                                        >
+                                            <option value="PENDING">PENDING</option>
+                                            <option value="APPROVED">APPROVED</option>
+                                            <option value="REJECTED">REJECTED</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="col-md-12 mb-3">
+                                        <label className="form-label">Reason</label>
+                                        <textarea
+                                            className="form-control"
+                                            rows={3}
+                                            value={editReason}
+                                            onChange={(e) => setEditReason(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-white border me-2"
+                                    data-bs-dismiss="modal"
+                                >
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                                    {isSubmitting ? 'Updating...' : 'Save Changes'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            {/* Delete Modal */}
+            <div className="modal fade" id="delete_modal" tabIndex={-1} aria-hidden="true">
+                <div className="modal-dialog modal-dialog-centered">
+                    <div className="modal-content">
+                        <div className="modal-body text-center">
+                            <span className="avatar avatar-xl bg-transparent-danger text-danger mb-3">
+                                <i className="ti ti-trash fs-36" />
+                            </span>
+                            <h4 className="mb-1">Confirm Delete</h4>
+                            <p className="mb-3">
+                                Are you sure you want to delete this resignation record for{" "}
+                                <strong>{selectedResignation?.employeeName}</strong>?
+                            </p>
+                            <div className="d-flex justify-content-center">
+                                <button
+                                    type="button"
+                                    className="btn btn-light me-3"
+                                    data-bs-dismiss="modal"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-danger"
+                                    onClick={handleDeleteResignation}
+                                    disabled={isSubmitting}
+                                >
+                                    {isSubmitting ? 'Deleting...' : 'Yes, Delete'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </>
+    );
+};
 
-    )
-}
-
-export default Resignation
+export default Resignation;

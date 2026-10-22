@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 import { useAppDispatch, useAppSelector } from "../../../core/data/redux/store";
 import { updateUser } from "../../../core/data/redux/authSlice";
 
@@ -38,7 +39,7 @@ const SuperAdminSettings: React.FC = () => {
     if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) {
       return url;
     }
-    const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+    const base = (apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()).replace(/\/+$/, "");
     const clean = url.startsWith("/") ? url : `/${url}`;
     return `${base}${clean}`;
   };

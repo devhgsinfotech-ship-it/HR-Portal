@@ -696,6 +696,51 @@ async function sendTestEmail(toEmail) {
     return { info, testUrl };
 }
 
+/**
+ * Sends a clean, branded email notification for lifecycle events (promotion, termination, resignation, probation).
+ */
+async function sendLifecycleNotificationEmail({ toEmail, recipientName, title, messageHtml, companyName = 'HGS-HRMS', actionUrl }) {
+    if (!toEmail) return null;
+    try {
+        const transporter = await getTransporter();
+        const mailOptions = {
+            from: `"${companyName}" <${process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@smarthr.local'}>`,
+            to: toEmail,
+            subject: `[${companyName}] ${title}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 25px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff;">
+                    <div style="border-bottom: 2px solid #ff5722; padding-bottom: 12px; margin-bottom: 16px;">
+                        <h2 style="color: #111827; margin: 0; font-size: 20px;">${title}</h2>
+                        <span style="color: #6b7280; font-size: 13px;">${companyName} HRMS</span>
+                    </div>
+                    <p style="color: #374151; font-size: 15px; margin-bottom: 12px;">Dear ${recipientName || 'Team Member'},</p>
+                    <div style="color: #374151; font-size: 14px; line-height: 1.6; margin-bottom: 20px; background: #f9fafb; padding: 14px; border-radius: 6px; border-left: 4px solid #ff5722;">
+                        ${messageHtml}
+                    </div>
+                    ${actionUrl ? `
+                    <div style="text-align: center; margin: 25px 0 20px 0;">
+                        <a href="${actionUrl}" style="background-color: #ff5722; color: #ffffff; padding: 11px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;">
+                            View in HR Portal
+                        </a>
+                    </div>
+                    ` : `
+                    <p style="color: #6b7280; font-size: 13px;">You can view full details in your HR portal dashboard.</p>
+                    `}
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+                    <p style="color: #9ca3af; font-size: 11px; margin: 0; text-align: center;">
+                        This is an automated notification from ${companyName}.
+                    </p>
+                </div>
+            `
+        };
+        const info = await transporter.sendMail(mailOptions);
+        return info;
+    } catch (err) {
+        console.warn('[emailService] Lifecycle email error:', err.message);
+        return null;
+    }
+}
+
 module.exports = {
     sendVerificationEmail,
     sendEmployeeInviteEmail,
@@ -706,5 +751,6 @@ module.exports = {
     sendCorrectionRequestEmail,
     sendDomainApprovedEmail,
     sendHRManagerOnboardingEmail,
-    sendTestEmail
+    sendTestEmail,
+    sendLifecycleNotificationEmail
 };

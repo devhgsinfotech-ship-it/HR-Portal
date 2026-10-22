@@ -6,6 +6,7 @@ import PerfectScrollbar from "react-perfect-scrollbar";
 import "../../../../node_modules/react-perfect-scrollbar/dist/css/styles.css";
 import { useAppSelector } from '../../data/redux/store';
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 
 const TwoColumnSidebar = () => {
     const user = useAppSelector((state) => state.auth.user) as any;
@@ -23,7 +24,7 @@ const TwoColumnSidebar = () => {
         if (logoPath.startsWith("http://") || logoPath.startsWith("https://") || logoPath.startsWith("blob:")) {
             return logoPath;
         }
-        const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+        const base = (apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()).replace(/\/+$/, "");
         const cleanPath = logoPath.startsWith("/") ? logoPath : `/${logoPath}`;
         return `${base}${cleanPath}`;
     };
@@ -33,7 +34,7 @@ const TwoColumnSidebar = () => {
         if (photoUrl.startsWith("http://") || photoUrl.startsWith("https://") || photoUrl.startsWith("blob:")) {
             return photoUrl;
         }
-        const base = (apiClient.defaults.baseURL || "http://localhost:5000").replace(/\/+$/, "");
+        const base = (apiClient.defaults.baseURL || APP_CONFIG.getBackendUrl()).replace(/\/+$/, "");
         const cleanPath = photoUrl.startsWith("/") ? photoUrl : `/${photoUrl}`;
         return `${base}${cleanPath}`;
     }, []);

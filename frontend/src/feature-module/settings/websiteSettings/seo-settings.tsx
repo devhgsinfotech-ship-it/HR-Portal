@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
 import apiClient from "../../../core/utils/apiClient";
+import { APP_CONFIG } from "../../../environment";
 import { applyDynamicSeo, resolveImageUrl, SeoData } from "../../../core/utils/dynamicSeo";
 
 const Seosettings: React.FC = () => {
@@ -167,7 +168,7 @@ const Seosettings: React.FC = () => {
   // Helper for current preview values
   const currentTitle = metaTitle.trim() || "HR Portal - Modern Cloud HRMS";
   const currentDesc = metaDescription.trim() || "Complete cloud HRMS and payroll solution for modern enterprises.";
-  const currentDomain = canonicalUrl.trim() || (typeof window !== "undefined" ? window.location.origin : "https://aaups.com");
+  const currentDomain = canonicalUrl.trim() || (typeof window !== "undefined" ? window.location.origin : APP_CONFIG.getFrontendUrl());
   const displayOgTitle = ogTitle.trim() || currentTitle;
   const displayOgDesc = ogDescription.trim() || currentDesc;
 

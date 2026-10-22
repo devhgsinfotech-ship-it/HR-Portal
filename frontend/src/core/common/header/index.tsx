@@ -81,9 +81,30 @@ const Header = React.memo(() => {
     if (logoPath.startsWith("http://") || logoPath.startsWith("https://") || logoPath.startsWith("blob:")) {
       return logoPath;
     }
-    const base = (apiUrl || "http://localhost:5000").replace(/\/+$/, "");
+    const base = (apiUrl || "").replace(/\/+$/, "");
     const cleanPath = logoPath.startsWith("/") ? logoPath : `/${logoPath}`;
-    return `${base}${cleanPath}`;
+    return base ? `${base}${cleanPath}` : cleanPath;
+  };
+
+  const getNotifIconInfo = (type: string) => {
+    switch (type) {
+      case 'PROMOTION':
+        return { icon: 'ti-trending-up', bg: 'bg-success-transparent text-success' };
+      case 'TERMINATION':
+        return { icon: 'ti-user-x', bg: 'bg-danger-transparent text-danger' };
+      case 'RESIGNATION':
+        return { icon: 'ti-file-text', bg: 'bg-warning-transparent text-warning' };
+      case 'PROBATION':
+        return { icon: 'ti-user-check', bg: 'bg-info-transparent text-info' };
+      case 'LEAVE_APPROVAL':
+        return { icon: 'ti-calendar-check', bg: 'bg-success-transparent text-success' };
+      case 'LEAVE_REJECTION':
+        return { icon: 'ti-calendar-x', bg: 'bg-danger-transparent text-danger' };
+      case 'PAYSLIP_GENERATED':
+        return { icon: 'ti-file-dollar', bg: 'bg-purple-transparent text-purple' };
+      default:
+        return { icon: 'ti-bell-ringing', bg: 'bg-primary-transparent text-primary' };
+    }
   };
 
   // ── Notifications System State & Fetching ────────────────────
@@ -1042,28 +1063,31 @@ const Header = React.memo(() => {
                         </div>
                       ) : (
                         <div className="d-flex flex-column gap-2">
-                          {notifications.map((n) => (
-                            <div
-                              key={n.id}
-                              className={`p-2 rounded border-bottom ${!n.isRead ? 'bg-light-subtle font-weight-bold' : ''}`}
-                              onClick={() => handleNotificationClick(n)}
-                              style={{ cursor: 'pointer' }}
-                            >
-                              <div className="d-flex align-items-start">
-                                <span className="avatar avatar-sm rounded-circle me-2 bg-primary-transparent text-primary fw-bold flex-shrink-0 d-flex align-items-center justify-content-center mt-1">
-                                  <i className="ti ti-bell-ringing fs-14" />
-                                </span>
-                                <div className="flex-grow-1 overflow-hidden">
-                                  <div className="d-flex justify-content-between align-items-center mb-1">
-                                    <span className="fs-13 fw-bold text-dark text-truncate">{n.title}</span>
-                                    {!n.isRead && <span className="badge bg-primary p-1 rounded-circle" title="Unread" />}
+                          {notifications.map((n) => {
+                            const iconInfo = getNotifIconInfo(n.type);
+                            return (
+                              <div
+                                key={n.id}
+                                className={`p-2 rounded border-bottom ${!n.isRead ? 'bg-light-subtle font-weight-bold' : ''}`}
+                                onClick={() => handleNotificationClick(n)}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                <div className="d-flex align-items-start">
+                                  <span className={`avatar avatar-sm rounded-circle me-2 ${iconInfo.bg} fw-bold flex-shrink-0 d-flex align-items-center justify-content-center mt-1`}>
+                                    <i className={`ti ${iconInfo.icon} fs-14`} />
+                                  </span>
+                                  <div className="flex-grow-1 overflow-hidden">
+                                    <div className="d-flex justify-content-between align-items-center mb-1">
+                                      <span className="fs-13 fw-bold text-dark text-truncate">{n.title}</span>
+                                      {!n.isRead && <span className="badge bg-primary p-1 rounded-circle" title="Unread" />}
+                                    </div>
+                                    <p className="fs-12 text-muted mb-1 text-wrap">{n.message}</p>
+                                    <span className="fs-10 text-secondary">{new Date(n.createdAt).toLocaleString()}</span>
                                   </div>
-                                  <p className="fs-12 text-muted mb-1 text-wrap">{n.message}</p>
-                                  <span className="fs-10 text-secondary">{new Date(n.createdAt).toLocaleString()}</span>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
