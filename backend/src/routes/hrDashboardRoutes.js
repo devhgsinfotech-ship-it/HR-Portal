@@ -9,7 +9,7 @@ router.use(verifyToken);
 // HR Dashboard summary — HR, Manager, Super Admin only
 router.get('/hr-summary', requireRole('HR', 'MANAGER', 'SUPER_ADMIN'), getHrDashboardSummary);
 
-// Admin Dashboard summary — HR, Manager, Super Admin only
-router.get('/admin-summary', requireRole('HR', 'MANAGER', 'SUPER_ADMIN'), getAdminDashboardSummary);
+// Admin Dashboard summary — COMPANY_ADMIN, HR, Manager, Super Admin only
+router.get('/admin-summary', requireRole('COMPANY_ADMIN', 'HR', 'MANAGER', 'SUPER_ADMIN'), getAdminDashboardSummary);
 
 module.exports = router;

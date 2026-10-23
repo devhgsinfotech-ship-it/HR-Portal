@@ -86,6 +86,15 @@ async function getNotifications(req, res) {
         case 'PROBATION':
           targetUrl = '/probation-management';
           break;
+        case 'WFH':
+          targetUrl = '/wfh-management';
+          break;
+        case 'SHIFT_SWAP':
+          targetUrl = '/shift-swap-requests';
+          break;
+        case 'OVERTIME':
+          targetUrl = '/overtime';
+          break;
         default:
           targetUrl = null;
       }

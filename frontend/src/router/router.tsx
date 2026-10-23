@@ -17,6 +17,21 @@ const getRouteRoles = (path: string | undefined): Role[] => {
 
   const p = path.toLowerCase();
 
+  // Root URL — accessible to all logged in users so RootRedirect can route them
+  if (p === "/" || p === "") {
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
+  // Company Admin Dashboard (/index) — COMPANY_ADMIN & SUPER_ADMIN only
+  if (p === "/index") {
+    return ["SUPER_ADMIN", "COMPANY_ADMIN"];
+  }
+
+  // HR Dashboard (/hr-dashboard) — HR, COMPANY_ADMIN & SUPER_ADMIN
+  if (p === "/hr-dashboard") {
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"];
+  }
+
   // 1. Super Admin ONLY routes
   if (p.startsWith("/super-admin")) return ["SUPER_ADMIN"];
 
@@ -66,6 +81,24 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     p.includes("promotion") ||
     p.includes("resignation") ||
     p.includes("termination")
+  ) {
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
+  // Payroll Overtime is restricted to HR and Admins
+  if (p.includes("payroll-overtime")) {
+    return ["COMPANY_ADMIN", "HR"];
+  }
+
+  // Shift Scheduling & Work Arrangements (Phase 2: Accessible by all roles)
+  if (
+    p.includes("schedule-timing") ||
+    p.includes("shift-schedule") ||
+    p.includes("shift-swap") ||
+    p.includes("overtime") ||
+    p.includes("holiday-calendar") ||
+    p.includes("wfh-management") ||
+    p.includes("work-from-home")
   ) {
     return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
