@@ -102,6 +102,12 @@ const Header = React.memo(() => {
         return { icon: 'ti-calendar-x', bg: 'bg-danger-transparent text-danger' };
       case 'PAYSLIP_GENERATED':
         return { icon: 'ti-file-dollar', bg: 'bg-purple-transparent text-purple' };
+      case 'SHIFT_SWAP':
+        return { icon: 'ti-arrows-shuffle', bg: 'bg-primary-transparent text-primary' };
+      case 'WFH':
+        return { icon: 'ti-home', bg: 'bg-info-transparent text-info' };
+      case 'OVERTIME':
+        return { icon: 'ti-clock-plus', bg: 'bg-warning-transparent text-warning' };
       default:
         return { icon: 'ti-bell-ringing', bg: 'bg-primary-transparent text-primary' };
     }
@@ -178,6 +184,15 @@ const Header = React.memo(() => {
             break;
           case 'DOCUMENT_VERIFIED':
             targetRoute = userRole === 'EMPLOYEE' ? (routes.profile || '/pages/profile') : (routes.employeeList || '/employees');
+            break;
+          case 'SHIFT_SWAP':
+            targetRoute = all_routes.shiftSwapRequests || '/shift-swap-requests';
+            break;
+          case 'WFH':
+            targetRoute = all_routes.wfhManagement || '/wfh-management';
+            break;
+          case 'OVERTIME':
+            targetRoute = all_routes.overtime || '/overtime';
             break;
           default:
             targetRoute = null;

@@ -56,6 +56,10 @@ model Company {
   promotions       Promotion[]
   resignations     Resignation[]
   terminations     Termination[]
+  shiftSchedules   ShiftSchedule[]
+  shiftSwapRequests ShiftSwapRequest[]
+  overtimeRecords  OvertimeRecord[]
+  wfhRequests      WfhRequest[]
 
   @@map("companies")
 }
@@ -196,10 +200,10 @@ model Employee {
   companyRoleId                Int?
 
   // Lifecycle Management Fields (Phase 1)
-  probationDurationMonths      Int?
+  probationDurationMonths      Int?                @default(3)
   probationEndDate             DateTime?
-  probationStatus              String?             // ON_PROBATION, CONFIRMED, EXTENDED, FAILED
-  noticePeriodDays             Int?
+  probationStatus              String?             @default("ON_PROBATION") // ON_PROBATION, CONFIRMED, EXTENDED, FAILED
+  noticePeriodDays             Int?                @default(30)
   noticeStartDate              DateTime?
   noticeEndDate                DateTime?
   noticeStatus                 String?             // SERVING, COMPLETED, WAIVED
@@ -244,6 +248,11 @@ model Employee {
   promotions                   Promotion[]
   resignations                 Resignation[]
   terminations                 Termination[]
+  shiftSchedules               ShiftSchedule[]
+  shiftSwapRequestsSent        ShiftSwapRequest[]  @relation("ShiftSwapRequester")
+  shiftSwapRequestsReceived    ShiftSwapRequest[]  @relation("ShiftSwapTarget")
+  overtimeRecords              OvertimeRecord[]
+  wfhRequests                  WfhRequest[]
 
   @@index([companyRoleId], map: "employees_companyRoleId_fkey")
   @@index([departmentId], map: "employees_departmentId_fkey")
@@ -660,11 +669,15 @@ model ShiftPolicy {
   startTime   String
   endTime     String
   gracePeriod Int        @default(15)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  employees   Employee[]
-  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  employees          Employee[]
+  shiftSchedules     ShiftSchedule[]
+  shiftSwapCurrent   ShiftSwapRequest[] @relation("ShiftSwapCurrentShift")
+  shiftSwapRequested ShiftSwapRequest[] @relation("ShiftSwapRequestedShift")
+  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@unique([companyId, name])
   @@index([companyId], map: "shift_policies_companyId_fkey")
   @@map("shift_policies")
 }
@@ -1258,6 +1271,9 @@ enum NotificationType {
   TERMINATION
   RESIGNATION
   PROBATION
+  SHIFT_SWAP
+  OVERTIME
+  WFH
 }
 
 enum ProjectStatus {
@@ -1560,3 +1576,103 @@ model Termination {
   @@index([departmentId])
   @@map("terminations")
 }
+
+// ========================================================
+// PHASE 2: SHIFT SCHEDULING & WORK ARRANGEMENTS
+// ========================================================
+
+model ShiftSchedule {
+  id            Int         @id @default(autoincrement())
+  companyId     Int
+  employeeId    Int
+  shiftPolicyId Int
+  startDate     DateTime    @db.Date
+  endDate       DateTime?   @db.Date
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee      Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shiftPolicy   ShiftPolicy @relation(fields: [shiftPolicyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([shiftPolicyId])
+  @@map("shift_schedules")
+}
+
+model ShiftSwapRequest {
+  id               Int         @id @default(autoincrement())
+  companyId        Int
+  requesterId      Int
+  targetEmployeeId Int?
+  shiftDate        DateTime    @db.Date
+  currentShiftId   Int
+  requestedShiftId Int
+  reason           String?     @db.Text
+  status           String      @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
+  approvedById     Int?
+  approvedAt       DateTime?
+  rejectionReason  String?     @db.Text
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  company          Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requester        Employee    @relation("ShiftSwapRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetEmployee   Employee?   @relation("ShiftSwapTarget", fields: [targetEmployeeId], references: [id], onDelete: SetNull)
+  currentShift     ShiftPolicy @relation("ShiftSwapCurrentShift", fields: [currentShiftId], references: [id], onDelete: Cascade)
+  requestedShift   ShiftPolicy @relation("ShiftSwapRequestedShift", fields: [requestedShiftId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([requesterId])
+  @@index([targetEmployeeId])
+  @@index([currentShiftId])
+  @@index([requestedShiftId])
+  @@map("shift_swap_requests")
+}
+
+model OvertimeRecord {
+  id           Int       @id @default(autoincrement())
+  companyId    Int
+  employeeId   Int
+  overtimeDate DateTime  @db.Date
+  hours        Decimal   @db.Decimal(5, 2)
+  project      String?
+  description  String?   @db.Text
+  overtimeRate Decimal?  @db.Decimal(10, 2)
+  status       String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvedById Int?
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@map("overtime_records")
+}
+
+model WfhRequest {
+  id           Int       @id @default(autoincrement())
+  companyId    Int
+  employeeId   Int
+  startDate    DateTime  @db.Date
+  endDate      DateTime  @db.Date
+  reason       String?   @db.Text
+  status       String    @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
+  approvedById Int?
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@map("wfh_requests")
+}
+

@@ -192,6 +192,12 @@ app.use('/lifecycle', lifecycleRoutes);
 app.use('/api/lifecycle', lifecycleRoutes);
 app.use('/api/v1/lifecycle', lifecycleRoutes);
 
+// Shift Scheduling & Work Arrangements Routes (Phase 2: Shift Schedule, Swaps, Overtime, WFH)
+const shiftArrangementRoutes = require('./src/routes/shiftArrangementRoutes');
+app.use('/shifts', shiftArrangementRoutes);
+app.use('/api/shifts', shiftArrangementRoutes);
+app.use('/api/v1/shifts', shiftArrangementRoutes);
+
 
 const { getDynamicFrontendUrl } = require('./src/utils/urlHelper');
 

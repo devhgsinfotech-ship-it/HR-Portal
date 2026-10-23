@@ -334,6 +334,7 @@ import AiTeamPerformanceInsights from "@/feature-module/ai-center/ai-team-perfor
 import AiConfiguration from "@/feature-module/ai-center/ai-configuration/aiConfiguration";
 import AcceptInvite from "../feature-module/auth/acceptInvite/acceptInvite";
 import OnboardingWizard from "../feature-module/onboarding/OnboardingWizard";
+import RootRedirect from "./RootRedirect";
 
 const routes = all_routes;
 
@@ -347,7 +348,7 @@ export const publicRoutes = [
   {
     path: "/",
     name: "Root",
-    element: <Navigate to="/index" />,
+    element: <RootRedirect />,
     route: Route,
   },
   {

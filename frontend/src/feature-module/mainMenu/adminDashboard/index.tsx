@@ -32,6 +32,8 @@ const AdminDashboard = () => {
     permissionCount: 0,
     totalAttendanceToday: 0,
     latestEmployees: [],
+    clockedInList: [],
+    lateList: [],
     totalProjects: 0,
     totalClients: 0,
     totalTasks: 0
@@ -81,6 +83,7 @@ const AdminDashboard = () => {
   const [approveLoading, setApproveLoading] = useState(false);
 
   const fetchPendingHR = async () => {
+    if (user?.role !== 'COMPANY_ADMIN' && user?.role !== 'SUPER_ADMIN') return;
     try {
       const res = await apiClient.get('/employees/pending-hr-onboarding');
       setPendingHRList(res.data || []);
@@ -241,7 +244,14 @@ const AdminDashboard = () => {
         const localDateObj = new Date(date.getTime() - (offset * 60 * 1000));
         const formattedDate = localDateObj.toISOString().split('T')[0];
         const res = await apiClient.get(`/dashboard/admin-summary?date=${formattedDate}`);
-        setData(res.data);
+        if (res.data) {
+          setData({
+            ...res.data,
+            clockedInList: res.data.clockedInList || [],
+            lateList: res.data.lateList || [],
+            latestEmployees: res.data.latestEmployees || []
+          });
+        }
       } catch (err) {
         console.error('Error fetching admin summary:', err);
       } finally {
@@ -1434,10 +1444,10 @@ const AdminDashboard = () => {
                   <div>
                     {loading ? (
                       <p className="text-muted text-center py-3">Loading...</p>
-                    ) : data.clockedInList.length === 0 ? (
+                    ) : (data?.clockedInList || []).length === 0 ? (
                       <p className="text-muted text-center py-3">No clocked-in employees today</p>
                     ) : (
-                      data.clockedInList.map((item: any, idx: number) => (
+                      (data?.clockedInList || []).map((item: any, idx: number) => (
                         <div key={item.id} className={`d-flex align-items-center justify-content-between mb-3 p-2 border br-5 ${idx === 0 ? 'border-dashed' : ''}`}>
                           <div className="d-flex align-items-center">
                             <div className="avatar flex-shrink-0">
@@ -1498,10 +1508,10 @@ const AdminDashboard = () => {
                   <h6 className="mb-2">Late</h6>
                   {loading ? (
                     <p className="text-muted text-center py-2">Loading...</p>
-                  ) : data.lateList.length === 0 ? (
+                  ) : (data?.lateList || []).length === 0 ? (
                     <p className="text-muted text-center py-2">No late arrivals today</p>
                   ) : (
-                    data.lateList.map((item: any) => (
+                    (data?.lateList || []).map((item: any) => (
                       <div key={item.id} className="d-flex align-items-center justify-content-between mb-3 p-2 border border-dashed br-5">
                         <div className="d-flex align-items-center">
                           <span className="avatar flex-shrink-0">

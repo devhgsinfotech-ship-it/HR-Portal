@@ -155,6 +155,24 @@ const getRouteRoles = (path: string | undefined): Role[] => {
     return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
   }
 
+  // Payroll Overtime is restricted to HR and Admins
+  if (p.includes("payroll-overtime")) {
+    return ["COMPANY_ADMIN", "HR"];
+  }
+
+  // Shift Scheduling & Work Arrangements (Phase 2: Accessible by all roles)
+  if (
+    p.includes("schedule-timing") ||
+    p.includes("shift-schedule") ||
+    p.includes("shift-swap") ||
+    p.includes("overtime") ||
+    p.includes("holiday-calendar") ||
+    p.includes("wfh-management") ||
+    p.includes("work-from-home")
+  ) {
+    return ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+  }
+
   if (p.includes("category") || p.includes("categories")) {
     return isSuperAdminRoute 
       ? ["SUPER_ADMIN", "COMPANY_ADMIN", "HR", "MANAGER"]

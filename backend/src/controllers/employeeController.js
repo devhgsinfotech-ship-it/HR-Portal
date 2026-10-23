@@ -170,6 +170,10 @@ async function createEmployee(req, res) {
             const compNameOrCode = company.name || company.companyCode;
             const empCode = await generateEmployeeCode(tx, company.id, compNameOrCode);
 
+            const doj = dateOfJoining ? new Date(dateOfJoining) : new Date();
+            const probEnd = new Date(doj);
+            probEnd.setMonth(probEnd.getMonth() + 3);
+
             const employee = await tx.employee.create({
                 data: {
                     userId: user.id,
@@ -180,10 +184,14 @@ async function createEmployee(req, res) {
                     departmentId: departmentId && departmentId !== 'undefined' ? parseInt(departmentId, 10) : null,
                     designationId: designationId && designationId !== 'undefined' ? parseInt(designationId, 10) : null,
                     companyRoleId: companyRoleId && companyRoleId !== 'undefined' && companyRoleId !== 'null' ? parseInt(companyRoleId, 10) : null,
-                    dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : new Date(),
+                    dateOfJoining: doj,
                     reportingManagerId: finalReportingManagerId,
                     profilePhotoUrl,
-                    onboardingStatus: 'INVITED'
+                    onboardingStatus: 'INVITED',
+                    probationDurationMonths: 3,
+                    probationEndDate: probEnd,
+                    probationStatus: 'ON_PROBATION',
+                    noticePeriodDays: 30
                 },
                 include: {
                     user: {
