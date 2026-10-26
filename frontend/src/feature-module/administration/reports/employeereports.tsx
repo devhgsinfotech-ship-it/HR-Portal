@@ -38,7 +38,8 @@ const EmployeeReports = () => {
             try {
                 const res = await apiClient.get('/employees');
                 const employees = res.data;
-                const formattedData = employees.map((emp: any) => ({
+                const formattedData = employees.map((emp: any, index: number) => ({
+                    key: emp.employeeCode || String(emp.id || index),
                     EmpID: emp.employeeCode || `EMP-${emp.id}`,
                     Name: `${emp.firstName} ${emp.lastName}`,
                     Image: emp.user?.profilePhotoUrl || 'avatar-20.jpg',

@@ -1009,6 +1009,11 @@ export const publicRoutes = [
     route: Route,
   },
   {
+    path: "/performance/performance-appraisal",
+    element: <PerformanceAppraisal />,
+    route: Route,
+  },
+  {
     path: routes.goalTracking,
     element: <GoalTracking />,
     route: Route,

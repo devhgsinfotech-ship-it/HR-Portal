@@ -1,25 +1,25 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import Table from "../../../core/common/dataTable/index";
 import { all_routes } from '../../../router/all_routes';
 import ImageWithBasePath from '../../../core/common/imageWithBasePath';
-import PredefinedDateRanges from '../../../core/common/datePicker';
-import { leavereportDetails } from '../../../core/data/json/leavereportDetails';
 import ReactApexChart from 'react-apexcharts';
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header';
+import apiClient from '../../../core/utils/apiClient';
 
-// Define interfaces
 interface LeaveReportItem {
-    InvoiceID: string;
-    ClientName: string;
-    Image: string;
+    id: number;
+    Name: string;
     Role: string;
-    CompanyName: string;
-    CreatedDate: string;
-    DueDate: string;
-    Amount: string;
+    Department: string;
+    LeaveType: string;
+    StartDate: string;
+    EndDate: string;
+    Days: number;
+    Reason: string;
     Status: string;
-    [key: string]: any; // Remove if not needed
+    AppliedAt: string;
+    Image: string;
 }
 
 interface ColumnType<T> {
@@ -30,133 +30,182 @@ interface ColumnType<T> {
 }
 
 const LeaveReport = () => {
+    const [records, setRecords] = useState<LeaveReportItem[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [metrics, setMetrics] = useState({
+        totalRequests: 0,
+        approvedCount: 0,
+        pendingCount: 0,
+        rejectedCount: 0
+    });
+    const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
+    const [sortBy, setSortBy] = useState<string>("Recently Added");
 
-    const data: LeaveReportItem[] = leavereportDetails;
+    const [chartData, setChartData] = useState<{ labels: string[]; data: number[] }>({
+        labels: ['Casual Leave', 'Medical Leave', 'Annual Leave', 'Paid Leave'],
+        data: [10, 5, 8, 4]
+    });
+
+    const fetchLeaveData = async () => {
+        try {
+            setLoading(true);
+            const res = await apiClient.get('/api/reports/leave');
+            const data = res.data;
+            if (data) {
+                setRecords(data.records || []);
+                setMetrics(data.metrics || {
+                    totalRequests: 0,
+                    approvedCount: 0,
+                    pendingCount: 0,
+                    rejectedCount: 0
+                });
+                if (data.typeDistribution && data.typeDistribution.labels?.length > 0) {
+                    setChartData(data.typeDistribution);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch leave report:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLeaveData();
+    }, []);
+
+    const filteredRecords = useMemo(() => {
+        let result = [...records];
+        if (selectedStatus !== "ALL") {
+            result = result.filter(r => r.Status?.toUpperCase() === selectedStatus.toUpperCase());
+        }
+
+        if (sortBy === "Ascending") {
+            result.sort((a, b) => a.Name.localeCompare(b.Name));
+        } else if (sortBy === "Descending") {
+            result.sort((a, b) => b.Name.localeCompare(a.Name));
+        } else {
+            result.sort((a, b) => b.id - a.id);
+        }
+
+        return result;
+    }, [records, selectedStatus, sortBy]);
+
     const columns: ColumnType<LeaveReportItem>[] = [
         {
-            title: "Invoice ID",
-            dataIndex: "InvoiceID",
-            render: (text: string) => (
-                <Link to={all_routes.invoiceDetails} className="link-default">{text}</Link>
-            ),
-            sorter: (a, b) => a.InvoiceID.length - b.InvoiceID.length,
-        },
-        {
-            title: "Client Name",
-            dataIndex: "ClientName",
-            render: (_text: string, record?: LeaveReportItem) => (
-                <div className="d-flex align-items-center">
-                    <Link
-                        to="#"
-                        className="avatar avatar-md"
-                        data-bs-toggle="modal" data-inert={true}
-                        data-bs-target="#view_details"
-                    >
-                        <ImageWithBasePath
-                            src={`assets/img/reports/${record?.Image}`}
-                            className="img-fluid rounded-circle"
-                            alt="reports-image"
-                        />
-                    </Link>
-                    <div className="ms-2">
-                        <p className="text-dark mb-0">
-                            <Link to="#" data-bs-toggle="modal" data-inert={true} data-bs-target="#view_details">
-                                {record?.ClientName}
-                            </Link>
-                        </p>
-                        <span className="fs-12">{record?.Role}</span>
+            title: "Employee",
+            dataIndex: "Name",
+            render: (_text: string, record?: LeaveReportItem) => {
+                const photo = record?.Image;
+                const imgSrc = photo && (photo.includes('uploads/') || photo.startsWith('http'))
+                    ? photo
+                    : `assets/img/users/${photo || 'user-32.jpg'}`;
+                return (
+                    <div className="d-flex align-items-center">
+                        <span className="avatar avatar-md me-2 border avatar-rounded">
+                            <ImageWithBasePath
+                                src={imgSrc}
+                                className="img-fluid rounded-circle"
+                                alt="emp-avatar"
+                            />
+                        </span>
+                        <div>
+                            <p className="text-dark fw-medium mb-0">{record?.Name}</p>
+                            <span className="fs-12 text-muted">{record?.Role}</span>
+                        </div>
                     </div>
-                </div>
+                );
+            },
+            sorter: (a, b) => a.Name.localeCompare(b.Name),
+        },
+        {
+            title: "Department",
+            dataIndex: "Department",
+            render: (dept: string) => <span className="text-muted small">{dept}</span>,
+            sorter: (a, b) => a.Department.localeCompare(b.Department),
+        },
+        {
+            title: "Leave Type",
+            dataIndex: "LeaveType",
+            render: (type: string) => (
+                <span className="fw-semibold text-dark">{type}</span>
             ),
-            sorter: (a, b) => a.ClientName.length - b.ClientName.length,
+            sorter: (a, b) => a.LeaveType.localeCompare(b.LeaveType),
         },
         {
-            title: "Company Name",
-            dataIndex: "CompanyName",
-            sorter: (a, b) => a.CompanyName.length - b.CompanyName.length,
+            title: "Duration",
+            dataIndex: "StartDate",
+            render: (_: any, record?: LeaveReportItem) => (
+                <span className="small text-nowrap">
+                    <i className="ti ti-calendar me-1 text-muted" />
+                    {record?.StartDate} <span className="text-muted">to</span> {record?.EndDate}
+                </span>
+            ),
         },
         {
-            title: "Created Date",
-            dataIndex: "CreatedDate",
-            sorter: (a, b) => a.CreatedDate.length - b.CreatedDate.length,
+            title: "No. of Days",
+            dataIndex: "Days",
+            render: (days: number) => (
+                <span className="badge badge-info-transparent badge-sm">
+                    {days} {days === 1 ? 'Day' : 'Days'}
+                </span>
+            ),
+            sorter: (a, b) => Number(a.Days) - Number(b.Days),
         },
         {
-            title: "Due Date",
-            dataIndex: "DueDate",
-            sorter: (a, b) => a.DueDate.length - b.DueDate.length,
-        },
-        {
-            title: "Amount",
-            dataIndex: "Amount",
-            sorter: (a, b) => a.Amount.length - b.Amount.length,
+            title: "Reason",
+            dataIndex: "Reason",
+            render: (text: string) => (
+                <span className="text-muted small">
+                    {text && text.length > 35 ? `${text.substring(0, 35)}...` : text || '—'}
+                </span>
+            ),
         },
         {
             title: "Status",
             dataIndex: "Status",
-            render: (text: string) => (
-                <span className={`badge d-inline-flex align-items-center badge-xs ${text === 'Paid'
-                    ? 'badge-soft-success'
-                    : text === 'Sent'
-                        ? 'badge-soft-purple'
-                        : 'badge-soft-warning'
-                    }`}>
-                    {text}
-                </span>
-            ),
-            sorter: (a, b) => a.Status.length - b.Status.length,
+            render: (status: string) => {
+                let badgeClass = "badge-soft-warning";
+                if (status === 'APPROVED') badgeClass = "badge-soft-success";
+                else if (status === 'REJECTED') badgeClass = "badge-soft-danger";
+
+                return (
+                    <span className={`badge d-inline-flex align-items-center badge-xs ${badgeClass}`}>
+                        <i className="ti ti-point-filled me-1" />
+                        {status}
+                    </span>
+                );
+            },
+            sorter: (a, b) => a.Status.localeCompare(b.Status),
         },
-    ]
-    //New Chart
-    const [leavechart] = useState<any>({
-        series: [{
-            name: 'Annual Leave',
-            data: [30, 40, 35, 50, 50, 60, 30, 40, 35, 50, 50, 60] // Replace with your data
-        }, {
-            name: 'Casual Leave',
-            data: [20, 30, 25, 40, 50, 60, 20, 30, 25, 40, 50, 60] // Replace with your data
-        }, {
-            name: 'Medical Leave',
-            data: [15, 10, 20, 15, 50, 60, 15, 10, 20, 15, 50, 60] // Replace with your data
-        }, {
-            name: 'Others',
-            data: [25, 20, 30, 35, 50, 60, 25, 20, 30, 35, 50, 60] // Replace with your data
-        },
-        ],
+    ];
+
+    const chartOptions: any = {
         chart: {
+            height: 200,
             type: 'bar',
-            height: 210, // Change this value to your desired height
-            stacked: true,
-            stackType: '100%'
+            toolbar: { show: false }
         },
-        responsive: [{
-            breakpoint: 480,
-            options: {
-                legend: {
-                    position: 'bottom',
-                    offsetX: -10,
-                    offsetY: 0
-                }
+        plotOptions: {
+            bar: {
+                borderRadius: 4,
+                horizontal: false,
+                columnWidth: '45%'
             }
-        }],
+        },
+        dataLabels: { enabled: false },
         xaxis: {
-            categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',] // Update to match your time frame
+            categories: chartData.labels.length > 0 ? chartData.labels : ['Casual', 'Medical', 'Annual']
         },
-        yaxis: {
-            labels: {
-                offsetX: -15,
-            }
-        },
-        fill: {
-            opacity: 1
-        },
-        legend: {
-            show: false
-        },
-        colors: ['#03C95A', '#FFC107', '#0C4B5E', '#F26522'], // Set your colors here
-        dataLabels: {
-            enabled: false // Disable data labels
+        colors: ['#0d6efd']
+    };
+
+    const chartSeries = [
+        {
+            name: 'Days Requested',
+            data: chartData.data.length > 0 ? chartData.data : [5, 3, 7]
         }
-    });
+    ];
 
     return (
         <>
@@ -181,393 +230,250 @@ const LeaveReport = () => {
                                 </ol>
                             </nav>
                         </div>
-                        <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
-                            <div className="mb-2">
-                                <div className="dropdown">
-                                    <Link
-                                        to="#"
-                                        className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                    >
-                                        <i className="ti ti-file-export me-1" />
-                                        Export
-                                    </Link>
-                                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                <i className="ti ti-file-type-pdf me-1" />
-                                                Export as PDF
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                <i className="ti ti-file-type-xls me-1" />
-                                                Export as Excel{" "}
-                                            </Link>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
+                        <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
                             <div className="head-icons ms-2">
                                 <CollapseHeader />
                             </div>
                         </div>
                     </div>
                     {/* /Breadcrumb */}
+
+                    {/* Summary KPI Cards & Chart */}
                     <div className="row">
                         <div className="col-xl-6 d-flex">
                             <div className="row flex-fill">
-                                {/* Total Companies */}
+                                {/* Total Requests */}
                                 <div className="col-lg-6 col-md-6 d-flex">
                                     <div className="card flex-fill">
                                         <div className="card-body">
-                                            <div className="d-flex align-items-center justify-content-between mb-2 overflow-hidden">
-                                                <div>
-                                                    <p className="fs-12 fw-normal mb-1 text-truncate">
-                                                        Total Leaves
-                                                    </p>
-                                                    <h4>15</h4>
-                                                </div>
-                                                <div className="leave-report-icon">
-                                                    <Link to="#">
-                                                        <span className="p-2 border border-primary bg-transparent-primary rounded-circle d-flex align-items-center justify-content-center">
-                                                            <i className="ti ti-calendar-x text-primary" />
-                                                        </span>
-                                                    </Link>
-                                                </div>
-                                            </div>
-                                            <div className="p-2 bg-gray-100 br-5">
-                                                <div className="d-flex align-items-center justify-content-between">
-                                                    <p className="fs-12 fw-normal mb-0">Last Month</p>
-                                                    <span className="fs-12 fw-normal text-success d-flex align-items-center">
-                                                        <i className="ti ti-arrow-wave-right-up text-success me-1" />
-                                                        +17.02%
+                                            <div className="d-flex align-items-center overflow-hidden mb-2">
+                                                <div className="attendence-icon">
+                                                    <span>
+                                                        <i className="ti ti-calendar text-primary" />
                                                     </span>
                                                 </div>
+                                                <div className="ms-2 overflow-hidden">
+                                                    <p className="fs-12 fw-normal mb-1 text-truncate">
+                                                        Total Leave Requests
+                                                    </p>
+                                                    <h4>{metrics.totalRequests}</h4>
+                                                </div>
                                             </div>
+                                            <div className="attendance-report-bar mb-2">
+                                                <div className="progress" style={{ height: 5 }}>
+                                                    <div className="progress-bar bg-primary" style={{ width: "100%" }} />
+                                                </div>
+                                            </div>
+                                            <p className="fs-12 text-muted mb-0">Total recorded requests</p>
                                         </div>
                                     </div>
                                 </div>
-                                {/* /Total Companies */}
-                                {/* Total Companies */}
+
+                                {/* Approved Leaves */}
                                 <div className="col-lg-6 col-md-6 d-flex">
                                     <div className="card flex-fill">
                                         <div className="card-body">
-                                            <div className="d-flex align-items-center justify-content-between mb-2 overflow-hidden">
-                                                <div>
+                                            <div className="d-flex align-items-center overflow-hidden mb-2">
+                                                <div className="attendence-icon">
+                                                    <span>
+                                                        <i className="ti ti-check text-success" />
+                                                    </span>
+                                                </div>
+                                                <div className="ms-2 overflow-hidden">
                                                     <p className="fs-12 fw-normal mb-1 text-truncate">
                                                         Approved Leaves
                                                     </p>
-                                                    <h4>15</h4>
-                                                </div>
-                                                <div className="leave-report-icon">
-                                                    <Link to="#">
-                                                        <span className="p-2 border border-success bg-transparent-success rounded-circle d-flex align-items-center justify-content-center">
-                                                            <i className="ti ti-calendar-x text-success" />
-                                                        </span>
-                                                    </Link>
+                                                    <h4>{metrics.approvedCount}</h4>
                                                 </div>
                                             </div>
-                                            <div className="p-2 bg-gray-100 br-5">
-                                                <div className="d-flex align-items-center justify-content-between">
-                                                    <p className="fs-12 fw-normal mb-0">Last Month</p>
-                                                    <span className="fs-12 fw-normal text-success d-flex align-items-center">
-                                                        <i className="ti ti-arrow-wave-right-up text-success me-1" />
-                                                        +17.02%
-                                                    </span>
+                                            <div className="attendance-report-bar mb-2">
+                                                <div className="progress" style={{ height: 5 }}>
+                                                    <div
+                                                        className="progress-bar bg-success"
+                                                        style={{
+                                                            width: metrics.totalRequests > 0
+                                                                ? `${Math.round((metrics.approvedCount / metrics.totalRequests) * 100)}%`
+                                                                : "0%"
+                                                        }}
+                                                    />
                                                 </div>
                                             </div>
+                                            <p className="fs-12 text-muted mb-0">
+                                                {metrics.totalRequests > 0
+                                                    ? `${Math.round((metrics.approvedCount / metrics.totalRequests) * 100)}% approved rate`
+                                                    : "0% rate"}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
-                                {/* /Total Companies */}
-                                {/* Inactive Companies */}
+
+                                {/* Pending Leaves */}
                                 <div className="col-lg-6 col-md-6 d-flex">
                                     <div className="card flex-fill">
                                         <div className="card-body">
-                                            <div className="d-flex align-items-center justify-content-between mb-2 overflow-hidden">
-                                                <div>
+                                            <div className="d-flex align-items-center overflow-hidden mb-2">
+                                                <div className="attendence-icon">
+                                                    <span>
+                                                        <i className="ti ti-clock text-warning" />
+                                                    </span>
+                                                </div>
+                                                <div className="ms-2 overflow-hidden">
                                                     <p className="fs-12 fw-normal mb-1 text-truncate">
-                                                        Pending Requests
+                                                        Pending Approval
                                                     </p>
-                                                    <h4>5</h4>
-                                                </div>
-                                                <div className="leave-report-icon">
-                                                    <Link to="#">
-                                                        <span className="p-2 border border-skyblue bg-transparent-skyblue rounded-circle d-flex align-items-center justify-content-center">
-                                                            <i className="ti ti-calendar-x text-skyblue" />
-                                                        </span>
-                                                    </Link>
+                                                    <h4>{metrics.pendingCount}</h4>
                                                 </div>
                                             </div>
-                                            <div className="p-2 bg-gray-100 br-5">
-                                                <div className="d-flex align-items-center justify-content-between">
-                                                    <p className="fs-12 fw-normal mb-0">Last Month</p>
-                                                    <span className="fs-12 fw-normal text-success d-flex align-items-center">
-                                                        <i className="ti ti-arrow-wave-right-up text-success me-1" />
-                                                        +17.02%
-                                                    </span>
+                                            <div className="attendance-report-bar mb-2">
+                                                <div className="progress" style={{ height: 5 }}>
+                                                    <div
+                                                        className="progress-bar bg-warning"
+                                                        style={{
+                                                            width: metrics.totalRequests > 0
+                                                                ? `${Math.round((metrics.pendingCount / metrics.totalRequests) * 100)}%`
+                                                                : "0%"
+                                                        }}
+                                                    />
                                                 </div>
                                             </div>
+                                            <p className="fs-12 text-muted mb-0">Awaiting manager action</p>
                                         </div>
                                     </div>
                                 </div>
-                                {/* /Inactive Companies */}
-                                {/* Company Location */}
+
+                                {/* Rejected Leaves */}
                                 <div className="col-lg-6 col-md-6 d-flex">
                                     <div className="card flex-fill">
                                         <div className="card-body">
-                                            <div className="d-flex align-items-center justify-content-between mb-2 overflow-hidden">
-                                                <div>
+                                            <div className="d-flex align-items-center overflow-hidden mb-2">
+                                                <div className="attendence-icon">
+                                                    <span>
+                                                        <i className="ti ti-x text-danger" />
+                                                    </span>
+                                                </div>
+                                                <div className="ms-2 overflow-hidden">
                                                     <p className="fs-12 fw-normal mb-1 text-truncate">
                                                         Rejected Leaves
                                                     </p>
-                                                    <h4>5</h4>
-                                                </div>
-                                                <div className="leave-report-icon">
-                                                    <Link to="#">
-                                                        <span className="p-2 border border-danger bg-transparent-danger rounded-circle d-flex align-items-center justify-content-center">
-                                                            <i className="ti ti-calendar-x text-danger" />
-                                                        </span>
-                                                    </Link>
+                                                    <h4>{metrics.rejectedCount}</h4>
                                                 </div>
                                             </div>
-                                            <div className="p-2 bg-gray-100 br-5">
-                                                <div className="d-flex align-items-center justify-content-between">
-                                                    <p className="fs-12 fw-normal mb-0">Last Month</p>
-                                                    <span className="fs-12 fw-normal text-success d-flex align-items-center">
-                                                        <i className="ti ti-arrow-wave-right-up text-success me-1" />
-                                                        +17.02%
-                                                    </span>
+                                            <div className="attendance-report-bar mb-2">
+                                                <div className="progress" style={{ height: 5 }}>
+                                                    <div
+                                                        className="progress-bar bg-danger"
+                                                        style={{
+                                                            width: metrics.totalRequests > 0
+                                                                ? `${Math.round((metrics.rejectedCount / metrics.totalRequests) * 100)}%`
+                                                                : "0%"
+                                                        }}
+                                                    />
                                                 </div>
                                             </div>
+                                            <p className="fs-12 text-muted mb-0">Declined requests</p>
                                         </div>
                                     </div>
                                 </div>
-                                {/* /Company Location */}
                             </div>
                         </div>
+
+                        {/* Chart Column */}
                         <div className="col-xl-6 d-flex">
                             <div className="card flex-fill">
-                                <div className="card-header border-0 pb-0">
-                                    <div className="d-flex flex-wrap justify-content-between align-items-center row-gap-2">
-                                        <div className="d-flex align-items-center ">
-                                            <span className="me-2">
-                                                <i className="ti ti-chart-bar text-danger" />
-                                            </span>
-                                            <h5>Leaves </h5>
-                                        </div>
-                                        <div className="d-flex align-items-center">
-                                            <p className="d-inline-flex align-items-center me-2 mb-0">
-                                                <i className="ti ti-square-filled fs-12 text-success me-2" />
-                                                Annual
-                                            </p>
-                                            <p className="d-inline-flex align-items-center mb-0 me-2">
-                                                <i className="ti ti-square-filled fs-12 text-warning me-2" />
-                                                Casual
-                                            </p>
-                                            <p className="d-inline-flex align-items-center mb-0 me-2">
-                                                <i className="ti ti-square-filled fs-12 text-dark me-2" />
-                                                Medical
-                                            </p>
-                                            <p className="d-inline-flex align-items-center">
-                                                <i className="ti ti-square-filled fs-12 text-primary me-2" />
-                                                Others
-                                            </p>
-                                        </div>
-                                        <div className="dropdown">
-                                            <Link
-                                                to="#"
-                                                className="dropdown-toggle btn btn-sm fs-12 btn-white d-inline-flex align-items-center"
-                                                data-bs-toggle="dropdown"
-                                            >
-                                                This Year
-                                            </Link>
-                                            <ul className="dropdown-menu  dropdown-menu-end p-2">
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        2024
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        2023
-                                                    </Link>
-                                                </li>
-                                                <li>
-                                                    <Link
-                                                        to="#"
-                                                        className="dropdown-item rounded-1"
-                                                    >
-                                                        2022
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
+                                <div className="card-header">
+                                    <h5>Leave Types Utilization</h5>
                                 </div>
-                                <div className="card-body py-0">
+                                <div className="card-body pb-0">
                                     <ReactApexChart
-                                        id="payslip-chart"
-                                        options={leavechart}
-                                        series={leavechart.series}
+                                        options={chartOptions}
+                                        series={chartSeries}
                                         type="bar"
-                                        height={210}
+                                        height={200}
                                     />
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    {/* Table Card */}
                     <div className="card">
                         <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-                            <h5>Invoice List</h5>
-                            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
-                                <div className="me-3">
-                                    <div className="input-icon position-relative">
-                                        <PredefinedDateRanges />
+                            <h5>Leave Requests Overview</h5>
+                            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap gap-2">
+                                {/* Status Filter */}
+                                <select
+                                    className="form-select form-select-sm"
+                                    style={{ width: "140px" }}
+                                    value={selectedStatus}
+                                    onChange={(e) => setSelectedStatus(e.target.value)}
+                                >
+                                    <option value="ALL">All Status</option>
+                                    <option value="APPROVED">Approved</option>
+                                    <option value="PENDING">Pending</option>
+                                    <option value="REJECTED">Rejected</option>
+                                </select>
 
-                                    </div>
-                                </div>
-                                <div className="dropdown me-3">
-                                    <Link
-                                        to="#"
-                                        className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                    >
-                                        $0.00 - $0.00
-                                    </Link>
-                                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                $3000
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                $2500
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                $2800
-                                            </Link>
-                                        </li>
-                                    </ul>
-                                </div>
-                                <div className="dropdown me-3">
-                                    <Link
-                                        to="#"
-                                        className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
-                                        data-bs-toggle="dropdown"
-                                    >
-                                        Select Status
-                                    </Link>
-                                    <ul className="dropdown-menu  dropdown-menu-end p-3">
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Paid
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Sent
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Partially Paid
-                                            </Link>
-                                        </li>
-                                    </ul>
-                                </div>
+                                {/* Sort Dropdown */}
                                 <div className="dropdown">
                                     <Link
                                         to="#"
-                                        className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
+                                        className="dropdown-toggle btn btn-white d-inline-flex align-items-center btn-sm"
                                         data-bs-toggle="dropdown"
                                     >
-                                        Sort By : Last 7 Days
+                                        Sort By : {sortBy}
                                     </Link>
-                                    <ul className="dropdown-menu  dropdown-menu-end p-3">
+                                    <ul className="dropdown-menu dropdown-menu-end p-2">
                                         <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
+                                            <button
+                                                type="button"
+                                                className={`dropdown-item rounded-1 ${sortBy === "Recently Added" ? "active" : ""}`}
+                                                onClick={() => setSortBy("Recently Added")}
                                             >
                                                 Recently Added
-                                            </Link>
+                                            </button>
                                         </li>
                                         <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
+                                            <button
+                                                type="button"
+                                                className={`dropdown-item rounded-1 ${sortBy === "Ascending" ? "active" : ""}`}
+                                                onClick={() => setSortBy("Ascending")}
                                             >
                                                 Ascending
-                                            </Link>
+                                            </button>
                                         </li>
                                         <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
+                                            <button
+                                                type="button"
+                                                className={`dropdown-item rounded-1 ${sortBy === "Descending" ? "active" : ""}`}
+                                                onClick={() => setSortBy("Descending")}
                                             >
                                                 Descending
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Last Month
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link
-                                                to="#"
-                                                className="dropdown-item rounded-1"
-                                            >
-                                                Last 7 Days
-                                            </Link>
+                                            </button>
                                         </li>
                                     </ul>
                                 </div>
                             </div>
                         </div>
+
                         <div className="card-body p-0">
-                            <Table dataSource={data} columns={columns} Selection={true} />
+                            {loading ? (
+                                <div className="text-center p-5">
+                                    <div className="spinner-border text-primary" role="status">
+                                        <span className="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p className="mt-2 text-muted">Loading Leave Report...</p>
+                                </div>
+                            ) : (
+                                <Table
+                                    dataSource={filteredRecords.map((r, idx) => ({ ...r, key: String(r.id || idx) }))}
+                                    columns={columns}
+                                    Selection={false}
+                                />
+                            )}
                         </div>
                     </div>
                 </div>
+
                 <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
                     <p className="mb-0">2014 - 2026 © SmartHR.</p>
                     <p>
@@ -580,9 +486,7 @@ const LeaveReport = () => {
             </div>
             {/* /Page Wrapper */}
         </>
+    );
+};
 
-
-    )
-}
-
-export default LeaveReport
+export default LeaveReport;
