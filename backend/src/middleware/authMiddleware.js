@@ -1,14 +1,19 @@
 const jwt = require('jsonwebtoken');
 
 const verifyToken = (req, res, next) => {
-    // Check for Authorization header
+    // Check for Authorization header or query param token (useful for file downloads & new window tabs)
+    let token = null;
     const authHeader = req.headers.authorization || req.headers.Authorization;
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ message: 'Authorization token is missing or invalid' });
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+    } else if (req.query && req.query.token) {
+        token = req.query.token;
     }
 
-    const token = authHeader.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({ message: 'Authorization token is missing or invalid' });
+    }
 
     try {
         // Verify the token

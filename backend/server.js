@@ -198,6 +198,30 @@ app.use('/shifts', shiftArrangementRoutes);
 app.use('/api/shifts', shiftArrangementRoutes);
 app.use('/api/v1/shifts', shiftArrangementRoutes);
 
+// Performance Management & Appraisals Routes (Phase 3: Goal Types, Goals, Indicators, Appraisals)
+const performanceRoutes = require('./src/routes/performanceRoutes');
+app.use('/performance', performanceRoutes);
+app.use('/api/performance', performanceRoutes);
+app.use('/api/v1/performance', performanceRoutes);
+
+// Training & Development Routes (Phase 4: Training Types, Trainers, Training Programs)
+const trainingRoutes = require('./src/routes/trainingRoutes');
+app.use('/training', trainingRoutes);
+app.use('/api/training', trainingRoutes);
+app.use('/api/v1/training', trainingRoutes);
+
+// Company Policies & Dynamic Reports Routes (Phase 5: Company Policies, Reports)
+const policyRoutes = require('./src/routes/policyRoutes');
+app.use('/policies', policyRoutes);
+app.use('/api/policies', policyRoutes);
+app.use('/policy', policyRoutes);
+app.use('/api/policy', policyRoutes);
+
+const reportsRoutes = require('./src/routes/reportsRoutes');
+app.use('/reports', reportsRoutes);
+app.use('/api/reports', reportsRoutes);
+
+
 
 const { getDynamicFrontendUrl } = require('./src/utils/urlHelper');
 

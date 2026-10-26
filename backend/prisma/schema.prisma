@@ -60,6 +60,16 @@ model Company {
   shiftSwapRequests ShiftSwapRequest[]
   overtimeRecords  OvertimeRecord[]
   wfhRequests      WfhRequest[]
+  goalTypes        GoalType[]
+  performanceGoals PerformanceGoal[]
+  performanceIndicators PerformanceIndicator[]
+  performanceAppraisals PerformanceAppraisal[]
+  performanceReviews    PerformanceReview[]
+  trainers              Trainer[]
+  trainingTypes         TrainingType[]
+  trainingPrograms      TrainingProgram[]
+  trainingParticipants  TrainingParticipant[]
+  companyPolicies       CompanyPolicy[]
 
   @@map("companies")
 }
@@ -253,6 +263,11 @@ model Employee {
   shiftSwapRequestsReceived    ShiftSwapRequest[]  @relation("ShiftSwapTarget")
   overtimeRecords              OvertimeRecord[]
   wfhRequests                  WfhRequest[]
+  performanceIndicators        PerformanceIndicator[] @relation("IndicatorAddedBy")
+  appraisalsReceived           PerformanceAppraisal[] @relation("AppraisalEmployee")
+  appraisalsConducted          PerformanceAppraisal[] @relation("AppraisalReviewer")
+  trainingParticipations       TrainingParticipant[]
+
 
   @@index([companyRoleId], map: "employees_companyRoleId_fkey")
   @@index([departmentId], map: "employees_departmentId_fkey")
@@ -276,6 +291,8 @@ model Department {
   promotions   Promotion[]
   resignations Resignation[]
   terminations Termination[]
+  performanceIndicators PerformanceIndicator[]
+  companyPolicies       CompanyPolicy[]
 
   @@unique([companyId, name])
   @@map("departments")
@@ -291,6 +308,7 @@ model Designation {
   employees      Employee[]
   promotionsFrom Promotion[] @relation("PrevDesignation")
   promotionsTo   Promotion[] @relation("NewDesignation")
+  performanceIndicators PerformanceIndicator[]
 
   @@unique([companyId, name])
   @@map("designations")
@@ -523,35 +541,127 @@ model Document {
   @@map("documents")
 }
 
-model PerformanceGoal {
-  id          Int       @id @default(autoincrement())
-  employeeId  Int
-  createdById Int
-  title       String
-  description String?
-  targetDate  DateTime?
-  isCompleted Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  createdBy   Employee  @relation("ManagerGoals", fields: [createdById], references: [id], onDelete: Cascade)
-  employee    Employee  @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
+model GoalType {
+  id          Int               @id @default(autoincrement())
+  companyId   Int
+  name        String
+  description String?           @db.Text
+  status      String            @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
-  @@index([createdById], map: "performance_goals_createdById_fkey")
-  @@index([employeeId], map: "performance_goals_employeeId_fkey")
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  goals       PerformanceGoal[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("goal_types")
+}
+
+model PerformanceGoal {
+  id                Int       @id @default(autoincrement())
+  companyId         Int
+  employeeId        Int
+  createdById       Int?
+  goalTypeId        Int?
+  subject           String    // Title of the goal
+  targetAchievement String?   // Expected metric e.g. "15 Deals", "99.9% Uptime"
+  startDate         DateTime? @db.Date
+  endDate           DateTime? @db.Date
+  description       String?   @db.Text
+  status            String    @default("ACTIVE") // ACTIVE, IN_PROGRESS, COMPLETED, ON_HOLD, OVERDUE
+  progress          Int       @default(0) // 0 to 100 percentage
+  isCompleted       Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee          Employee  @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
+  createdBy         Employee? @relation("ManagerGoals", fields: [createdById], references: [id], onDelete: SetNull)
+  goalType          GoalType? @relation(fields: [goalTypeId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([createdById])
+  @@index([goalTypeId])
   @@map("performance_goals")
 }
 
+model PerformanceIndicator {
+  id                 Int          @id @default(autoincrement())
+  companyId          Int
+  departmentId       Int?
+  designationId      Int?
+  addedById          Int?
+  customerExperience String       @default("Advanced") // None, Beginner, Intermediate, Advanced, Expert
+  marketing          String       @default("Intermediate")
+  management         String       @default("Advanced")
+  administration     String       @default("Intermediate")
+  presentationSkills String       @default("Advanced")
+  qualityOfWork      String       @default("Advanced")
+  efficiency         String       @default("Advanced")
+  integrity          String       @default("Advanced")
+  status             String       @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  company            Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department         Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  designation        Designation? @relation(fields: [designationId], references: [id], onDelete: SetNull)
+  addedBy            Employee?    @relation("IndicatorAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([departmentId])
+  @@index([designationId])
+  @@map("performance_indicators")
+}
+
+model PerformanceAppraisal {
+  id                  Int       @id @default(autoincrement())
+  companyId           Int
+  employeeId          Int
+  reviewerId          Int?
+  appraisalCycle      String    @default("Annual Review 2026")
+  appraisalDate       DateTime  @db.Date
+  selfRating          Float?    @default(0)
+  managerRating       Float?    @default(0)
+  finalRating         Float?    @default(0)
+  competencyScore     Float?    @default(0)
+  strengths           String?   @db.Text
+  areasForImprovement String?   @db.Text
+  employeeRemarks     String?   @db.Text
+  managerRemarks      String?   @db.Text
+  hrRemarks           String?   @db.Text
+  status              String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  company             Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee            Employee  @relation("AppraisalEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewer            Employee? @relation("AppraisalReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([reviewerId])
+  @@map("performance_appraisals")
+}
+
 model PerformanceReview {
-  id         Int      @id @default(autoincrement())
+  id         Int       @id @default(autoincrement())
+  companyId  Int?
   employeeId Int
   reviewerId Int
   rating     Int
-  feedback   String?
-  reviewDate DateTime @default(now())
-  employee   Employee @relation("EmployeeReviews", fields: [employeeId], references: [id], onDelete: Cascade)
-  reviewer   Employee @relation("ManagerReviews", fields: [reviewerId], references: [id], onDelete: Cascade)
+  feedback   String?   @db.Text
+  reviewDate DateTime  @default(now())
 
-  @@index([employeeId], map: "performance_reviews_employeeId_fkey")
-  @@index([reviewerId], map: "performance_reviews_reviewerId_fkey")
+  company    Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee  @relation("EmployeeReviews", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewer   Employee  @relation("ManagerReviews", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([reviewerId])
   @@map("performance_reviews")
 }
 
@@ -1274,6 +1384,8 @@ enum NotificationType {
   SHIFT_SWAP
   OVERTIME
   WFH
+  PERFORMANCE_GOAL
+  PERFORMANCE_APPRAISAL
 }
 
 enum ProjectStatus {
@@ -1674,5 +1786,120 @@ model WfhRequest {
   @@index([companyId])
   @@index([employeeId])
   @@map("wfh_requests")
+}
+
+// ========================================================
+// PHASE 4: TRAINING & DEVELOPMENT MODELS
+// ========================================================
+
+model Trainer {
+  id              Int               @id @default(autoincrement())
+  companyId       Int
+  firstName       String
+  lastName        String
+  email           String
+  phone           String?
+  role            String?           // e.g. "Senior Cloud Architect", "Soft Skills Lead"
+  trainerType     String            @default("INTERNAL") // INTERNAL, EXTERNAL
+  status          String            @default("ACTIVE") // ACTIVE, INACTIVE
+  profilePhotoUrl String?
+  description     String?           @db.Text
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  trainingPrograms TrainingProgram[]
+
+  @@index([companyId])
+  @@map("trainers")
+}
+
+model TrainingType {
+  id          Int               @id @default(autoincrement())
+  companyId   Int
+  type        String            // Name e.g. "Technical Skills", "Leadership", "Compliance"
+  description String?           @db.Text
+  status      String            @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  trainingPrograms TrainingProgram[]
+
+  @@unique([companyId, type])
+  @@index([companyId])
+  @@map("training_types")
+}
+
+model TrainingProgram {
+  id              Int                   @id @default(autoincrement())
+  companyId       Int
+  trainingTypeId  Int
+  trainerId       Int?
+  title           String                // Program title
+  description     String?               @db.Text
+  startDate       DateTime?             @db.Date
+  endDate         DateTime?             @db.Date
+  cost            Decimal?              @db.Decimal(10, 2)
+  status          String                @default("ACTIVE") // ACTIVE, IN_PROGRESS, COMPLETED, CANCELLED
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  company         Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  trainingType    TrainingType          @relation(fields: [trainingTypeId], references: [id], onDelete: Cascade)
+  trainer         Trainer?              @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  participants    TrainingParticipant[]
+
+  @@index([companyId])
+  @@index([trainingTypeId])
+  @@index([trainerId])
+  @@map("training_programs")
+}
+
+model TrainingParticipant {
+  id                Int             @id @default(autoincrement())
+  companyId         Int
+  trainingProgramId Int
+  employeeId        Int
+  attendanceStatus  String          @default("ENROLLED") // ENROLLED, ATTENDED, COMPLETED, ABSENT
+  feedback          String?         @db.Text
+  rating            Float?
+  certificateUrl    String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  trainingProgram   TrainingProgram @relation(fields: [trainingProgramId], references: [id], onDelete: Cascade)
+  employee          Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingProgramId, employeeId])
+  @@index([companyId])
+  @@index([trainingProgramId])
+  @@index([employeeId])
+  @@map("training_participants")
+}
+
+// ========================================================
+// PHASE 5: COMPANY POLICIES & GOVERNANCE
+// ========================================================
+
+model CompanyPolicy {
+  id           Int         @id @default(autoincrement())
+  companyId    Int
+  departmentId Int?        // null = All Departments
+  title        String
+  description  String?     @db.Text
+  policyDate   DateTime?   @db.Date
+  documentUrl  String?     @db.Text
+  status       String      @default("ACTIVE") // ACTIVE, INACTIVE, DRAFT
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([departmentId])
+  @@map("company_policies")
 }
 

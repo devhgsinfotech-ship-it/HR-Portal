@@ -1,87 +1,191 @@
+import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { all_routes } from "../../router/all_routes";
 import CollapseHeader from "../../core/common/collapse-header/collapse-header";
-import { trainersData } from "../../core/data/json/trainersData";
 import Table from "../../core/common/dataTable/index";
 import ImageWithBasePath from "../../core/common/imageWithBasePath";
-import TrainersModal from "../../core/modals/trainersModal";
-
-// Define a type-safe interface for trainers
-interface Trainer {
-  Name: string;
-  Image: string;
-  Phone: string;
-  Email: string;
-  Description: string;
-  Status: string;
-}
+import TrainersModal, { TrainerRecord } from "../../core/modals/trainersModal";
+import apiClient from "../../core/utils/apiClient";
 
 const Trainers = () => {
   const routes = all_routes;
-  const data: Trainer[] = trainersData;
+  const [trainers, setTrainers] = useState<TrainerRecord[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [selectedTrainer, setSelectedTrainer] = useState<TrainerRecord | null>(null);
+  const [trainerToDelete, setTrainerToDelete] = useState<TrainerRecord | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [sortBy, setSortBy] = useState<string>("Recently Added");
+
+  const fetchTrainers = async () => {
+    try {
+      setLoading(true);
+      const res = await apiClient.get("/api/training/trainers");
+      setTrainers(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch trainers:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTrainers();
+  }, []);
+
+  const filteredTrainers = useMemo(() => {
+    let result = [...trainers];
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((t) => {
+        const fullName = `${t.firstName || ""} ${t.lastName || ""}`.toLowerCase();
+        return (
+          fullName.includes(q) ||
+          t.email?.toLowerCase().includes(q) ||
+          t.role?.toLowerCase().includes(q) ||
+          t.phone?.toLowerCase().includes(q)
+        );
+      });
+    }
+
+    if (sortBy === "Ascending") {
+      result.sort((a, b) =>
+        `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
+      );
+    } else if (sortBy === "Descending") {
+      result.sort((a, b) =>
+        `${b.firstName} ${b.lastName}`.localeCompare(`${a.firstName} ${a.lastName}`)
+      );
+    } else {
+      // Recently Added
+      result.sort((a, b) => b.id - a.id);
+    }
+
+    return result;
+  }, [trainers, searchQuery, sortBy]);
+
   const columns = [
     {
       title: "Name",
-      dataIndex: "Name",
-      render: (text: string, record: Trainer) => (
-        <div className="d-flex align-items-center file-name-icon">
-          <Link to="#" className="avatar avatar-md border avatar-rounded">
-            <ImageWithBasePath
-              src={`assets/img/users/${record.Image}`}
-              className="img-fluid"
-              alt={`${record.Name} avatar`}
-            />
-          </Link>
-          <div className="ms-2">
-            <h6 className="fw-medium">
-              <Link to="#">{text}</Link>
-            </h6>
+      dataIndex: "firstName",
+      render: (_: any, record: TrainerRecord) => {
+        const fullName = `${record.firstName || ""} ${record.lastName || ""}`.trim();
+        const photo = record.profilePhotoUrl || "user-32.jpg";
+        return (
+          <div className="d-flex align-items-center file-name-icon">
+            <Link to="#" className="avatar avatar-md border avatar-rounded">
+              <ImageWithBasePath
+                src={`assets/img/users/${photo}`}
+                className="img-fluid"
+                alt={`${fullName} avatar`}
+              />
+            </Link>
+            <div className="ms-2">
+              <h6 className="fw-medium mb-0">
+                <span className="text-dark">{fullName}</span>
+              </h6>
+              {record.role && <small className="text-muted">{record.role}</small>}
+            </div>
           </div>
-        </div>
-      ),
-      sorter: (a: Trainer, b: Trainer) => a.Name.length - b.Name.length,
+        );
+      },
+      sorter: (a: TrainerRecord, b: TrainerRecord) =>
+        `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`),
     },
     {
       title: "Phone",
-      dataIndex: "Phone",
-      sorter: (a: Trainer, b: Trainer) => a.Phone.length - b.Phone.length,
+      dataIndex: "phone",
+      render: (phone: string | null) => (
+        <span>{phone || "—"}</span>
+      ),
+      sorter: (a: TrainerRecord, b: TrainerRecord) =>
+        (a.phone || "").localeCompare(b.phone || ""),
     },
     {
       title: "Email",
-      dataIndex: "Email",
-      sorter: (a: Trainer, b: Trainer) => a.Email.length - b.Email.length,
+      dataIndex: "email",
+      render: (email: string) => (
+        <a href={`mailto:${email}`} className="text-primary">
+          {email}
+        </a>
+      ),
+      sorter: (a: TrainerRecord, b: TrainerRecord) =>
+        (a.email || "").localeCompare(b.email || ""),
+    },
+    {
+      title: "Type",
+      dataIndex: "trainerType",
+      render: (type: string | undefined) => {
+        const isInternal = type?.toUpperCase() === "INTERNAL";
+        return (
+          <span
+            className={`badge ${
+              isInternal ? "badge-info-transparent" : "badge-purple-transparent"
+            } badge-xs`}
+          >
+            {isInternal ? "Internal" : "External"}
+          </span>
+        );
+      },
     },
     {
       title: "Description",
-      dataIndex: "Description",
-      sorter: (a: Trainer, b: Trainer) => a.Description.length - b.Description.length,
+      dataIndex: "description",
+      render: (text: string | null) => (
+        <span className="text-muted small">
+          {text ? (text.length > 55 ? `${text.substring(0, 55)}...` : text) : "—"}
+        </span>
+      ),
     },
     {
       title: "Status",
-      dataIndex: "Status",
-      render: (text: Trainer["Status"]) => (
-        <span className="badge badge-success d-inline-flex align-items-center badge-xs">
-          <i className="ti ti-point-filled me-1" />
-          {text}
-        </span>
-      ),
-      sorter: (a: Trainer, b: Trainer) => a.Status.length - b.Status.length,
+      dataIndex: "status",
+      render: (status: string) => {
+        const isActive = status?.toUpperCase() === "ACTIVE";
+        return (
+          <span
+            className={`badge ${
+              isActive ? "badge-success" : "badge-secondary"
+            } d-inline-flex align-items-center badge-xs`}
+          >
+            <i className="ti ti-point-filled me-1" />
+            {isActive ? "Active" : "Inactive"}
+          </span>
+        );
+      },
+      sorter: (a: TrainerRecord, b: TrainerRecord) =>
+        (a.status || "").localeCompare(b.status || ""),
     },
     {
-      title: "",
+      title: "Actions",
       dataIndex: "actions",
-      render: () => (
+      render: (_: any, record: TrainerRecord) => (
         <div className="action-icon d-inline-flex">
-          <Link to="#" className="me-2" data-bs-toggle="modal" data-bs-target="#edit_trainer">
+          <Link
+            to="#"
+            className="me-2 text-primary"
+            data-bs-toggle="modal"
+            data-bs-target="#edit_trainer"
+            onClick={() => setSelectedTrainer(record)}
+            title="Edit Trainer"
+          >
             <i className="ti ti-edit" />
           </Link>
-          <Link to="#" data-bs-toggle="modal" data-bs-target="#delete_modal">
+          <Link
+            to="#"
+            className="text-danger"
+            data-bs-toggle="modal"
+            data-bs-target="#delete_trainer_modal"
+            onClick={() => setTrainerToDelete(record)}
+            title="Delete Trainer"
+          >
             <i className="ti ti-trash" />
           </Link>
         </div>
       ),
     },
   ];
+
   return (
     <>
       {/* Page Wrapper */}
@@ -98,14 +202,14 @@ const Trainers = () => {
                       <i className="ti ti-smart-home" />
                     </Link>
                   </li>
-                  <li className="breadcrumb-item">Performance</li>
+                  <li className="breadcrumb-item">Training</li>
                   <li className="breadcrumb-item active" aria-current="page">
                     Trainers
                   </li>
                 </ol>
               </nav>
             </div>
-            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap ">
+            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
               <div className="mb-2">
                 <Link
                   to="#"
@@ -123,54 +227,94 @@ const Trainers = () => {
             </div>
           </div>
           {/* /Breadcrumb */}
-          {/* Performance Indicator list */}
+
+          {/* Trainers List Card */}
           <div className="card">
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-              <h5>Trainers List</h5>
-              <div className="d-flex my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+              <h5>Trainers Directory</h5>
+              <div className="d-flex my-xl-auto right-content align-items-center flex-wrap gap-2">
+                {/* Search Bar */}
+                <div className="input-group input-group-sm" style={{ width: "230px" }}>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Search trainer..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button
+                      className="btn btn-outline-secondary"
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                    >
+                      <i className="ti ti-x" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Sort Dropdown */}
                 <div className="dropdown">
                   <Link
                     to="#"
-                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center"
+                    className="dropdown-toggle btn btn-white d-inline-flex align-items-center btn-sm"
                     data-bs-toggle="dropdown"
                   >
-                    Sort By : Last 7 Days
+                    Sort By : {sortBy}
                   </Link>
-                  <ul className="dropdown-menu  dropdown-menu-end p-3">
+                  <ul className="dropdown-menu dropdown-menu-end p-2">
                     <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
+                      <button
+                        type="button"
+                        className={`dropdown-item rounded-1 ${sortBy === "Recently Added" ? "active" : ""}`}
+                        onClick={() => setSortBy("Recently Added")}
                       >
                         Recently Added
-                      </Link>
+                      </button>
                     </li>
                     <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
+                      <button
+                        type="button"
+                        className={`dropdown-item rounded-1 ${sortBy === "Ascending" ? "active" : ""}`}
+                        onClick={() => setSortBy("Ascending")}
                       >
                         Ascending
-                      </Link>
+                      </button>
                     </li>
                     <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item rounded-1"
+                      <button
+                        type="button"
+                        className={`dropdown-item rounded-1 ${sortBy === "Descending" ? "active" : ""}`}
+                        onClick={() => setSortBy("Descending")}
                       >
                         Descending
-                      </Link>
+                      </button>
                     </li>
                   </ul>
                 </div>
               </div>
             </div>
+
             <div className="card-body p-0">
-              <Table dataSource={data} columns={columns} Selection={true} />
+              {loading ? (
+                <div className="text-center p-5">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </div>
+                  <p className="mt-2 text-muted">Loading Trainers...</p>
+                </div>
+              ) : (
+                <Table
+                  dataSource={filteredTrainers.map((t) => ({ ...t, key: String(t.id) }))}
+                  columns={columns}
+                  Selection={false}
+                />
+              )}
             </div>
           </div>
-          {/* /Performance Indicator list */}
+          {/* /Trainers List Card */}
         </div>
+
         <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
           <p className="mb-0">2014 - 2026 © SmartHR.</p>
           <p>
@@ -183,7 +327,11 @@ const Trainers = () => {
       </div>
       {/* /Page Wrapper */}
 
-      <TrainersModal />
+      <TrainersModal
+        selectedTrainer={selectedTrainer}
+        trainerToDelete={trainerToDelete}
+        onSaved={fetchTrainers}
+      />
     </>
   );
 };
